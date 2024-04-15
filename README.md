@@ -6,49 +6,43 @@ Python package to interpolate recordings and stimuli of neuroscience experiments
 ```
 dataset-folder/
   images/
+    meta.json # what type of interpolator should be used.
     0001/
       meta.json
-      trials.csv
+      timestamps.npz
+      meta/
+        condition_hash.npy
+        trial_idx.npy
       data/
         img01.png
         img02.png
         ...
     0002/
-      meta.json
-      trials.csv
-      data/
-        img01.png
-        img02.png
-        ...
+      ...
   videos/
+    meta.json
     0001/
       meta.json
-      trials.csv
+      timestamps.npz
+      meta/
+        condition_hash.npy
+        trial_idx.npy
       data/
-        vid01.png
-        vid02.png
+        img01.png
+        img02.png
         ...
     0002/
-      meta.json
-      trials.csv
-      data/
-        vid01.png
-        vid02.png
-        ...
+      ...
   pupil_dilation/
     meta.json
-    timestamps.csv
-    signal.csv
+    timestamps.npz
   running/
     meta.json
-    timestamps.csv
-    signal.csv
+    timestamps.npz
   multiunit/
     meta.json
-    timestamps.csv
-    signal.csv
+    timestamps.npz
   poses/
     meta.json
-    timestamps.csv
-    signal.csv
+    timestamps.npz
 ```
