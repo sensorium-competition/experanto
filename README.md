@@ -1,6 +1,19 @@
 # Experanto
 Python package to interpolate recordings and stimuli of neuroscience experiments 
 
+## Use specification
+- Instantiation
+```python
+dat = Experiment('dataset-folder', discretization=30) # 30Hz
+```
+
+- Single frame access
+```python
+item = dat[10]
+sequence = dat[10:100]
+```
+
+
 ## Data Folder Structure
 
 ```
