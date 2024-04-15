@@ -7,7 +7,7 @@ Python package to interpolate recordings and stimuli of neuroscience experiments
 dat = Experiment('dataset-folder', discretization=30) # 30Hz
 ```
 
-- Single frame access
+- Single frame or sequence access
 ```python
 item = dat[10]
 sequence = dat[10:100]
