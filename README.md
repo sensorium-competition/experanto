@@ -8,14 +8,14 @@ dataset-folder/
   images/
     0001/
       meta.json
-      timestamps.csv
+      trials.csv
       data/
         img01.png
         img02.png
         ...
     0002/
       meta.json
-      timestamps.csv
+      trials.csv
       data/
         img01.png
         img02.png
@@ -23,14 +23,14 @@ dataset-folder/
   videos/
     0001/
       meta.json
-      timestamps.csv
+      trials.csv
       data/
         vid01.png
         vid02.png
         ...
     0002/
       meta.json
-      timestamps.csv
+      trials.csv
       data/
         vid01.png
         vid02.png
