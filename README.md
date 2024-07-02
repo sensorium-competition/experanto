@@ -18,10 +18,10 @@ sequence = dat[10:100]
 
 ```
 dataset-folder/
-  images/
-    meta.json # what type of interpolator should be used.
-    0001/
-      meta.json
+  screen/
+    meta.json # what type of interpolator should be used for which block / which data type each block is
+    0001/ # this could be a block of images
+      meta.json # what is actually here? should it be deleted?
       timestamps.npz
       meta/
         condition_hash.npy
@@ -30,26 +30,14 @@ dataset-folder/
         img01.png
         img02.png
         ...
-    0002/
+    0002/ # this could be a block of videos
       ...
-  videos/
-    meta.json
-    0001/
-      meta.json
-      timestamps.npz
-      meta/
-        condition_hash.npy
-        trial_idx.npy
-      data/
-        img01.png
-        img02.png
-        ...
-    0002/
+    0003/ # this could be a abother block of images 
       ...
   eye_tracker/
     meta.json
     timestamps.npz
-  running/
+  running_wheel/
     meta.json
     timestamps.npz
   multiunit/
@@ -60,8 +48,15 @@ dataset-folder/
     timestamps.npz
 ```
 
-## Example for meta.yml
+## Example for meta.json
 
-```yml
+```
 modality: images
+```
+or 
+```
+0001: images
+0002: videos
+0003: images
+...
 ```
