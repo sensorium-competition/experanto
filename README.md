@@ -18,9 +18,10 @@ sequence = dat[10:100]
 Do we want 0001 blocks in eye_tracker/running_wheel/responses?
 ```
 dataset-folder/
+
   screen/
     0001/ # this could be a block of images
-      meta.json #what type of interpolator should be used for which block / which data type each block is
+      meta.yaml #what type of interpolator should be used for which block / which data type each block is
       timestamps.npz
       meta/
         condition_hash.npy
@@ -34,16 +35,16 @@ dataset-folder/
     0003/ # this could be a abother block of images 
       ...
   eye_tracker/
-    meta.json
+    meta.yaml
     timestamps.npz
   running_wheel/
-    meta.json
+    meta.yaml
     timestamps.npz
   multiunit/
-    meta.json
+    meta.yaml
     timestamps.npz
   poses/
-    meta.json
+    meta.yaml
     timestamps.npz
 ```
 
