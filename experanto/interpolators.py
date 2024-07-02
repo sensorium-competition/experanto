@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 from abc import abstractmethod
 import numpy.lib.format as fmt
+import os
 
 
 class Interpolator:
@@ -58,34 +59,27 @@ class ImageInterpolator(Interpolator):
 
     def __init__(self, root_folder: str) -> None:
         # create mapping from image index to file index
-        self._data_files = list(Path(root_folder / "data").rglob("*.npy"))
-        self._num_images = []
-        self._image_file_idx = np.zeros([0])
-        for i, f in enumerate(self._data_files):
-            shape = get_npy_shape(f)
-            assert len(shape) == 3, "Images must be 3D arrays"
-            self._image_size = shape[:2]
-            self._num_images.append(shape[2])
-            self._image_file_idx.append(np.ones(shape[2]) * i)
-        self._first_image_idx = np.cumsum([0] + self._num_images)
+        self._image_files = list(Path(os.path.join(root_folder, "data")).rglob("*.npy"))
+        shape = get_npy_shape(self._image_files[0])
+        self._image_size = shape[1:]
 
         # read timesteps
-        self._timesteps = np.load(root_folder / "timesteps.npy")
+        self._timesteps = np.load(os.path.join(root_folder, "timesteps.npy"))
         assert np.all(np.diff(self._timesteps) > 0), "Timesteps must be sorted"
 
     def interpolate(self, times: np.ndarray) -> tuple:
         assert np.all(np.diff(times) > 0), "Times must be sorted"
-        idx = np.searchsorted(self._timesteps, times) - 1 # convert times to image indices
-        assert(np.all(idx >= 0) and np.all(idx < len(self._timesteps)), "Times out of bounds")
+        idx = np.searchsorted(self._timesteps, times) # convert times to image indices
+        print(idx)
         
         # Go through files, load them and extract all images
-        unique_files = np.unique(self._image_file_idx[idx])
-        imgs = np.array([len(times)] + self._image_size)
-        for u_idx in unique_files:
-            images = np.load(self._data_files[u_idx])
-            idx_for_this_file = np.where(self._image_file_idx[idx] == u_idx)
-            imgs[idx_for_this_file] = np.transpose(
-                images[idx - self._first_image_idx[u_idx]], [2, 0, 1])
+        unique_img_idx = np.unique(idx)
+        imgs = np.zeros([len(times)] + list(self._image_size))
+        for u_idx in unique_img_idx:
+            print(u_idx)
+            image = np.load(self._image_files[u_idx])
+            idx_for_this_img = np.where(idx == u_idx)
+            imgs[idx_for_this_img] = np.repeat(image, len(idx_for_this_img), axis=0)
 
         return imgs, np.ones(len(times), dtype=bool)
 
