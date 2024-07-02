@@ -5,8 +5,6 @@ from collections.abc import Sequence
 Interval = namedtuple("Interval", ["start", "end"])
 
 
-
-
 class Experiment(Sequence):
 
     def __init__(self, root_folder: str, sampling_rate: float) -> None:
