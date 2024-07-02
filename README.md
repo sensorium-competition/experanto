@@ -48,7 +48,7 @@ dataset-folder/
     timestamps.npz
 ```
 
-## Example for meta.json
+## Example for meta.yaml
 
 ```
 modality: images
