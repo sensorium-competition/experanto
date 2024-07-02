@@ -1,38 +1,10 @@
 import numpy as np
-from pathlib import Path
 from collections import namedtuple
-from collections.abc import Sequence, abstractmethod
+from collections.abc import Sequence
 
 Interval = namedtuple("Interval", ["start", "end"])
 
 
-class Interpolator:
-
-    def __init__(self, root_folder: str, sampling_rate: float, phase_shift: float = 0.0) -> None:
-        self.root_folder = Path(root_folder)
-        self.sampling_rate = sampling_rate
-        self._phase_shift = phase_shift
-        
-        # initialization: load from file
-        self.start_time = ...
-        self.end_time = ...
-        # self._sample_times = np.arange(self.start_time + phase_shift, self.end_time, 1.0 / self.sampling_rate) 
-        self._modality = ... 
-    
-    @abstractmethod
-    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        ...
-        # returns interpolated signal and boolean mask of valid samples
-    
-    # @property
-    # def sample_times(self) -> np.ndarray:
-    #     return self._sample_times
-        
-    # def __getitem__(self, idx):
-    #     return self.interpolate(self._sample_times[idx])
-
-    # def __len__(self) -> int:
-    #     return self._sample_times.size
 
 
 class Experiment(Sequence):
