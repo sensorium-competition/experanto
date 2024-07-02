@@ -15,7 +15,7 @@ sequence = dat[10:100]
 
 
 ## Data Folder Structure
-
+Do we want 0001 blocks in eye_tracker/running_wheel/responses?
 ```
 dataset-folder/
   screen/
