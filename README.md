@@ -46,7 +46,7 @@ dataset-folder/
         ...
     0002/
       ...
-  pupil_dilation/
+  eye_tracker/
     meta.json
     timestamps.npz
   running/
@@ -58,4 +58,10 @@ dataset-folder/
   poses/
     meta.json
     timestamps.npz
+```
+
+## Example for meta.yml
+
+```yml
+modality: images
 ```
