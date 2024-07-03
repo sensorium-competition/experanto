@@ -85,20 +85,33 @@ class VideoInterpolator(Interpolator):
     def __init__(self, root_folder: str) -> None:
         super().__init__(root_folder)
 
+        # create mapping from image index to file index
         self._video_files = list(Path(os.path.join(root_folder, "data")).rglob("*.npy"))
         shape = get_npy_shape(self._video_files[0])
         self._video_size = shape[1:]
+        self._num_frames = []
+        self._video_file_idx = np.zeros([0], dtype=int)
+        for i, f in enumerate(self._video_files):
+            shape = get_npy_shape(f)
+            assert len(shape) == 3, "Videos must be 3D arrays"
+            assert self._video_size == shape[1:], "All videos must have the same size"
+            self._num_frames.append(shape[0])
+            self._video_file_idx = np.append(self._video_file_idx, np.full(shape[0], i), axis=0)
+        self._first_frame_idx = np.cumsum([0] + self._num_frames)
+
 
     def interpolate(self, times: np.ndarray) -> tuple:
         assert np.all(np.diff(times) > 0), "Times must be sorted"
-        idx = np.searchsorted(self.timestamps, times) - 1 # convert times to image indices
+        idx = np.searchsorted(self.timestamps, times) - 1 # convert times to frame indices
+        video_idx = self._video_file_idx[idx]
         
-        # Go through files, load them and extract all images
-        unique_vid_idx = np.unique(idx)
+        # Go through files, load them and extract all frames
+        unique_vid_idx = np.unique(video_idx)
         vids = np.zeros([len(times)] + list(self._video_size))
         for u_idx in unique_vid_idx:
             video = np.load(self._video_files[u_idx])
-            idx_for_this_vid = np.where(idx == u_idx)
-            vids[idx_for_this_vid] = np.repeat(video, len(idx_for_this_vid), axis=0)
+            idx_for_this_vid = np.where(self._video_file_idx[idx] == u_idx)
+            vids[idx_for_this_vid] = video[idx[idx_for_this_vid] - self._first_frame_idx[u_idx]]
 
         return vids, np.ones(len(times), dtype=bool)
+    
