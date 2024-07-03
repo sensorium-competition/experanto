@@ -5,6 +5,7 @@ from abc import abstractmethod
 import numpy.lib.format as fmt
 import os
 import yaml
+import warnings
 
 
 class Interpolator:
@@ -95,7 +96,9 @@ class ImageInterpolator(Interpolator):
             idx_for_this_img = np.where(idx == u_idx)
             imgs[idx_for_this_img] = np.repeat(image, len(idx_for_this_img), axis=0)
 
-        return imgs, valid
+        # display warning that output is cropped to (36,64)
+        warnings.warn("Image output is cropped to (36,64)", UserWarning)
+        return imgs[:,:36,:64], valid
 
 
 class VideoInterpolator(Interpolator):
