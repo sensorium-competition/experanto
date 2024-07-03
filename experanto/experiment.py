@@ -73,7 +73,7 @@ class Experiment(Sequence):
         return return_value
 
     def __len__(self) -> int:
-        ...
+        return len(self._sample_times)
 
 
     def get_sample_index(self, t):
