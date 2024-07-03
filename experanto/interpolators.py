@@ -28,7 +28,7 @@ class Interpolator:
         return globals()[class_name](root_folder)
 
     def __contains__(self, times: np.ndarray):
-        return np.any((times >= self.timestamps[0]) & times <= self.timestamps[-1])
+        return np.any((times >= self.timestamps[0]) & (times <= self.timestamps[-1]))
     
     def valid_times(self, times: np.ndarray) -> np.ndarray:
         return (times >= self.timestamps[0]) & (times <= self.timestamps[-1])
@@ -38,10 +38,14 @@ class SequenceInterpolator(Interpolator):
     
         def __init__(self, root_folder: str) -> None:
             super().__init__(root_folder)
+            # quick hack to use only one timestamp for all neurons -- will be fixed in the future
+            if self.timestamps.ndim == 2:
+                self.timestamps = self.timestamps[:,0]
             print(self.timestamps.shape)
             
             self._data = np.load(self.root_folder / "data.npy")
-        
+
+
         def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
             valid = self.valid_times(times)
             valid_times = times[valid]
@@ -77,18 +81,21 @@ class ImageInterpolator(Interpolator):
         self._image_size = shape[1:]
 
     def interpolate(self, times: np.ndarray) -> tuple:
-        assert np.all(np.diff(times) > 0), "Times must be sorted"
-        idx = np.searchsorted(self.timestamps, times) - 1 # convert times to image indices
+        valid = self.valid_times(times)
+        valid_times = times[valid]
+
+        assert np.all(np.diff(valid_times) > 0), "Times must be sorted"
+        idx = np.searchsorted(self.timestamps, valid_times) - 1 # convert times to image indices
         
         # Go through files, load them and extract all images
         unique_img_idx = np.unique(idx)
-        imgs = np.zeros([len(times)] + list(self._image_size))
+        imgs = np.zeros([len(valid_times)] + list(self._image_size))
         for u_idx in unique_img_idx:
             image = np.load(self._image_files[u_idx])
             idx_for_this_img = np.where(idx == u_idx)
             imgs[idx_for_this_img] = np.repeat(image, len(idx_for_this_img), axis=0)
 
-        return imgs, np.ones(len(times), dtype=bool)
+        return imgs, valid
 
 
 class VideoInterpolator(Interpolator):
@@ -113,17 +120,20 @@ class VideoInterpolator(Interpolator):
 
 
     def interpolate(self, times: np.ndarray) -> tuple:
-        assert np.all(np.diff(times) > 0), "Times must be sorted"
-        idx = np.searchsorted(self.timestamps, times) - 1 # convert times to frame indices
+        valid = self.valid_times(times)
+        valid_times = times[valid]
+
+        assert np.all(np.diff(valid_times) > 0), "Times must be sorted"
+        idx = np.searchsorted(self.timestamps, valid_times) - 1 # convert times to frame indices
         video_idx = self._video_file_idx[idx]
         
         # Go through files, load them and extract all frames
         unique_vid_idx = np.unique(video_idx)
-        vids = np.zeros([len(times)] + list(self._video_size))
+        vids = np.zeros([len(valid_times)] + list(self._video_size))
         for u_idx in unique_vid_idx:
             video = np.load(self._video_files[u_idx])
             idx_for_this_vid = np.where(self._video_file_idx[idx] == u_idx)
             vids[idx_for_this_vid] = video[idx[idx_for_this_vid] - self._first_frame_idx[u_idx]]
 
-        return vids, np.ones(len(times), dtype=bool)
+        return vids, valid
     
