@@ -4,19 +4,29 @@ import numpy as np
 from abc import abstractmethod
 import numpy.lib.format as fmt
 import os
+import yaml
 
 
 class Interpolator:
 
     def __init__(self, root_folder: str) -> None:
         self.root_folder = Path(root_folder)
-        self.timestamps = np.load(self.root_folder / "timesteps.npy")
+        self.timestamps = np.load(self.root_folder / "timestamps.npy")
     
     @abstractmethod
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         ...
         # returns interpolated signal and boolean mask of valid samples
-    
+
+    @staticmethod
+    def create(root_folder: str) -> "Interpolator":
+        with open(Path(root_folder) / 'meta.yaml', 'r') as file:
+            meta_data = yaml.safe_load(file)
+        modality = meta_data.get('modality')
+        class_name = modality.capitalize() + "Interpolator"
+        assert class_name in globals(), f"Unknown modality: {modality}"
+        return globals()[class_name](root_folder)
+
     def __contains__(self, times: np.ndarray):
         return np.any((times >= self.timestamps[0]) & times <= self.timestamps[-1])
     
@@ -59,6 +69,7 @@ class ImageInterpolator(Interpolator):
 
     def __init__(self, root_folder: str) -> None:
         super().__init__(root_folder)
+        self.timestamps = np.load(self.root_folder / "timestamps.npy")
 
         # create mapping from image index to file index
         self._image_files = list(Path(os.path.join(root_folder, "data")).rglob("*.npy"))
@@ -84,6 +95,7 @@ class VideoInterpolator(Interpolator):
 
     def __init__(self, root_folder: str) -> None:
         super().__init__(root_folder)
+        self.timestamps = np.load(self.root_folder / "timestamps.npy")
 
         # create mapping from image index to file index
         self._video_files = list(Path(os.path.join(root_folder, "data")).rglob("*.npy"))

@@ -1,6 +1,8 @@
 import numpy as np
 from collections import namedtuple
 from collections.abc import Sequence
+from pathlib import Path
+from .interpolators import Interpolator
 
 Interval = namedtuple("Interval", ["start", "end"])
 
@@ -11,13 +13,22 @@ class Experiment(Sequence):
         self.root_folder = Path(root_folder)
         self.sampling_rate = sampling_rate
 
-        self.start_time = ...
-        self.end_time = ...
-        self._sample_times = np.arange(self.start_time, self.end_time, 1.0 / self.sampling_rate) 
+        # Populate devices by going through subfolders
+        device_folders = [d for d in self.root_folder.iterdir() if d.is_dir()]
+        self._devices = dict()
+        for f in device_folders:
+            print("Parsing {} data... ".format(f.name), end="")
+            self._devices[f.name] = [Interpolator.create(str(b)) for b in f.iterdir() if b.is_dir()]
+            print("done")
 
-        self._blocks = defaultdict(list)
-        self._devices = []
-        self._load_blocks()
+        # self.start_time = ...
+        # self.end_time = ...
+        # self._sample_times = np.arange(self.start_time, self.end_time, 1.0 / self.sampling_rate) 
+
+        # self._blocks = defaultdict(list)
+        # self._devices = []
+        # self._load_blocks()
+
 
     def _load_blocks(self) -> None:
         # for block_folder in self.root_folder.iterdir():
