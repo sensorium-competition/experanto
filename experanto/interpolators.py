@@ -10,7 +10,7 @@ class Interpolator:
 
     def __init__(self, root_folder: str) -> None:
         self.root_folder = Path(root_folder)
-        self.timestamps = np.load(self.root_folder / "timestamps.npy")
+        self.timestamps = np.load(self.root_folder / "timesteps.npy")
     
     @abstractmethod
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -58,18 +58,16 @@ def get_npy_shape(file_path):
 class ImageInterpolator(Interpolator):
 
     def __init__(self, root_folder: str) -> None:
+        super().__init__(root_folder)
+
         # create mapping from image index to file index
         self._image_files = list(Path(os.path.join(root_folder, "data")).rglob("*.npy"))
         shape = get_npy_shape(self._image_files[0])
         self._image_size = shape[1:]
 
-        # read timesteps
-        self._timesteps = np.load(os.path.join(root_folder, "timesteps.npy"))
-        assert np.all(np.diff(self._timesteps) > 0), "Timesteps must be sorted"
-
     def interpolate(self, times: np.ndarray) -> tuple:
         assert np.all(np.diff(times) > 0), "Times must be sorted"
-        idx = np.searchsorted(self._timesteps, times) # convert times to image indices
+        idx = np.searchsorted(self.timestamps, times) - 1 # convert times to image indices
         print(idx)
         
         # Go through files, load them and extract all images
