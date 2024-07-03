@@ -68,16 +68,13 @@ class ImageInterpolator(Interpolator):
     def interpolate(self, times: np.ndarray) -> tuple:
         assert np.all(np.diff(times) > 0), "Times must be sorted"
         idx = np.searchsorted(self.timestamps, times) - 1 # convert times to image indices
-        print(idx)
         
         # Go through files, load them and extract all images
         unique_img_idx = np.unique(idx)
         imgs = np.zeros([len(times)] + list(self._image_size))
         for u_idx in unique_img_idx:
-            print(u_idx)
             image = np.load(self._image_files[u_idx])
             idx_for_this_img = np.where(idx == u_idx)
             imgs[idx_for_this_img] = np.repeat(image, len(idx_for_this_img), axis=0)
 
         return imgs, np.ones(len(times), dtype=bool)
-
