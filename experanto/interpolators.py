@@ -78,3 +78,27 @@ class ImageInterpolator(Interpolator):
             imgs[idx_for_this_img] = np.repeat(image, len(idx_for_this_img), axis=0)
 
         return imgs, np.ones(len(times), dtype=bool)
+
+
+class VideoInterpolator(Interpolator):
+
+    def __init__(self, root_folder: str) -> None:
+        super().__init__(root_folder)
+
+        self._video_files = list(Path(os.path.join(root_folder, "data")).rglob("*.npy"))
+        shape = get_npy_shape(self._video_files[0])
+        self._video_size = shape[1:]
+
+    def interpolate(self, times: np.ndarray) -> tuple:
+        assert np.all(np.diff(times) > 0), "Times must be sorted"
+        idx = np.searchsorted(self.timestamps, times) - 1 # convert times to image indices
+        
+        # Go through files, load them and extract all images
+        unique_vid_idx = np.unique(idx)
+        vids = np.zeros([len(times)] + list(self._video_size))
+        for u_idx in unique_vid_idx:
+            video = np.load(self._video_files[u_idx])
+            idx_for_this_vid = np.where(idx == u_idx)
+            vids[idx_for_this_vid] = np.repeat(video, len(idx_for_this_vid), axis=0)
+
+        return vids, np.ones(len(times), dtype=bool)
