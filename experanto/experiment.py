@@ -34,25 +34,42 @@ class Experiment(Sequence):
 
 
     def __getitem__(self, idx) -> dict:
-        # idx or slice
-        return_value = {}
-
-        assert isinstance(idx, int) or (isinstance(idx, slice) and (idx.step is None or idx.step == 1)), \
+        # allow indexing with e[idx,dev] as a shortcut for e[idx][dev]
+        if isinstance(idx, tuple) and len(idx) == 2:
+            idx, dev = idx
+        else:
+            dev = None
+        
+        assert isinstance(idx, int) or \
+            (isinstance(idx, slice) and (idx.step is None or idx.step == 1)), \
             "Only integer indices or slices with step 1 are supported"
+        assert isinstance(dev, str) or dev is None, "Second index must be a string"
 
         t = self._sample_times[idx]
 
-        for dev, blocks in self._devices.items():
-            # find block(s) that contain the data for the current device
-            return_value[dev] = None # create empty array
-            for b in blocks:
+        if dev is None:
+            return_value = {}
+            for dev, blocks in self._devices.items():
+                # find block(s) that contain the data for the current device
+                return_value[dev] = None # create empty array
+                for b in blocks:
+                    if t in b:
+                        values, valid = b.interpolate(self._sample_times[idx])
+                        if return_value[dev] is None:
+                            return_value[dev] = np.full((len(t), ) + values.shape[1:], np.nan, dtype=values.dtype)
+                        return_value[dev][valid] = values
+                        if valid[-1]: break # if the last time point is valid, we can stop here
+        elif isinstance(dev, str):
+            assert dev in self._devices, "Unknown device '{}'".format(dev)
+            return_value = None
+            for b in self._devices[dev]:
                 if t in b:
                     values, valid = b.interpolate(self._sample_times[idx])
-                    if return_value[dev] is None:
-                        return_value[dev] = np.full((len(t), ) + values.shape[1:], np.nan, dtype=values.dtype)
-                    return_value[dev][valid] = values
-
+                    if return_value is None:
+                        return_value = np.full((len(t), ) + values.shape[1:], np.nan, dtype=values.dtype)
+                    return_value[valid] = values
                     if valid[-1]: break # if the last time point is valid, we can stop here
+
         return return_value
 
     def __len__(self) -> int:
