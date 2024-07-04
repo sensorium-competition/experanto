@@ -11,6 +11,7 @@ class Mouse2pChunkedDataset(Dataset):
         self.sampling_rate = sampling_rate
         self.chunk_size = chunk_size
         self._experiment = Experiment(root_folder)
+        self.device_names = self._experiment.device_names
         self.start_time, self.end_time = self._experiment.get_valid_range("screen")
         self._sample_times = np.arange(self.start_time, self.end_time, 1.0 / self.sampling_rate)
 
@@ -22,7 +23,3 @@ class Mouse2pChunkedDataset(Dataset):
         times = self._sample_times[s:s+self.chunk_size]
         data, _ = self._experiment.interpolate(times)
         return list(data.values())
-
-    def get_device_names(self):
-        return self._experiment.device_names
-    

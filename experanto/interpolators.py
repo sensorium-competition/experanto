@@ -30,10 +30,10 @@ class Interpolator:
     def __init__(self, root_folder: str) -> None:
         self.root_folder = Path(root_folder)
         meta = self.load_meta()
-        self.start_time = meta["start_time"]
-        self.end_time = meta["end_time"]
+        self.start_time = None
+        self.end_time = None
         # Valid interval can be different to start time and end time. 
-        self.valid_interval = TimeInterval(self.start_time, self.end_time)
+        self.valid_interval = None
 
     def load_meta(self):
         with open(self.root_folder / "meta.yml") as f:
@@ -72,10 +72,14 @@ class SequenceInterpolator(Interpolator):
         super().__init__(root_folder)
         meta = self.load_meta()
         self.time_delta = 1./meta["sampling_rate"]
+        self.start_time = meta["start_time"]
+        self.end_time = meta["end_time"]
+        # Valid interval can be different to start time and end time. 
+        self.valid_interval = TimeInterval(self.start_time, self.end_time)
 
         self.use_phase_shifts = meta["phase_shift_per_signal"]
         if meta["phase_shift_per_signal"]:
-            self._phase_shifts = np.load(self.root_folder / "meta/phase_shifts.npy")
+            self._phase_shifts = np.load(self.root_folder / "meta/neuron_delta.npy")
             self.valid_interval = TimeInterval(
                 self.start_time + np.max(self._phase_shifts),
                 self.end_time + np.min(self._phase_shifts),
@@ -107,6 +111,7 @@ class ScreenInterpolator(Interpolator):
         self.timestamps = np.load(self.root_folder / "timestamps.npy")
         self.start_time = self.timestamps[0]
         self.end_time = self.timestamps[-1]
+        self.valid_interval = TimeInterval(self.start_time, self.end_time)
         self._parse_trials()
 
         # create mapping from image index to file index

@@ -23,10 +23,10 @@ class Experiment:
         self.device_names = [f.name for f in device_folders]
         for d in device_folders:
             print("Parsing {} data... ".format(d.name), end="")
-            self._devices[d.name] = Interpolator.create(d)
-            ts = self._devices[d.name].timestamps
-            self.start_time = min(self.start_time, ts[0])
-            self.end_time = max(self.end_time, ts[-1])
+            dev = Interpolator.create(d)
+            self._devices[d.name] = dev
+            self.start_time = dev.start_time
+            self.end_time = dev.end_time
             print("done")
 
     def interpolate(self, times: slice, device=None) -> tuple[np.ndarray, np.ndarray]:
