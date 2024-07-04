@@ -96,13 +96,17 @@ class ScreenInterpolator(Interpolator):
         self._parse_meta()
 
         # create mapping from image index to file index
-        self._data_files = [Path(root_folder) / "data" / (m.file_name + ".npy") for m in self.meta]
         self._num_frames = [m.num_frames for m in self.meta]
         self._first_frame_idx = [m.first_frame for m in self.meta]
         self._data_file_idx = np.concatenate([np.full(m.num_frames, i) for i, m in enumerate(self.meta)])
 
-        self._image_size = self.meta[0].image_size
-        assert np.all([m.image_size == self._image_size for m in self.meta]), 'All files must have the same image size'
+        # infer image size
+        for m in self.meta:
+            if m.image_size is not None:
+                self._image_size = m.image_size
+                break
+        assert np.all([(m.image_size == self._image_size) or (m.image_size is None) for m in self.meta]), \
+            'All files must have the same image size'
 
     def _parse_meta(self) -> None:
         # Function to check if a file is a numbered yml file
@@ -131,7 +135,7 @@ class ScreenInterpolator(Interpolator):
         unique_file_idx = np.unique(data_file_idx)
         out = np.zeros([len(valid_times)] + list(self._image_size))
         for u_idx in unique_file_idx:
-            data = np.load(self._data_files[u_idx])
+            data = self.meta[u_idx].get_data()
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
             out[idx_for_this_file] = data[idx[idx_for_this_file] - self._first_frame_idx[u_idx]]
 
@@ -140,7 +144,9 @@ class ScreenInterpolator(Interpolator):
 
 class ScreenMeta():
     def __init__(self, file_name: str, data: dict, image_size: tuple, first_frame: int, num_frames: int) -> None:
-        self.file_name = file_name
+        f = Path(file_name)
+        self.file_name = f
+        self.data_file_name = f.parent.parent / "data" / (f.stem + ".npy")
         self._data = data
         self.modality = data.get('modality')
         self.image_size = image_size
@@ -154,16 +160,26 @@ class ScreenMeta():
         modality = meta_data.get('modality')
         class_name = modality.capitalize() + "Meta"
         assert class_name in globals(), f"Unknown modality: {modality}"
-        return globals()[class_name](Path(file_name).stem, meta_data)
+        return globals()[class_name](file_name, meta_data)
     
+    def get_data(self) -> np.array:
+        return np.load(self.data_file_name)
+
 
 class ImageMeta(ScreenMeta):
     def __init__(self, file_name, data) -> None:
-        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), 2)
+        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), 1)
 
 
 class VideoMeta(ScreenMeta):
     def __init__(self, file_name, data) -> None:
         super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), data.get("num_frames"))
 
- 
+
+class BlankMeta(ScreenMeta):
+    def __init__(self, file_name, data) -> None:
+        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), 1)
+        self.fill_value = data.get("fill_value")
+
+    def get_data(self) -> np.array:
+        return np.full((1, ) + self.image_size, self.fill_value)
