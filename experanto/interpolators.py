@@ -6,6 +6,7 @@ import numpy.lib.format as fmt
 import os
 import yaml
 import warnings
+import re
 
 
 class TimeInterval:
@@ -28,7 +29,6 @@ class Interpolator:
 
     def __init__(self, root_folder: str) -> None:
         self.root_folder = Path(root_folder)
-        # self.timestamps = np.load(self.root_folder / "timestamps.npy") # Alex: Move to ImageInterpolator
         meta = self.load_meta()
         self.start_time = meta["start_time"]
         self.end_time = meta["end_time"]
@@ -50,7 +50,7 @@ class Interpolator:
 
     @staticmethod
     def create(root_folder: str) -> "Interpolator":
-        with open(Path(root_folder) / 'meta.yaml', 'r') as file:
+        with open(Path(root_folder) / 'meta.yml', 'r') as file:
             meta_data = yaml.safe_load(file)
         modality = meta_data.get('modality')
         class_name = modality.capitalize() + "Interpolator"
@@ -88,81 +88,98 @@ class SequenceInterpolator(Interpolator):
         return np.take_along_axis(self._data, idx, axis=0), valid
 
 
-def get_npy_shape(file_path):
-    with open(file_path, 'rb') as f:
-        version = fmt.read_magic(f)
-        fmt._check_version(version)
-        shape, fortran_order, dtype = fmt._read_array_header(f, version)
-    return shape
-
-
-class ImageInterpolator(Interpolator):
+class ScreenInterpolator(Interpolator):
 
     def __init__(self, root_folder: str) -> None:
         super().__init__(root_folder)
         self.timestamps = np.load(self.root_folder / "timestamps.npy")
+        self._parse_trials()
 
         # create mapping from image index to file index
-        self._image_files = list(Path(os.path.join(root_folder, "data")).rglob("*.npy"))
-        shape = get_npy_shape(self._image_files[0])
-        self._image_size = shape[1:]
+        self._num_frames = [t.num_frames for t in self.trials]
+        self._first_frame_idx = [t.first_frame for t in self.trials]
+        self._data_file_idx = np.concatenate([np.full(t.num_frames, i) for i, t in enumerate(self.trials)])
+
+        # infer image size
+        for m in self.trials:
+            if m.image_size is not None:
+                self._image_size = m.image_size
+                break
+        assert np.all([(t.image_size == self._image_size) or (t.image_size is None) for t in self.trials]), \
+            'All files must have the same image size'
+
+    def _parse_trials(self) -> None:
+        # Function to check if a file is a numbered yml file
+        def is_numbered_yml(file_name):
+            return re.fullmatch(r'\d{5}\.yml', file_name) is not None
+
+        # Get block subfolders and sort by number
+        meta_files = [f for f in (self.root_folder / "meta").iterdir() if f.is_file() and is_numbered_yml(f.name)]
+        meta_files.sort(key=lambda f: int(os.path.splitext(f.name)[0]))
+
+        self.trials = []
+        for f in meta_files:
+            self.trials.append(ScreenTrial.create(f))
 
     def interpolate(self, times: np.ndarray) -> tuple:
         valid = self.valid_times(times)
         valid_times = times[valid]
-
-        assert np.all(np.diff(valid_times) > 0), "Times must be sorted"
-        idx = np.searchsorted(self.timestamps, valid_times) - 1 # convert times to image indices
-        
-        # Go through files, load them and extract all images
-        unique_img_idx = np.unique(idx)
-        imgs = np.zeros([len(valid_times)] + list(self._image_size))
-        for u_idx in unique_img_idx:
-            image = np.load(self._image_files[u_idx])
-            idx_for_this_img = np.where(idx == u_idx)
-            imgs[idx_for_this_img] = np.repeat(image, len(idx_for_this_img), axis=0)
-
-        # display warning that output is cropped to (36,64)
-        warnings.warn("Image output is cropped to (36,64)", UserWarning)
-        return imgs[:,:36,:64], valid
-
-
-class VideoInterpolator(Interpolator):
-
-    def __init__(self, root_folder: str) -> None:
-        super().__init__(root_folder)
-        self.timestamps = np.load(self.root_folder / "timestamps.npy")
-
-        # create mapping from image index to file index
-        self._video_files = list(Path(os.path.join(root_folder, "data")).rglob("*.npy"))
-        shape = get_npy_shape(self._video_files[0])
-        self._video_size = shape[1:]
-        self._num_frames = []
-        self._video_file_idx = np.zeros([0], dtype=int)
-        for i, f in enumerate(self._video_files):
-            shape = get_npy_shape(f)
-            assert len(shape) == 3, "Videos must be 3D arrays"
-            assert self._video_size == shape[1:], "All videos must have the same size"
-            self._num_frames.append(shape[0])
-            self._video_file_idx = np.append(self._video_file_idx, np.full(shape[0], i), axis=0)
-        self._first_frame_idx = np.cumsum([0] + self._num_frames)
-
-
-    def interpolate(self, times: np.ndarray) -> tuple:
-        valid = self.valid_times(times)
-        valid_times = times[valid]
+        valid_times += 1e-6 # add small offset to avoid numerical issues
 
         assert np.all(np.diff(valid_times) > 0), "Times must be sorted"
         idx = np.searchsorted(self.timestamps, valid_times) - 1 # convert times to frame indices
-        video_idx = self._video_file_idx[idx]
+        assert np.all((idx >= 0) & (idx < len(self.timestamps))), "All times must be within the valid range"
+        data_file_idx = self._data_file_idx[idx]
         
         # Go through files, load them and extract all frames
-        unique_vid_idx = np.unique(video_idx)
-        vids = np.zeros([len(valid_times)] + list(self._video_size))
-        for u_idx in unique_vid_idx:
-            video = np.load(self._video_files[u_idx])
-            idx_for_this_vid = np.where(self._video_file_idx[idx] == u_idx)
-            vids[idx_for_this_vid] = video[idx[idx_for_this_vid] - self._first_frame_idx[u_idx]]
+        unique_file_idx = np.unique(data_file_idx)
+        out = np.zeros([len(valid_times)] + list(self._image_size))
+        for u_idx in unique_file_idx:
+            data = self.trials[u_idx].get_data()
+            idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
+            out[idx_for_this_file] = data[idx[idx_for_this_file] - self._first_frame_idx[u_idx]]
 
-        return vids, valid
+        return out, valid
     
+
+class ScreenTrial():
+    def __init__(self, file_name: str, data: dict, image_size: tuple, first_frame: int, num_frames: int) -> None:
+        f = Path(file_name)
+        self.file_name = f
+        self.data_file_name = f.parent.parent / "data" / (f.stem + ".npy")
+        self._data = data
+        self.modality = data.get('modality')
+        self.image_size = image_size
+        self.first_frame = first_frame
+        self.num_frames = num_frames
+
+    @staticmethod
+    def create(file_name: str) -> "ScreenTrial":
+        with open(file_name, 'r') as file:
+            meta_data = yaml.safe_load(file)
+        modality = meta_data.get('modality')
+        class_name = modality.capitalize() + "Trial"
+        assert class_name in globals(), f"Unknown modality: {modality}"
+        return globals()[class_name](file_name, meta_data)
+    
+    def get_data(self) -> np.array:
+        return np.load(self.data_file_name)
+
+
+class ImageTrial(ScreenTrial):
+    def __init__(self, file_name, data) -> None:
+        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), 1)
+
+
+class VideoTrial(ScreenTrial):
+    def __init__(self, file_name, data) -> None:
+        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), data.get("num_frames"))
+
+
+class BlankTrial(ScreenTrial):
+    def __init__(self, file_name, data) -> None:
+        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), 1)
+        self.fill_value = data.get("fill_value")
+
+    def get_data(self) -> np.array:
+        return np.full((1, ) + self.image_size, self.fill_value)
