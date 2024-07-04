@@ -75,25 +75,25 @@ class SequenceInterpolator(Interpolator):
         self.use_phase_shifts = meta["phase_shift_per_signal"]
         if meta["phase_shift_per_signal"]:
             self._phase_shifts = np.load(self.root_folder / "meta/phase_shifts.npy")
-            # self.valid_interval = TimeInterval(
-            #     self.start_time + np.max(self._phase_shifts),
-            #     self.end_time + np.min(self._phase_shifts),
-            # )
             self.valid_interval = TimeInterval(
-                self.start_time,
-                self.end_time ,
+                self.start_time + np.max(self._phase_shifts),
+                self.end_time + np.min(self._phase_shifts),
             )
-        self._data = np.load(self.root_folder / "data.npy")
+
+        if not meta["is_mem_mapped"]:
+            self._data = np.load(self.root_folder / "data.npy")
+        else:
+            self._data = np.memmap(self.root_folder / "data.npy", dtype=meta["dtype"], mode='r', shape=(meta["n_timestamps"], meta["n_signals"]))
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
 
         if self.use_phase_shifts:
-            idx = np.round((valid_times[:, np.newaxis] - self._phase_shifts[np.newaxis, :] - self.start_time) / self.time_delta).astype(int)
+            idx = np.floor((valid_times[:, np.newaxis] - self._phase_shifts[np.newaxis, :] - self.start_time) / self.time_delta).astype(int)
             data = np.take_along_axis(self._data, idx, axis=0)
         else:
-            idx = np.round((valid_times - self.start_time) / self.time_delta).astype(int)
+            idx = np.floor((valid_times - self.start_time) / self.time_delta).astype(int)
             data = self._data[idx]
             
         return data, valid
