@@ -73,7 +73,5 @@ class Experiment:
     # def __len__(self) -> int:
     #     return len(self._sample_times)
 
-    # def get_valid_range(self, device_name) -> tuple:
-    #     s = np.searchsorted(self._sample_times, self._devices[device_name][0].timestamps[0])
-    #     e = np.searchsorted(self._sample_times, self._devices[device_name][-1].timestamps[-1])
-    #     return s, e
+    def get_valid_range(self, device_name) -> tuple:
+        return self._devices[device_name].start_time, self._devices[device_name].end_time

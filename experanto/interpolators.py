@@ -94,6 +94,8 @@ class ScreenInterpolator(Interpolator):
     def __init__(self, root_folder: str) -> None:
         super().__init__(root_folder)
         self.timestamps = np.load(self.root_folder / "timestamps.npy")
+        self.start_time = self.timestamps[0]
+        self.end_time = self.timestamps[-1]
         self._parse_trials()
 
         # create mapping from image index to file index
