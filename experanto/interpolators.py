@@ -29,7 +29,6 @@ class Interpolator:
 
     def __init__(self, root_folder: str) -> None:
         self.root_folder = Path(root_folder)
-        # self.timestamps = np.load(self.root_folder / "timestamps.npy") # Alex: Move to ImageInterpolator
         meta = self.load_meta()
         self.start_time = meta["start_time"]
         self.end_time = meta["end_time"]
@@ -97,7 +96,6 @@ class ScreenInterpolator(Interpolator):
         self._parse_meta()
 
         # create mapping from image index to file index
-        # print(Path(root_folder) / (m.file_name + ".npy"))
         self._data_files = [Path(root_folder) / "data" / (m.file_name + ".npy") for m in self.meta]
         self._num_frames = [m.num_frames for m in self.meta]
         self._first_frame_idx = [m.first_frame for m in self.meta]
@@ -113,7 +111,6 @@ class ScreenInterpolator(Interpolator):
 
         # Get block subfolders and sort by number
         meta_files = [f for f in (self.root_folder / "meta").iterdir() if f.is_file() and is_numbered_yml(f.name)]
-        # meta_files = list(Path(os.path.join(self._root_folder, "meta")).rglob("*.yml"))
         meta_files.sort(key=lambda f: int(os.path.splitext(f.name)[0]))
 
         self.meta = []
