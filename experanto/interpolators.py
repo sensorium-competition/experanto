@@ -93,22 +93,22 @@ class ScreenInterpolator(Interpolator):
     def __init__(self, root_folder: str) -> None:
         super().__init__(root_folder)
         self.timestamps = np.load(self.root_folder / "timestamps.npy")
-        self._parse_meta()
+        self._parse_trials()
 
         # create mapping from image index to file index
-        self._num_frames = [m.num_frames for m in self.meta]
-        self._first_frame_idx = [m.first_frame for m in self.meta]
-        self._data_file_idx = np.concatenate([np.full(m.num_frames, i) for i, m in enumerate(self.meta)])
+        self._num_frames = [t.num_frames for t in self.trials]
+        self._first_frame_idx = [t.first_frame for t in self.trials]
+        self._data_file_idx = np.concatenate([np.full(t.num_frames, i) for i, t in enumerate(self.trials)])
 
         # infer image size
-        for m in self.meta:
+        for m in self.trials:
             if m.image_size is not None:
                 self._image_size = m.image_size
                 break
-        assert np.all([(m.image_size == self._image_size) or (m.image_size is None) for m in self.meta]), \
+        assert np.all([(t.image_size == self._image_size) or (t.image_size is None) for t in self.trials]), \
             'All files must have the same image size'
 
-    def _parse_meta(self) -> None:
+    def _parse_trials(self) -> None:
         # Function to check if a file is a numbered yml file
         def is_numbered_yml(file_name):
             return re.fullmatch(r'\d{5}\.yml', file_name) is not None
@@ -117,9 +117,9 @@ class ScreenInterpolator(Interpolator):
         meta_files = [f for f in (self.root_folder / "meta").iterdir() if f.is_file() and is_numbered_yml(f.name)]
         meta_files.sort(key=lambda f: int(os.path.splitext(f.name)[0]))
 
-        self.meta = []
+        self.trials = []
         for f in meta_files:
-            self.meta.append(ScreenMeta.create(f))
+            self.trials.append(ScreenTrial.create(f))
 
     def interpolate(self, times: np.ndarray) -> tuple:
         valid = self.valid_times(times)
@@ -135,14 +135,14 @@ class ScreenInterpolator(Interpolator):
         unique_file_idx = np.unique(data_file_idx)
         out = np.zeros([len(valid_times)] + list(self._image_size))
         for u_idx in unique_file_idx:
-            data = self.meta[u_idx].get_data()
+            data = self.trials[u_idx].get_data()
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
             out[idx_for_this_file] = data[idx[idx_for_this_file] - self._first_frame_idx[u_idx]]
 
         return out, valid
     
 
-class ScreenMeta():
+class ScreenTrial():
     def __init__(self, file_name: str, data: dict, image_size: tuple, first_frame: int, num_frames: int) -> None:
         f = Path(file_name)
         self.file_name = f
@@ -154,11 +154,11 @@ class ScreenMeta():
         self.num_frames = num_frames
 
     @staticmethod
-    def create(file_name: str) -> "ScreenMeta":
+    def create(file_name: str) -> "ScreenTrial":
         with open(file_name, 'r') as file:
             meta_data = yaml.safe_load(file)
         modality = meta_data.get('modality')
-        class_name = modality.capitalize() + "Meta"
+        class_name = modality.capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"
         return globals()[class_name](file_name, meta_data)
     
@@ -166,17 +166,17 @@ class ScreenMeta():
         return np.load(self.data_file_name)
 
 
-class ImageMeta(ScreenMeta):
+class ImageTrial(ScreenTrial):
     def __init__(self, file_name, data) -> None:
         super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), 1)
 
 
-class VideoMeta(ScreenMeta):
+class VideoTrial(ScreenTrial):
     def __init__(self, file_name, data) -> None:
         super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), data.get("num_frames"))
 
 
-class BlankMeta(ScreenMeta):
+class BlankTrial(ScreenTrial):
     def __init__(self, file_name, data) -> None:
         super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), 1)
         self.fill_value = data.get("fill_value")
