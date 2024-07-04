@@ -97,7 +97,7 @@ class ScreenInterpolator(Interpolator):
 
         # create mapping from image index to file index
         self._num_frames = [t.num_frames for t in self.trials]
-        self._first_frame_idx = [t.first_frame for t in self.trials]
+        self._first_frame_idx = [t.first_frame_idx for t in self.trials]
         self._data_file_idx = np.concatenate([np.full(t.num_frames, i) for i, t in enumerate(self.trials)])
 
         # infer image size
@@ -143,14 +143,14 @@ class ScreenInterpolator(Interpolator):
     
 
 class ScreenTrial():
-    def __init__(self, file_name: str, data: dict, image_size: tuple, first_frame: int, num_frames: int) -> None:
+    def __init__(self, file_name: str, data: dict, image_size: tuple, first_frame_idx: int, num_frames: int) -> None:
         f = Path(file_name)
         self.file_name = f
         self.data_file_name = f.parent.parent / "data" / (f.stem + ".npy")
         self._data = data
         self.modality = data.get('modality')
         self.image_size = image_size
-        self.first_frame = first_frame
+        self.first_frame_idx = first_frame_idx
         self.num_frames = num_frames
 
     @staticmethod
@@ -168,17 +168,17 @@ class ScreenTrial():
 
 class ImageTrial(ScreenTrial):
     def __init__(self, file_name, data) -> None:
-        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), 1)
+        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame_idx"), 1)
 
 
 class VideoTrial(ScreenTrial):
     def __init__(self, file_name, data) -> None:
-        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), data.get("num_frames"))
+        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame_idx"), data.get("num_frames"))
 
 
 class BlankTrial(ScreenTrial):
     def __init__(self, file_name, data) -> None:
-        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame"), 1)
+        super().__init__(file_name, data, tuple(data.get("image_size")), data.get("first_frame_idx"), 1)
         self.fill_value = data.get("fill_value")
 
     def get_data(self) -> np.array:
