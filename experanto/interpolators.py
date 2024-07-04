@@ -57,8 +57,9 @@ class Interpolator:
         assert class_name in globals(), f"Unknown modality: {modality}"
         return globals()[class_name](root_folder)
 
-    def __contains__(self, times: np.ndarray):
-        return np.any((times >= self.timestamps[0]) & (times <= self.timestamps[-1]))
+    # CAN BE REMOVED? (DUPLICATE OF __contains__ METHOD)
+    # def __contains__(self, times: np.ndarray):
+    #     return np.any((times >= self.timestamps[0]) & (times <= self.timestamps[-1]))
     
     def valid_times(self, times: np.ndarray) -> np.ndarray:
         return self.valid_interval.intersect(times)
@@ -121,7 +122,7 @@ class ScreenInterpolator(Interpolator):
         for f in meta_files:
             self.trials.append(ScreenTrial.create(f))
 
-    def interpolate(self, times: np.ndarray) -> tuple:
+    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
         valid_times += 1e-6 # add small offset to avoid numerical issues
