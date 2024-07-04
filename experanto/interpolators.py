@@ -75,9 +75,13 @@ class SequenceInterpolator(Interpolator):
         self.use_phase_shifts = meta["phase_shift_per_signal"]
         if meta["phase_shift_per_signal"]:
             self._phase_shifts = np.load(self.root_folder / "meta/phase_shifts.npy")
+            # self.valid_interval = TimeInterval(
+            #     self.start_time + np.max(self._phase_shifts),
+            #     self.end_time + np.min(self._phase_shifts),
+            # )
             self.valid_interval = TimeInterval(
-                self.start_time + np.max(self._phase_shifts),
-                self.end_time + np.min(self._phase_shifts),
+                self.start_time,
+                self.end_time ,
             )
         self._data = np.load(self.root_folder / "data.npy")
 
