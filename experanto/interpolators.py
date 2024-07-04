@@ -50,7 +50,7 @@ class Interpolator:
 
     @staticmethod
     def create(root_folder: str) -> "Interpolator":
-        with open(Path(root_folder) / 'meta.yaml', 'r') as file:
+        with open(Path(root_folder) / 'meta.yml', 'r') as file:
             meta_data = yaml.safe_load(file)
         modality = meta_data.get('modality')
         class_name = modality.capitalize() + "Interpolator"
@@ -62,6 +62,7 @@ class Interpolator:
     
     def valid_times(self, times: np.ndarray) -> np.ndarray:
         return self.valid_interval.intersect(times)
+
 
 
 class SequenceInterpolator(Interpolator):
@@ -84,8 +85,14 @@ class SequenceInterpolator(Interpolator):
         valid = self.valid_times(times)
         valid_times = times[valid]
 
-        idx = np.round((valid_times[:, np.newaxis] - self._phase_shifts[np.newaxis, :] - self.start_time) / self.time_delta).astype(int)
-        return np.take_along_axis(self._data, idx, axis=0), valid
+        if self.use_phase_shifts:
+            idx = np.round((valid_times[:, np.newaxis] - self._phase_shifts[np.newaxis, :] - self.start_time) / self.time_delta).astype(int)
+            data = np.take_along_axis(self._data, idx, axis=0)
+        else:
+            idx = np.round((valid_times - self.start_time) / self.time_delta).astype(int)
+            data = self._data[idx]
+            
+        return data, valid
 
 
 def get_npy_shape(file_path):
