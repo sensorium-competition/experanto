@@ -60,10 +60,6 @@ class Interpolator:
         assert class_name in globals(), f"Unknown modality: {modality}"
         return globals()[class_name](root_folder)
 
-    # CAN BE REMOVED? (DUPLICATE OF __contains__ METHOD)
-    # def __contains__(self, times: np.ndarray):
-    #     return np.any((times >= self.timestamps[0]) & (times <= self.timestamps[-1]))
-
     def valid_times(self, times: np.ndarray) -> np.ndarray:
         return self.valid_interval.intersect(times)
 
@@ -86,7 +82,8 @@ class SequenceInterpolator(Interpolator):
                 self.end_time + np.min(self._phase_shifts),
             )
 
-        if not meta["is_mem_mapped"]:
+        # read .npy or .mem (memmap) file
+        if (self.root_folder / "data.npy").exists():
             self._data = np.load(self.root_folder / "data.npy")
         else:
             self._data = np.memmap(
