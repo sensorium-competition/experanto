@@ -5,20 +5,16 @@ from pathlib import Path
 from .interpolators import Interpolator
 import re
 
-Interval = namedtuple("Interval", ["start", "end"])
 
+class Experiment:
 
-class Experiment(Sequence):
-
-    def __init__(self, root_folder: str, sampling_rate: float) -> None:
+    def __init__(self, root_folder: str) -> None:
         self.root_folder = Path(root_folder)
-        self.sampling_rate = sampling_rate
         self._devices = dict()
         self.device_names = list()
         self.start_time = np.inf
         self.end_time = -np.inf
         self._load_devices()
-
 
     def _load_devices(self) -> None:
         # Populate devices by going through subfolders
@@ -27,52 +23,55 @@ class Experiment(Sequence):
         self.device_names = [f.name for f in device_folders]
         for d in device_folders:
             print("Parsing {} data... ".format(d.name), end="")
-            self._devices[d.name] = Interpolator.create(d)
-            ts = self._devices[d.name].timestamps.flatten()
-            self.start_time = min(self.start_time, ts[0])
-            self.end_time = max(self.end_time, ts[-1])
+            dev = Interpolator.create(d)
+            self._devices[d.name] = dev
+            self.start_time = dev.start_time
+            self.end_time = dev.end_time
             print("done")
 
-        self._sample_times = np.arange(self.start_time, self.end_time, 1.0 / self.sampling_rate) 
+    def interpolate(self, times: slice, device=None) -> tuple[np.ndarray, np.ndarray]:
+        if device is None:
+            values = {}
+            valid = {}
+            for d, interp in self._devices.items():
+                values[d], valid[d] = interp.interpolate(times)
+        elif isinstance(device, str):
+            assert device in self._devices, "Unknown device '{}'".format(device)
+            values, valid = self._devices[device].interpolate(times)
+        return values, valid
 
-
-    def __getitem__(self, idx) -> dict:
-        # allow indexing with e[idx,dev] as a shortcut for e[idx][dev]
-        if isinstance(idx, tuple) and len(idx) == 2:
-            idx, dev = idx
-        else:
-            dev = None
+    # def __getitem__(self, idx) -> dict:
+    #     # allow indexing with e[idx,dev] as a shortcut for e[idx][dev]
+    #     if isinstance(idx, tuple) and len(idx) == 2:
+    #         idx, dev = idx
+    #     else:
+    #         dev = None
         
-        if isinstance(idx, int):
-            idx = slice(idx, idx+1)
+    #     if isinstance(idx, int):
+    #         idx = slice(idx, idx+1)
 
-        assert isinstance(idx, slice) and (idx.step is None or idx.step == 1), \
-            "Only integer indices or slices with step 1 are supported"
-        assert isinstance(dev, str) or dev is None, "Second index must be a string"
+    #     assert isinstance(idx, slice) and (idx.step is None or idx.step == 1), \
+    #         "Only integer indices or slices with step 1 are supported"
+    #     assert isinstance(dev, str) or dev is None, "Second index must be a string"
 
-        t = self._sample_times[idx]
+    #     t = self._sample_times[idx]
 
-        if dev is None:
-            return_value = {}
-            for dev, interpolator in self._devices.items():
-                values, valid = interpolator.interpolate(self._sample_times[idx])
-                return_value[dev] = np.full((len(t), ) + values.shape[1:], np.nan, dtype=values.dtype)
-                return_value[dev][valid] = values
-        elif isinstance(dev, str):
-            assert dev in self._devices, "Unknown device '{}'".format(dev)
-            values, valid = self._devices[dev].interpolate(self._sample_times[idx])
-            return_value = np.full((len(t), ) + values.shape[1:], np.nan, dtype=values.dtype)
-            return_value[valid] = values
+    #     if dev is None:
+    #         return_value = {}
+    #         for dev, interpolator in self._devices.items():
+    #             values, valid = interpolator.interpolate(self._sample_times[idx])
+    #             return_value[dev] = np.full((len(t), ) + values.shape[1:], np.nan, dtype=values.dtype)
+    #             return_value[dev][valid] = values
+    #     elif isinstance(dev, str):
+    #         assert dev in self._devices, "Unknown device '{}'".format(dev)
+    #         values, valid = self._devices[dev].interpolate(self._sample_times[idx])
+    #         return_value = np.full((len(t), ) + values.shape[1:], np.nan, dtype=values.dtype)
+    #         return_value[valid] = values
 
-        return return_value
+    #     return return_value
 
-    def __len__(self) -> int:
-        return len(self._sample_times)
-
-    def get_sample_index(self, t):
-        return np.searchsorted(self._sample_times, t)
+    # def __len__(self) -> int:
+    #     return len(self._sample_times)
 
     def get_valid_range(self, device_name) -> tuple:
-        s = np.searchsorted(self._sample_times, self._devices[device_name][0].timestamps[0])
-        e = np.searchsorted(self._sample_times, self._devices[device_name][-1].timestamps[-1])
-        return s, e
+        return self._devices[device_name].start_time, self._devices[device_name].end_time
