@@ -34,7 +34,7 @@ class Experiment:
             log.info("Parsing finished")
             
     @property
-    def devive_names(self):
+    def device_names(self):
         return tuple(self._devices.keys())        
 
     def interpolate(self, times: slice, device=None) -> tuple[np.ndarray, np.ndarray]:
