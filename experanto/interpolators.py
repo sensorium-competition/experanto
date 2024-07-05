@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 import numpy as np
 from abc import abstractmethod
@@ -82,7 +84,7 @@ class SequenceInterpolator(Interpolator):
 
         self.use_phase_shifts = meta["phase_shift_per_signal"]
         if meta["phase_shift_per_signal"]:
-            self._phase_shifts = np.load(self.root_folder / "meta/neuron_delta.npy")
+            self._phase_shifts = np.load(self.root_folder / "meta/phase_shifts.npy")
             self.valid_interval = TimeInterval(
                 self.start_time + np.max(self._phase_shifts),
                 self.end_time + np.min(self._phase_shifts),
@@ -91,7 +93,7 @@ class SequenceInterpolator(Interpolator):
         if not meta["is_mem_mapped"]:
             self._data = np.load(self.root_folder / "data.npy")
         else:
-            self._data = np.memmap(self.root_folder / "data.npy", dtype=meta["dtype"], mode='r', shape=(meta["n_timestamps"], meta["n_signals"]))
+            self._data = np.memmap(self.root_folder / "data.mem", dtype=meta["dtype"], mode='r', shape=(meta["n_timestamps"], meta["n_signals"]))
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)

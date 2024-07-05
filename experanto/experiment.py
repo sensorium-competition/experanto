@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 from collections import namedtuple
 from collections.abc import Sequence
