@@ -9,12 +9,12 @@ import os
 import yaml
 import warnings
 import re
+import typing
 
+class TimeInterval(typing.NamedTuple):
+    start: float
+    end: float
 
-class TimeInterval:
-    def __init__(self, start, end) -> None:
-        self.start = start
-        self.end = end
 
     def __contains__(self, time):
         return self.start <= time < self.end
@@ -25,6 +25,9 @@ class TimeInterval:
         
     def __repr__(self) -> str:
         return f"TimeInterval [{self.start}, {self.end})"
+    
+    def __iter__(self):
+        return iter( (self.start, self.end) )
 
 
 class Interpolator:
@@ -120,7 +123,7 @@ class ScreenInterpolator(Interpolator):
         self._num_frames = [t.num_frames for t in self.trials]
         self._first_frame_idx = [t.first_frame_idx for t in self.trials]
         self._data_file_idx = np.concatenate([np.full(t.num_frames, i) for i, t in enumerate(self.trials)])
-
+        
         # infer image size
         for m in self.trials:
             if m.image_size is not None:
