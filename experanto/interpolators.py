@@ -68,7 +68,8 @@ class SequenceInterpolator(Interpolator):
     def __init__(self, root_folder: str) -> None:
         super().__init__(root_folder)
         meta = self.load_meta()
-        self.time_delta = 1.0 / meta["sampling_rate"]
+        self.sampling_rate = meta["sampling_rate"]
+        self.time_delta = 1.0 / self.sampling_rate
         self.start_time = meta["start_time"]
         self.end_time = meta["end_time"]
         # Valid interval can be different to start time and end time.
@@ -163,7 +164,7 @@ class ScreenInterpolator(Interpolator):
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
-        valid_times += 1e-6  # add small offset to avoid numerical issues
+        valid_times += 1e-4  # add small offset to avoid numerical issues
 
         assert np.all(np.diff(valid_times) > 0), "Times must be sorted"
         idx = (
@@ -193,7 +194,7 @@ class ScreenTrial:
     def __init__(
         self,
         file_name: str,
-        data: dict,
+        meta_data: dict,
         image_size: tuple,
         first_frame_idx: int,
         num_frames: int,
@@ -201,8 +202,8 @@ class ScreenTrial:
         f = Path(file_name)
         self.file_name = f
         self.data_file_name = f.parent.parent / "data" / (f.stem + ".npy")
-        self._data = data
-        self.modality = data.get("modality")
+        self._meta_data = meta_data
+        self.modality = meta_data.get("modality")
         self.image_size = image_size
         self.first_frame_idx = first_frame_idx
         self.num_frames = num_frames
@@ -218,6 +219,9 @@ class ScreenTrial:
 
     def get_data(self) -> np.array:
         return np.load(self.data_file_name)
+    
+    def get_meta(self, property: str):
+        return self._meta_data.get(property)
 
 
 class ImageTrial(ScreenTrial):
