@@ -186,7 +186,6 @@ class ScreenInterpolator(Interpolator):
             out[idx_for_this_file] = data[
                 idx[idx_for_this_file] - self._first_frame_idx[u_idx]
             ]
-
         return out, valid
 
 

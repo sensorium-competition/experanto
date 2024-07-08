@@ -35,10 +35,17 @@ class Mouse2pChunkedDataset(Dataset):
 
 
 class Mouse2pStaticImageDataset(Dataset):
-    def __init__(self, root_folder: str, tier: str, offset=100) -> None:
+    def __init__(
+            self, 
+            root_folder: str, 
+            tier: str, 
+            offset: float, 
+            stim_duration: float
+            ) -> None:
         self.root_folder = Path(root_folder)
         self.tier = tier
         self.offset = offset
+        self.stim_duration = stim_duration
         self._experiment = Experiment(root_folder)
         self.device_names = self._experiment.device_names
         self.DataPoint = namedtuple("DataPoint", self.device_names)
@@ -53,14 +60,8 @@ class Mouse2pStaticImageDataset(Dataset):
         s_idx = np.array([t.first_frame_idx for t in self._trials])
         if len(s_idx):
             self._start_times = screen.timestamps[s_idx]
-            end_times = screen.timestamps[s_idx + 1]
-            self._trial_duration = np.min(end_times - self._start_times)
-            assert np.all(
-                end_times - self._start_times - self._trial_duration < 0.1), \
-                "Trial durations vary by more than 100 ms"
         else:
-            self._start_times = []
-            self._trial_duration = 0
+            self._start_times = np.array([])
 
     def __len__(self):
         return len(self._trials)
@@ -74,7 +75,7 @@ class Mouse2pStaticImageDataset(Dataset):
             else:
                 Fs = device.sampling_rate
                 times = self._start_times[idx] + self.offset + np.arange(
-                    0, self._trial_duration, 1.0 / Fs)
+                    0, self.stim_duration, 1.0 / Fs)
             d, _ = device.interpolate(times)
             data[device_name] = d.mean(axis=0)
         return self.DataPoint(**data)
