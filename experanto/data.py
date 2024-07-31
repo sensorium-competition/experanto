@@ -31,9 +31,16 @@ class Mouse2pChunkedDataset(Dataset):
         s = idx * self.chunk_size
         times = self._sample_times[s : s + self.chunk_size]
         data, _ = self._experiment.interpolate(times)
-        data["timestamps"] = times
+
+        # Hack-1 add timestamps for each neuron
+        phase_shifts = self._experiment.devices["responses"]._phase_shifts
+        timestamps_neurons = (times - times.min())[:, None] + phase_shifts[None, :]
+        data["timestamps"] = timestamps_neurons
+        
+        # Hack-2: add batch dimension for screen
+        if len(data["screen"].shape) != 4:
+            data["screen"] = data["screen"][:, None, ...]
         return data
-        #return self.DataPoint(*list(data.values()))
 
 
 class Mouse2pStaticImageDataset(Dataset):

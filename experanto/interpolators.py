@@ -54,7 +54,7 @@ class Interpolator:
     @staticmethod
     def create(root_folder: str) -> "Interpolator":
         with open(Path(root_folder) / "meta.yml", "r") as file:
-            meta_data = yaml.safe_load(file)
+            meta_data = yaml.load(file, Loader=yaml.Loader)
         modality = meta_data.get("modality")
         class_name = modality.capitalize() + "Interpolator"
         assert class_name in globals(), f"Unknown modality: {modality}"
@@ -210,7 +210,7 @@ class ScreenTrial:
     @staticmethod
     def create(file_name: str) -> "ScreenTrial":
         with open(file_name, "r") as file:
-            meta_data = yaml.safe_load(file)
+            meta_data = yaml.load(file, Loader=yaml.Loader)
         modality = meta_data.get("modality")
         class_name = modality.capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"
