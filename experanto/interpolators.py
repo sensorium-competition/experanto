@@ -254,7 +254,7 @@ class BlankTrial(ScreenTrial):
             data.get("first_frame_idx"),
             1,
         )
-        self.fill_value = data.get("fill_value")
+        self.interleave_value = data.get("interleave_value")
 
     def get_data(self) -> np.array:
-        return np.full((1,) + self.image_size, self.fill_value)
+        return np.full((1,) + self.image_size, self.interleave_value)
