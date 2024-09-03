@@ -83,6 +83,11 @@ class SequenceInterpolator(Interpolator):
                 self.start_time + np.max(self._phase_shifts),
                 self.end_time + np.min(self._phase_shifts),
             )
+        # todo - make it lazy loading? and read-only properties?
+        if "neuron_properties" in meta:
+            self.cell_motor_coordinates = np.load(self.root_folder / meta["neuron_properties"]["cell_motor_coordinates"])
+            self.unit_ids = np.load(self.root_folder / meta["neuron_properties"]["unit_ids"])
+            self.fields = np.load(self.root_folder / meta["neuron_properties"]["fields"])
 
         # read .npy or .mem (memmap) file
         if (self.root_folder / "data.npy").exists():
@@ -94,7 +99,7 @@ class SequenceInterpolator(Interpolator):
                 mode="r",
                 shape=(meta["n_timestamps"], meta["n_signals"]),
             )
-
+        
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
