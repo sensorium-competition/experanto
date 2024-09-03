@@ -13,11 +13,12 @@ log = logging.getLogger(__name__)
 
 class Experiment:
 
-    def __init__(self, root_folder: str) -> None:
+    def __init__(self, root_folder: str, rescale: bool = False) -> None:
         self.root_folder = Path(root_folder)
         self.devices = dict()
         self.start_time = np.inf
         self.end_time = -np.inf
+        self.rescale = rescale
         self._load_devices()
 
     def _load_devices(self) -> None:
@@ -27,7 +28,10 @@ class Experiment:
 
         for d in device_folders:
             log.info(f"Parsing {d.name} data... ")
-            dev = Interpolator.create(d)
+            if d.name == 'screen':
+                dev = Interpolator.create(d, rescale=self.rescale)
+            else:
+                dev = Interpolator.create(d)
             self.devices[d.name] = dev
             self.start_time = dev.start_time
             self.end_time = dev.end_time

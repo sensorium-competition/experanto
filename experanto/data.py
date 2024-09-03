@@ -93,6 +93,7 @@ class Mouse2pVideoDataset(Dataset):
         cut: bool,
         add_channel: bool,
         channel_pos: int,
+        rescale: bool = False,
     ) -> None:
         """
         this dataloader returns the full the video resampled to the new freq rate
@@ -111,12 +112,13 @@ class Mouse2pVideoDataset(Dataset):
         self.tier = tier
         self.sampling_rate = sampling_rate
         self.stim_duration = stim_duration
-        self._experiment = Experiment(root_folder)
+        self._experiment = Experiment(root_folder, rescale=rescale)
         self.device_names = self._experiment.device_names
         self.subsample = subsample
         self.cut = cut
         self.add_channel = add_channel
         self.channel_pos = channel_pos
+        self.rescale = rescale
         assert (
             0 <= channel_pos < 4
         ), "channels could be extended only for positions [0,3]"
@@ -160,7 +162,7 @@ class Mouse2pVideoDataset(Dataset):
         :return: this would return video in data['screen'] with shape of [t, h, w]
         """
         fs = self.sampling_rate
-        times = np.arange(self._start_times[idx], self._end_times[idx], fs)
+        times = np.arange(self._start_times[idx], self._end_times[idx], 1/fs)
         # get all times possible
         # cut is needed
         if self.cut:

@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import numpy.lib.format as fmt
 import yaml
+import cv2
 
 
 class TimeInterval(typing.NamedTuple):
@@ -52,13 +53,13 @@ class Interpolator:
         return np.any(self.valid_times(times))
 
     @staticmethod
-    def create(root_folder: str) -> "Interpolator":
+    def create(root_folder: str, **kwargs) -> "Interpolator":
         with open(Path(root_folder) / "meta.yml", "r") as file:
             meta_data = yaml.safe_load(file)
         modality = meta_data.get("modality")
         class_name = modality.capitalize() + "Interpolator"
         assert class_name in globals(), f"Unknown modality: {modality}"
-        return globals()[class_name](root_folder)
+        return globals()[class_name](root_folder, **kwargs)
 
     def valid_times(self, times: np.ndarray) -> np.ndarray:
         return self.valid_interval.intersect(times)
