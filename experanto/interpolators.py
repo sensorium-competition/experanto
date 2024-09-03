@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from pathlib import Path
-import numpy as np
-from abc import abstractmethod
-import yaml
-import numpy.lib.format as fmt
 import os
-import yaml
-import warnings
 import re
 import typing
+import warnings
+from abc import abstractmethod
+from pathlib import Path
+
+import numpy as np
+import numpy.lib.format as fmt
+import yaml
+
 
 class TimeInterval(typing.NamedTuple):
     start: float
     end: float
-
 
     def __contains__(self, time):
         return self.start <= time < self.end
@@ -24,9 +24,9 @@ class TimeInterval(typing.NamedTuple):
 
     def __repr__(self) -> str:
         return f"TimeInterval [{self.start}, {self.end})"
-    
+
     def __iter__(self):
-        return iter( (self.start, self.end) )
+        return iter((self.start, self.end))
 
 
 class Interpolator:
@@ -118,12 +118,13 @@ class SequenceInterpolator(Interpolator):
 
 
 class ScreenInterpolator(Interpolator):
-    def __init__(self, root_folder: str) -> None:
+    def __init__(self, root_folder: str, rescale=False) -> None:
         super().__init__(root_folder)
         self.timestamps = np.load(self.root_folder / "timestamps.npy")
         self.start_time = self.timestamps[0]
         self.end_time = self.timestamps[-1]
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
+        self.rescale = rescale
         self._parse_trials()
 
         # create mapping from image index to file index
@@ -137,12 +138,13 @@ class ScreenInterpolator(Interpolator):
             if m.image_size is not None:
                 self._image_size = m.image_size
                 break
-        assert np.all(
-            [
-                (t.image_size == self._image_size) or (t.image_size is None)
-                for t in self.trials
-            ]
-        ), "All files must have the same image size"
+        if not self.rescale:
+            assert np.all(
+                [
+                    (t.image_size == self._image_size) or (t.image_size is None)
+                    for t in self.trials
+                ]
+            ), "All files must have the same image size"
 
     def _parse_trials(self) -> None:
         # Function to check if a file is a numbered yml file
@@ -186,7 +188,24 @@ class ScreenInterpolator(Interpolator):
             out[idx_for_this_file] = data[
                 idx[idx_for_this_file] - self._first_frame_idx[u_idx]
             ]
+        if self.rescale:
+            out = np.stack([self.rescale_frame(np.asarray(frame).T).T for frame in out])
         return out, valid
+
+    def rescale_frame(self, frame: np.array) -> np.array:
+        """
+        Changes the resolution of the image to this size.
+        Returns: Rescaled image
+        """
+
+        if (
+            not frame.shape[0] / self._image_size[0]
+            == frame.shape[1] / self._image_size[1]
+        ):
+            warnings.warn("Image size changes aspect ratio.")
+        return cv2.resize(frame, self._image_size, interpolation=cv2.INTER_AREA).astype(
+            np.float32
+        )
 
 
 class ScreenTrial:
@@ -218,7 +237,7 @@ class ScreenTrial:
 
     def get_data(self) -> np.array:
         return np.load(self.data_file_name)
-    
+
     def get_meta(self, property: str):
         return self._meta_data.get(property)
 
