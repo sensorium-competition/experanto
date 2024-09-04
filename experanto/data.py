@@ -114,6 +114,10 @@ class Mouse2pVideoDataset(Dataset):
         self.stim_duration = stim_duration
         self._experiment = Experiment(root_folder, rescale=rescale)
         self.device_names = self._experiment.device_names
+        # this is needed to match sensorium order only
+        if 'screen' in self.device_names and 'responses' in self.device_names:
+            start = ['screen', 'responses']
+            self.device_names = tuple(start) + tuple(set(self.device_names).difference(set(start)))
         self.subsample = subsample
         self.cut = cut
         self.add_channel = add_channel
@@ -176,5 +180,8 @@ class Mouse2pVideoDataset(Dataset):
 
         if self.add_channel and len(data["screen"].shape) != 4:
             data["screen"] = np.expand_dims(data["screen"], axis=self.channel_pos)
+        # this hack matches the shape for sensorium models  
+        if 'responses' in data:
+            data['responses'] = data['responses'].T
 
-        return data
+        return self.DataPoint(**data)
