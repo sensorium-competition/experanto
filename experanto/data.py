@@ -115,9 +115,11 @@ class Mouse2pVideoDataset(Dataset):
         self._experiment = Experiment(root_folder, rescale=rescale)
         self.device_names = self._experiment.device_names
         # this is needed to match sensorium order only
-        if 'screen' in self.device_names and 'responses' in self.device_names:
-            start = ['screen', 'responses']
-            self.device_names = tuple(start) + tuple(set(self.device_names).difference(set(start)))
+        if "screen" in self.device_names and "responses" in self.device_names:
+            start = ["screen", "responses"]
+            self.device_names = tuple(start) + tuple(
+                set(self.device_names).difference(set(start))
+            )
         self.subsample = subsample
         self.cut = cut
         self.add_channel = add_channel
@@ -129,6 +131,9 @@ class Mouse2pVideoDataset(Dataset):
 
         self.start_time, self.end_time = self._experiment.get_valid_range("screen")
         self.DataPoint = namedtuple("DataPoint", self.device_names)
+        self.MetaNeuro = namedtuple(
+            "MetaNeuro", ["cell_motor_coordinates", "unit_ids", "fields"]
+        )
         self._read_trials()
 
     def _read_trials(self):
@@ -159,6 +164,17 @@ class Mouse2pVideoDataset(Dataset):
     def __len__(self):
         return len(self._trials)
 
+    @property
+    def neurons(self):
+        loc_meta = {
+            "cell_motor_coordinates": self._experiment.devices[
+                "responses"
+            ].cell_motor_coordinates,
+            "unit_ids": self._experiment.devices["responses"].unit_ids,
+            "fields": self._experiment.devices["responses"].fields,
+        }
+        return self.MetaNeuro(**loc_meta)
+
     def __getitem__(self, idx):
         """
 
@@ -166,7 +182,7 @@ class Mouse2pVideoDataset(Dataset):
         :return: this would return video in data['screen'] with shape of [t, h, w]
         """
         fs = self.sampling_rate
-        times = np.arange(self._start_times[idx], self._end_times[idx], 1/fs)
+        times = np.arange(self._start_times[idx], self._end_times[idx], 1 / fs)
         # get all times possible
         # cut is needed
         if self.cut:
@@ -180,8 +196,8 @@ class Mouse2pVideoDataset(Dataset):
 
         if self.add_channel and len(data["screen"].shape) != 4:
             data["screen"] = np.expand_dims(data["screen"], axis=self.channel_pos)
-        # this hack matches the shape for sensorium models  
-        if 'responses' in data:
-            data['responses'] = data['responses'].T
+        # this hack matches the shape for sensorium models
+        if "responses" in data:
+            data["responses"] = data["responses"].T
 
         return self.DataPoint(**data)
