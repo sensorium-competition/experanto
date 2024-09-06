@@ -7,10 +7,12 @@ import warnings
 from abc import abstractmethod
 from pathlib import Path
 
+import cv2
 import numpy as np
 import numpy.lib.format as fmt
 import yaml
-import cv2
+
+from .utils import *
 
 
 class TimeInterval(typing.NamedTuple):
@@ -66,9 +68,25 @@ class Interpolator:
 
 
 class SequenceInterpolator(Interpolator):
-    def __init__(self, root_folder: str) -> None:
+    def __init__(
+        self,
+        root_folder: str,
+        keep_nans: bool = False,
+        #                  interpolation_mode: str = 'nearest_neighbor',
+        interpolation_mode: str = "linear",
+        interp_window: int = 5,
+    ) -> None:
+        """
+        interpolation_mode - nearest meighbor or linear
+        keep_nans - if we keep nans in linear interpolation
+        interp_window - how many points before or after the target period
+            are considered for interpolation
+        """
         super().__init__(root_folder)
         meta = self.load_meta()
+        self.keep_nans = keep_nans
+        self.interp_window = interp_window
+        self.interpolation_mode = interpolation_mode
         self.sampling_rate = meta["sampling_rate"]
         self.time_delta = 1.0 / self.sampling_rate
         self.start_time = meta["start_time"]
@@ -85,9 +103,15 @@ class SequenceInterpolator(Interpolator):
             )
         # todo - make it lazy loading? and read-only properties?
         if "neuron_properties" in meta:
-            self.cell_motor_coordinates = np.load(self.root_folder / meta["neuron_properties"]["cell_motor_coordinates"])
-            self.unit_ids = np.load(self.root_folder / meta["neuron_properties"]["unit_ids"])
-            self.fields = np.load(self.root_folder / meta["neuron_properties"]["fields"])
+            self.cell_motor_coordinates = np.load(
+                self.root_folder / meta["neuron_properties"]["cell_motor_coordinates"]
+            )
+            self.unit_ids = np.load(
+                self.root_folder / meta["neuron_properties"]["unit_ids"]
+            )
+            self.fields = np.load(
+                self.root_folder / meta["neuron_properties"]["fields"]
+            )
 
         # read .npy or .mem (memmap) file
         if (self.root_folder / "data.npy").exists():
@@ -99,11 +123,11 @@ class SequenceInterpolator(Interpolator):
                 mode="r",
                 shape=(meta["n_timestamps"], meta["n_signals"]),
             )
-        
+
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        # valid is an array of boolean, right
         valid = self.valid_times(times)
         valid_times = times[valid]
-
         if self.use_phase_shifts:
             idx = np.floor(
                 (
@@ -119,8 +143,75 @@ class SequenceInterpolator(Interpolator):
                 int
             )
             data = self._data[idx]
+        if self.interpolation_mode == "nearest_neighbor":
+            return data, valid
+        elif self.interpolation_mode == "linear":
+            # we are interested to take the data a bit before and after to have better interpolation
+            # if the target time sequence starts / ends with nan
+            # I need start index, end indexes, a bit before and after and data in between
+            # + times in between
+            # TODO - validate its 1 dim indeed when self.use_phase_shifts is False
+            if len(idx.shape) == 1:
+                start_idx = int(max(0, idx[0] - self.interp_window))
+                end_idx = int(
+                    min(
+                        idx[-1] + self.interp_window,
+                        np.floor(
+                            (self.valid_interval.end - self.valid_interval.start)
+                            / self.time_delta
+                        ),
+                    )
+                )
 
-        return data, valid
+                # time is always first dim
+                array = self._data[start_idx:end_idx]
+                orig_times = (
+                    np.arange(start_idx, end_idx) * self.time_delta
+                    + self.valid_interval.start
+                )
+                assert (
+                    array.shape[0] == orig_times.shape[0]
+                ), "times and data should be same length before interpolation"
+                data = linear_interpolate_sequences(
+                    array, orig_times, valid_times, self.keep_nans
+                )
+
+            else:
+                # this probably should be changed to be more efficient
+                start_idx = np.where(
+                    idx[:, 0] - self.interp_window > 0,
+                    idx[:, 0] - self.interp_window,
+                    0,
+                ).astype(int)
+                max_idx = np.floor(
+                    (self.valid_interval.end - self.valid_interval.start)
+                    / self.time_delta
+                ).astype(int)
+                end_idx = np.where(
+                    idx[:, -1] + self.interp_window < max_idx,
+                    idx[:, -1] + self.interp_window,
+                    max_idx,
+                ).astype(int)
+                data = np.full((self._data.shape[-1], len(valid_times)), np.nan)
+                for n_idx, st_idx in enumerate(start_idx):
+                    local_data = self._data[st_idx : end_idx[n_idx], n_idx]
+                    local_time = (
+                        np.arange(st_idx, end_idx[n_idx]) * self.time_delta
+                        + self.valid_interval.start
+                    )
+                    assert (
+                        local_data.shape[0] == local_time.shape[0]
+                    ), "times and data should be same length before interpolation"
+                    data[n_idx] = linear_interpolate_1d_sequence(
+                        local_data, local_time, valid_times, self.keep_nans
+                    )
+            #                 data = data.T
+
+            return data, valid
+        else:
+            raise NotImplementedError(
+                f"interpolation_mode should be linear or nearest_neighbor"
+            )
 
 
 class ScreenInterpolator(Interpolator):
