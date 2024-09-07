@@ -72,7 +72,7 @@ class SequenceInterpolator(Interpolator):
         self,
         root_folder: str,
         keep_nans: bool = False,
-        #                  interpolation_mode: str = 'nearest_neighbor',
+        # interpolation_mode: str = 'nearest_neighbor',
         interpolation_mode: str = "linear",
         interp_window: int = 5,
     ) -> None:
@@ -148,9 +148,6 @@ class SequenceInterpolator(Interpolator):
         elif self.interpolation_mode == "linear":
             # we are interested to take the data a bit before and after to have better interpolation
             # if the target time sequence starts / ends with nan
-            # I need start index, end indexes, a bit before and after and data in between
-            # + times in between
-            # TODO - validate its 1 dim indeed when self.use_phase_shifts is False
             if len(idx.shape) == 1:
                 start_idx = int(max(0, idx[0] - self.interp_window))
                 end_idx = int(
@@ -215,7 +212,10 @@ class SequenceInterpolator(Interpolator):
 
 
 class ScreenInterpolator(Interpolator):
-    def __init__(self, root_folder: str, rescale=False) -> None:
+    def __init__(self, root_folder: str, rescale: bool = False) -> None:
+        """
+        rescale would rescale images to the _image_size if true
+        """
         super().__init__(root_folder)
         self.timestamps = np.load(self.root_folder / "timestamps.npy")
         self.start_time = self.timestamps[0]

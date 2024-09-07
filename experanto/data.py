@@ -13,11 +13,26 @@ from .interpolators import ImageTrial, VideoTrial
 
 
 class Mouse2pChunkedDataset(Dataset):
-    def __init__(self, root_folder: str, sampling_rate: float, chunk_size: int) -> None:
+    def __init__(
+        self,
+        root_folder: str,
+        sampling_rate: float,
+        chunk_size: int,
+        rescale: bool = False,
+        keep_nans: bool = False,
+        interpolation_mode: str = "linear",
+        interp_window: int = 5,
+    ) -> None:
         self.root_folder = Path(root_folder)
         self.sampling_rate = sampling_rate
         self.chunk_size = chunk_size
-        self._experiment = Experiment(root_folder)
+        self._experiment = Experiment(
+            root_folder,
+            rescale=rescale,
+            keep_nans=keep_nans,
+            interpolation_mode=interpolation_mode,
+            interp_window=interp_window,
+        )
         self.device_names = self._experiment.device_names
         self.start_time, self.end_time = self._experiment.get_valid_range("screen")
         self._sample_times = np.arange(
@@ -37,13 +52,27 @@ class Mouse2pChunkedDataset(Dataset):
 
 class Mouse2pStaticImageDataset(Dataset):
     def __init__(
-        self, root_folder: str, tier: str, offset: float, stim_duration: float
+        self,
+        root_folder: str,
+        tier: str,
+        offset: float,
+        stim_duration: float,
+        rescale: bool = False,
+        keep_nans: bool = False,
+        interpolation_mode: str = "linear",
+        interp_window: int = 5,
     ) -> None:
         self.root_folder = Path(root_folder)
         self.tier = tier
         self.offset = offset
         self.stim_duration = stim_duration
-        self._experiment = Experiment(root_folder)
+        self._experiment = Experiment(
+            root_folder,
+            rescale=rescale,
+            keep_nans=keep_nans,
+            interpolation_mode=interpolation_mode,
+            interp_window=interp_window,
+        )
         self.device_names = self._experiment.device_names
         self.DataPoint = namedtuple("DataPoint", self.device_names)
         self._read_trials()
@@ -94,6 +123,9 @@ class Mouse2pVideoDataset(Dataset):
         add_channel: bool,
         channel_pos: int,
         rescale: bool = False,
+        keep_nans: bool = False,
+        interpolation_mode: str = "linear",
+        interp_window: int = 5,
     ) -> None:
         """
         this dataloader returns the full the video resampled to the new freq rate
@@ -112,7 +144,13 @@ class Mouse2pVideoDataset(Dataset):
         self.tier = tier
         self.sampling_rate = sampling_rate
         self.stim_duration = stim_duration
-        self._experiment = Experiment(root_folder, rescale=rescale)
+        self._experiment = Experiment(
+            root_folder,
+            rescale=rescale,
+            keep_nans=keep_nans,
+            interpolation_mode=interpolation_mode,
+            interp_window=interp_window,
+        )
         self.device_names = self._experiment.device_names
         # this is needed to match sensorium order only
         if "screen" in self.device_names and "responses" in self.device_names:
