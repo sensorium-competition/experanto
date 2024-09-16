@@ -17,20 +17,35 @@ class Experiment:
     def __init__(
         self,
         root_folder: str,
-        rescale: bool = False,
-        keep_nans: bool = False,
-        interpolation_mode: str = "linear",
-        interp_window: int = 5,
+        interp_config: dict = {
+            "screen": {"rescale": False},
+            "responses": {
+                "keep_nans": False,
+                "interpolation_mode": "linear",
+                "interp_window": 5,
+            },
+            "eye_tracker": {
+                "keep_nans": False,
+                "interpolation_mode": "linear",
+                "interp_window": 5,
+            },
+            "treadmill": {
+                "keep_nans": False,
+                "interpolation_mode": "linear",
+                "interp_window": 5,
+            },
+        },
     ) -> None:
-
+        """
+        root_folder: path to the data folder
+        interp_config: dict for configuring interpolators, like
+            interp_config = {"screen": {...}, {"eye_tracker": {...}, }
+        """
         self.root_folder = Path(root_folder)
         self.devices = dict()
         self.start_time = np.inf
         self.end_time = -np.inf
-        self.rescale = rescale
-        self.keep_nans = keep_nans
-        self.interpolation_mode = interpolation_mode
-        self.interp_window = interp_window
+        self.interp_config = interp_config
         self._load_devices()
 
     def _load_devices(self) -> None:
@@ -40,15 +55,7 @@ class Experiment:
 
         for d in device_folders:
             log.info(f"Parsing {d.name} data... ")
-            if d.name == "screen":
-                dev = Interpolator.create(d, rescale=self.rescale)
-            else:
-                dev = Interpolator.create(
-                    d,
-                    keep_nans=self.keep_nans,
-                    interpolation_mode=self.interpolation_mode,
-                    interp_window=self.interp_window,
-                )
+            dev = Interpolator.create(d, **self.interp_config[d.name])
             self.devices[d.name] = dev
             self.start_time = dev.start_time
             self.end_time = dev.end_time

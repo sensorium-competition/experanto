@@ -77,7 +77,7 @@ class SequenceInterpolator(Interpolator):
         interp_window: int = 5,
     ) -> None:
         """
-        interpolation_mode - nearest meighbor or linear
+        interpolation_mode - nearest neighbor or linear
         keep_nans - if we keep nans in linear interpolation
         interp_window - how many points before or after the target period
             are considered for interpolation
@@ -101,18 +101,6 @@ class SequenceInterpolator(Interpolator):
                 self.start_time + np.max(self._phase_shifts),
                 self.end_time + np.min(self._phase_shifts),
             )
-        # todo - make it lazy loading? and read-only properties?
-        if "neuron_properties" in meta:
-            self.cell_motor_coordinates = np.load(
-                self.root_folder / meta["neuron_properties"]["cell_motor_coordinates"]
-            )
-            self.unit_ids = np.load(
-                self.root_folder / meta["neuron_properties"]["unit_ids"]
-            )
-            self.fields = np.load(
-                self.root_folder / meta["neuron_properties"]["fields"]
-            )
-
         # read .npy or .mem (memmap) file
         if (self.root_folder / "data.npy").exists():
             self._data = np.load(self.root_folder / "data.npy")
@@ -176,8 +164,8 @@ class SequenceInterpolator(Interpolator):
             else:
                 # this probably should be changed to be more efficient
                 start_idx = np.where(
-                    idx[:, 0] - self.interp_window > 0,
-                    idx[:, 0] - self.interp_window,
+                    idx[0, :] - self.interp_window > 0,
+                    idx[0, :] - self.interp_window,
                     0,
                 ).astype(int)
                 max_idx = np.floor(
@@ -185,8 +173,8 @@ class SequenceInterpolator(Interpolator):
                     / self.time_delta
                 ).astype(int)
                 end_idx = np.where(
-                    idx[:, -1] + self.interp_window < max_idx,
-                    idx[:, -1] + self.interp_window,
+                    idx[-1, :] + self.interp_window < max_idx,
+                    idx[-1, :] + self.interp_window,
                     max_idx,
                 ).astype(int)
                 data = np.full((self._data.shape[-1], len(valid_times)), np.nan)
@@ -199,11 +187,12 @@ class SequenceInterpolator(Interpolator):
                     assert (
                         local_data.shape[0] == local_time.shape[0]
                     ), "times and data should be same length before interpolation"
+                    out = linear_interpolate_1d_sequence(
+                        local_data, local_time, valid_times, self.keep_nans
+                    )
                     data[n_idx] = linear_interpolate_1d_sequence(
                         local_data, local_time, valid_times, self.keep_nans
                     )
-            #                 data = data.T
-
             return data, valid
         else:
             raise NotImplementedError(

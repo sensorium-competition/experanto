@@ -11,6 +11,25 @@ from torch.utils.data import Dataset
 from .experiment import Experiment
 from .interpolators import ImageTrial, VideoTrial
 
+DEFAULT_INTERP_CONFIG = {
+    "screen": {"rescale": False},
+    "responses": {
+        "keep_nans": False,
+        "interpolation_mode": "linear",
+        "interp_window": 5,
+    },
+    "eye_tracker": {
+        "keep_nans": False,
+        "interpolation_mode": "linear",
+        "interp_window": 5,
+    },
+    "treadmill": {
+        "keep_nans": False,
+        "interpolation_mode": "linear",
+        "interp_window": 5,
+    },
+}
+
 
 class Mouse2pChunkedDataset(Dataset):
     def __init__(
@@ -18,20 +37,14 @@ class Mouse2pChunkedDataset(Dataset):
         root_folder: str,
         sampling_rate: float,
         chunk_size: int,
-        rescale: bool = False,
-        keep_nans: bool = False,
-        interpolation_mode: str = "linear",
-        interp_window: int = 5,
+        interp_config: dict = DEFAULT_INTERP_CONFIG,
     ) -> None:
         self.root_folder = Path(root_folder)
         self.sampling_rate = sampling_rate
         self.chunk_size = chunk_size
         self._experiment = Experiment(
             root_folder,
-            rescale=rescale,
-            keep_nans=keep_nans,
-            interpolation_mode=interpolation_mode,
-            interp_window=interp_window,
+            interp_config,
         )
         self.device_names = self._experiment.device_names
         self.start_time, self.end_time = self._experiment.get_valid_range("screen")
@@ -57,10 +70,7 @@ class Mouse2pStaticImageDataset(Dataset):
         tier: str,
         offset: float,
         stim_duration: float,
-        rescale: bool = False,
-        keep_nans: bool = False,
-        interpolation_mode: str = "linear",
-        interp_window: int = 5,
+        interp_config: dict = DEFAULT_INTERP_CONFIG,
     ) -> None:
         self.root_folder = Path(root_folder)
         self.tier = tier
@@ -68,10 +78,7 @@ class Mouse2pStaticImageDataset(Dataset):
         self.stim_duration = stim_duration
         self._experiment = Experiment(
             root_folder,
-            rescale=rescale,
-            keep_nans=keep_nans,
-            interpolation_mode=interpolation_mode,
-            interp_window=interp_window,
+            interp_config,
         )
         self.device_names = self._experiment.device_names
         self.DataPoint = namedtuple("DataPoint", self.device_names)
@@ -122,10 +129,7 @@ class Mouse2pVideoDataset(Dataset):
         cut: bool,
         add_channel: bool,
         channel_pos: int,
-        rescale: bool = False,
-        keep_nans: bool = False,
-        interpolation_mode: str = "linear",
-        interp_window: int = 5,
+        interp_config: dict = DEFAULT_INTERP_CONFIG,
     ) -> None:
         """
         this dataloader returns the full the video resampled to the new freq rate
@@ -146,10 +150,7 @@ class Mouse2pVideoDataset(Dataset):
         self.stim_duration = stim_duration
         self._experiment = Experiment(
             root_folder,
-            rescale=rescale,
-            keep_nans=keep_nans,
-            interpolation_mode=interpolation_mode,
-            interp_window=interp_window,
+            interp_config,
         )
         self.device_names = self._experiment.device_names
         # this is needed to match sensorium order only
@@ -162,7 +163,6 @@ class Mouse2pVideoDataset(Dataset):
         self.cut = cut
         self.add_channel = add_channel
         self.channel_pos = channel_pos
-        self.rescale = rescale
         assert (
             0 <= channel_pos < 4
         ), "channels could be extended only for positions [0,3]"
@@ -205,12 +205,27 @@ class Mouse2pVideoDataset(Dataset):
     @property
     def neurons(self):
         loc_meta = {
-            "cell_motor_coordinates": self._experiment.devices[
-                "responses"
-            ].cell_motor_coordinates,
-            "unit_ids": self._experiment.devices["responses"].unit_ids,
-            "fields": self._experiment.devices["responses"].fields,
+            "cell_motor_coordinates": [],
+            "unit_ids": [],
+            "fields": [],
         }
+        if "responses" in self._experiment.devices.keys():
+            # todo - make it lazy loading? and read-only properties?
+            root_folder = self._experiment.devices["responses"].root_folder
+            meta = self._experiment.devices["responses"].load_meta()
+            if "neuron_properties" in meta:
+                cell_motor_coordinates = np.load(
+                    root_folder / meta["neuron_properties"]["cell_motor_coordinates"]
+                )
+                unit_ids = np.load(root_folder / meta["neuron_properties"]["unit_ids"])
+                fields = np.load(root_folder / meta["neuron_properties"]["fields"])
+
+                loc_meta = {
+                    "cell_motor_coordinates": cell_motor_coordinates,
+                    "unit_ids": unit_ids,
+                    "fields": fields,
+                }
+
         return self.MetaNeuro(**loc_meta)
 
     def __getitem__(self, idx):
@@ -234,8 +249,4 @@ class Mouse2pVideoDataset(Dataset):
 
         if self.add_channel and len(data["screen"].shape) != 4:
             data["screen"] = np.expand_dims(data["screen"], axis=self.channel_pos)
-        # this hack matches the shape for sensorium models
-        if "responses" in data:
-            data["responses"] = data["responses"].T
-
         return self.DataPoint(**data)
