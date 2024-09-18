@@ -12,21 +12,34 @@ from .experiment import Experiment
 from .interpolators import ImageTrial, VideoTrial
 
 DEFAULT_INTERP_CONFIG = {
-    "screen": {"rescale": False},
+    "screen": {
+        "rescale": True,
+        "normalize": True,
+    },
     "responses": {
         "keep_nans": False,
+        #                            'interpolation_mode' : 'nearest_neighbor',
         "interpolation_mode": "linear",
         "interp_window": 5,
+        "normalize": True,
+        "normalize_subtract_mean": False,
+        "normalize_std_threshold": 0.01,
     },
     "eye_tracker": {
         "keep_nans": False,
         "interpolation_mode": "linear",
         "interp_window": 5,
+        "normalize": True,
+        "normalize_subtract_mean": True,
+        "normalize_std_threshold": None,
     },
     "treadmill": {
         "keep_nans": False,
         "interpolation_mode": "linear",
         "interp_window": 5,
+        "normalize": True,
+        "normalize_subtract_mean": True,
+        "normalize_std_threshold": None,
     },
 }
 
@@ -249,4 +262,7 @@ class Mouse2pVideoDataset(Dataset):
 
         if self.add_channel and len(data["screen"].shape) != 4:
             data["screen"] = np.expand_dims(data["screen"], axis=self.channel_pos)
+        # this hack matches the shape for sensorium models
+        if "responses" in data:
+            data["responses"] = data["responses"].T
         return self.DataPoint(**data)

@@ -75,6 +75,9 @@ class SequenceInterpolator(Interpolator):
         # interpolation_mode: str = 'nearest_neighbor',
         interpolation_mode: str = "linear",
         interp_window: int = 5,
+        normalize: bool = False,
+        normalize_subtract_mean: bool = False,
+        normalize_std_threshold: typing.Optional[float] = None,  # or 0.01
     ) -> None:
         """
         interpolation_mode - nearest neighbor or linear
@@ -87,6 +90,9 @@ class SequenceInterpolator(Interpolator):
         self.keep_nans = keep_nans
         self.interp_window = interp_window
         self.interpolation_mode = interpolation_mode
+        self.normalize = normalize
+        self.normalize_subtract_mean = normalize_subtract_mean
+        self.normalize_std_threshold = normalize_std_threshold
         self.sampling_rate = meta["sampling_rate"]
         self.time_delta = 1.0 / self.sampling_rate
         self.start_time = meta["start_time"]
@@ -101,6 +107,7 @@ class SequenceInterpolator(Interpolator):
                 self.start_time + np.max(self._phase_shifts),
                 self.end_time + np.min(self._phase_shifts),
             )
+        self.n_signals = meta["n_signals"]
         # read .npy or .mem (memmap) file
         if (self.root_folder / "data.npy").exists():
             self._data = np.load(self.root_folder / "data.npy")
@@ -111,6 +118,36 @@ class SequenceInterpolator(Interpolator):
                 mode="r",
                 shape=(meta["n_timestamps"], meta["n_signals"]),
             )
+        if self.normalize:
+            self.normalize_init()
+
+    def normalize_init(self):
+        self.mean = np.load(self.root_folder / "meta/means.npy")
+        self.std = np.load(self.root_folder / "meta/stds.npy")
+        assert (
+            self.mean.shape[0] == self.n_signals
+        ), f"mean shape does not match: {self.mean.shape} vs {self._data.shape}"
+        assert (
+            self.std.shape[0] == self.n_signals
+        ), f"std shape does not match: {self.std.shape} vs {self._data.shape}"
+        self.mean = self.mean.T
+        self.std = self.std.T
+        if self.normalize_std_threshold:
+            threshold = self.normalize_std_threshold * np.nanmean(self.std)
+            idx = self.std > threshold
+            self._precision = np.ones_like(self.std) / threshold
+            self._precision[idx] = 1 / self.std[idx]
+        else:
+            self._precision = 1 / self.std
+
+    #         if len(self._precision.shape) == 1:
+    #             self._precision = self._precision.reshape(1, -1)
+
+    def normalize_data(self, data):
+        if self.normalize_subtract_mean:
+            data = data - self.mean
+        data = data * self._precision
+        return data
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         # valid is an array of boolean, right
@@ -177,7 +214,7 @@ class SequenceInterpolator(Interpolator):
                     idx[-1, :] + self.interp_window,
                     max_idx,
                 ).astype(int)
-                data = np.full((self._data.shape[-1], len(valid_times)), np.nan)
+                data = np.full((len(valid_times), self._data.shape[-1]), np.nan)
                 for n_idx, st_idx in enumerate(start_idx):
                     local_data = self._data[st_idx : end_idx[n_idx], n_idx]
                     local_time = (
@@ -190,9 +227,11 @@ class SequenceInterpolator(Interpolator):
                     out = linear_interpolate_1d_sequence(
                         local_data, local_time, valid_times, self.keep_nans
                     )
-                    data[n_idx] = linear_interpolate_1d_sequence(
+                    data[:, n_idx] = linear_interpolate_1d_sequence(
                         local_data, local_time, valid_times, self.keep_nans
                     )
+            if self.normalize:
+                data = self.normalize_data(data)
             return data, valid
         else:
             raise NotImplementedError(
@@ -201,7 +240,13 @@ class SequenceInterpolator(Interpolator):
 
 
 class ScreenInterpolator(Interpolator):
-    def __init__(self, root_folder: str, rescale: bool = False) -> None:
+    def __init__(
+        self,
+        root_folder: str,
+        rescale: bool = False,
+        rescale_size: typing.Optional[tuple(int, int)] = None,
+        normalize: bool = False,
+    ) -> None:
         """
         rescale would rescale images to the _image_size if true
         """
@@ -220,10 +265,14 @@ class ScreenInterpolator(Interpolator):
             [np.full(t.num_frames, i) for i, t in enumerate(self.trials)]
         )
         # infer image size
-        for m in self.trials:
-            if m.image_size is not None:
-                self._image_size = m.image_size
-                break
+        if not rescale_size:
+            for m in self.trials:
+                if m.image_size is not None:
+                    self._image_size = m.image_size
+                    break
+        else:
+            self._image_size = rescale_size
+
         if not self.rescale:
             assert np.all(
                 [
@@ -231,6 +280,25 @@ class ScreenInterpolator(Interpolator):
                     for t in self.trials
                 ]
             ), "All files must have the same image size"
+        self.normalize = normalize
+        if self.normalize:
+            self.normalize_init()
+
+    def normalize_init(self):
+        self.mean = np.load(self.root_folder / "meta/means.npy")
+        self.std = np.load(self.root_folder / "meta/stds.npy")
+        if self.rescale:
+            self.mean = self.rescale_frame(self.mean.T).T
+            self.std = self.rescale_frame(self.std.T).T
+        assert (
+            self.mean.shape == self._image_size
+        ), f"mean size is different: {self.mean.shape} vs {self._image_size}"
+        assert (
+            self.std.shape == self._image_size
+        ), f"std size is different: {self.std.shape} vs {self._image_size}"
+
+    def normalize_data(self, data):
+        return (data - self.mean) / self.std
 
     def _parse_trials(self) -> None:
         # Function to check if a file is a numbered yml file
@@ -276,6 +344,8 @@ class ScreenInterpolator(Interpolator):
             ]
         if self.rescale:
             out = np.stack([self.rescale_frame(np.asarray(frame).T).T for frame in out])
+        if self.normalize:
+            data = self.normalize_data(data)
         return out, valid
 
     def rescale_frame(self, frame: np.array) -> np.array:
