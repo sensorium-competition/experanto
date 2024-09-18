@@ -339,13 +339,20 @@ class ScreenInterpolator(Interpolator):
             if len(data.shape) == 2:
                 data = np.expand_dims(data, axis=0)
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
-            out[idx_for_this_file] = data[
-                idx[idx_for_this_file] - self._first_frame_idx[u_idx]
-            ]
-        if self.rescale:
-            out = np.stack([self.rescale_frame(np.asarray(frame).T).T for frame in out])
+            if self.rescale:
+                orig_size = data[idx[idx_for_this_file] - self._first_frame_idx[u_idx]]
+                out[idx_for_this_file] = np.stack(
+                    [
+                        self.rescale_frame(np.asarray(frame, dtype=np.float32).T).T
+                        for frame in orig_size
+                    ]
+                )
+            else:
+                out[idx_for_this_file] = data[
+                    idx[idx_for_this_file] - self._first_frame_idx[u_idx]
+                ]
         if self.normalize:
-            data = self.normalize_data(data)
+            out = self.normalize_data(out)
         return out, valid
 
     def rescale_frame(self, frame: np.array) -> np.array:
