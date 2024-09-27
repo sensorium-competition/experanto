@@ -1,6 +1,8 @@
+import numba
 import numpy as np
 
 
+@numba.jit
 def linear_interpolate_1d_sequence(row, times_old, times_new, keep_nans=False):
     """
     Interpolates columns in a NumPy array and replaces NaNs with interpolated values
@@ -18,10 +20,11 @@ def linear_interpolate_1d_sequence(row, times_old, times_new, keep_nans=False):
         interpolated_array = np.interp(times_new, times_old, row)
     else:
         # Find indices of non-NaN values
-        valid_indices = np.where(~np.isnan(row))[0]
-        valid_times = times_old[valid_indices]
+        valid_indices = ~np.isnan(row)
         # Interpolate the column using linear interpolation
-        interpolated_array = np.interp(times_new, valid_times, row[valid_indices])
+        interpolated_array = np.interp(
+            times_new, times_old[valid_indices], row[valid_indices]
+        )
     return interpolated_array
 
 
@@ -43,9 +46,10 @@ def linear_interpolate_sequences(array, times, times_new, keep_nans=False):
         return linear_interpolate_1d_sequence(
             array.T.flatten(), times, times_new, keep_nans=keep_nans
         )
-    interpolated_array = np.full((array.shape[0], len(times_new)), np.nan)
-    for row_idx, row in enumerate(array):
-        interpolated_array[row_idx] = linear_interpolate_1d_sequence(
-            row, times, times_new, keep_nans=keep_nans
-        )
+    interpolated_array = np.array(
+        [
+            linear_interpolate_1d_sequence(row, times, times_new, keep_nans=False)
+            for row in array
+        ]
+    )
     return interpolated_array.T
