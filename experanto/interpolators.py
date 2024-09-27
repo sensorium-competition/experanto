@@ -140,9 +140,6 @@ class SequenceInterpolator(Interpolator):
         else:
             self._precision = 1 / self.std
 
-    #         if len(self._precision.shape) == 1:
-    #             self._precision = self._precision.reshape(1, -1)
-
     def normalize_data(self, data):
         if self.normalize_subtract_mean:
             data = data - self.mean
@@ -200,20 +197,15 @@ class SequenceInterpolator(Interpolator):
 
             else:
                 # this probably should be changed to be more efficient
-                start_idx = np.where(
-                    idx[0, :] - self.interp_window > 0,
-                    idx[0, :] - self.interp_window,
-                    0,
-                ).astype(int)
+                start_idx = np.maximum(idx[0, :] - self.interp_window, 0).astype(int)
                 max_idx = np.floor(
                     (self.valid_interval.end - self.valid_interval.start)
                     / self.time_delta
                 ).astype(int)
-                end_idx = np.where(
-                    idx[-1, :] + self.interp_window < max_idx,
-                    idx[-1, :] + self.interp_window,
-                    max_idx,
-                ).astype(int)
+                end_idx = np.minimum(idx[-1, :] + self.interp_window, max_idx).astype(
+                    int
+                )
+
                 data = np.full((len(valid_times), self._data.shape[-1]), np.nan)
                 for n_idx, st_idx in enumerate(start_idx):
                     local_data = self._data[st_idx : end_idx[n_idx], n_idx]
@@ -224,9 +216,6 @@ class SequenceInterpolator(Interpolator):
                     assert (
                         local_data.shape[0] == local_time.shape[0]
                     ), "times and data should be same length before interpolation"
-                    out = linear_interpolate_1d_sequence(
-                        local_data, local_time, valid_times, self.keep_nans
-                    )
                     data[:, n_idx] = linear_interpolate_1d_sequence(
                         local_data, local_time, valid_times, self.keep_nans
                     )
@@ -343,7 +332,7 @@ class ScreenInterpolator(Interpolator):
                 orig_size = data[idx[idx_for_this_file] - self._first_frame_idx[u_idx]]
                 out[idx_for_this_file] = np.stack(
                     [
-                        self.rescale_frame(np.asarray(frame, dtype=np.float32).T).T
+                        self.rescale_frame(np.array(frame, dtype=np.float32).T).T
                         for frame in orig_size
                     ]
                 )
