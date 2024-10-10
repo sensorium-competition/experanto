@@ -44,7 +44,8 @@ DEFAULT_INTERP_CONFIG = {
 }
 
 
-class Mouse2pChunkedDataset(Dataset):
+
+class SimpleChunkedDataset(Dataset):
     def __init__(
         self,
         root_folder: str,
