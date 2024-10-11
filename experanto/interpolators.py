@@ -12,7 +12,24 @@ import numpy as np
 import numpy.lib.format as fmt
 import yaml
 
-from .utils import *
+from .utils import linear_interpolate_1d_sequence, linear_interpolate_sequences
+
+
+DEFAULT_INTERP_CONFIG = {
+    "screen": {"rescale": False, "normalize": False},
+    "responses": {
+        "keep_nans": True,
+        "interpolation_mode": "nearest_neighbor",
+    },
+    "eye_tracker": {
+        "keep_nans": True,
+        "interpolation_mode": "nearest_neighbor",
+    },
+    "treadmill": {
+        "keep_nans": True,
+        "interpolation_mode": "nearest_neighbor",
+    },
+}
 
 
 class TimeInterval(typing.NamedTuple):
