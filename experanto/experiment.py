@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .interpolators import Interpolator
+from .interpolators import Interpolator, DEFAULT_INTERP_CONFIG
 
 log = logging.getLogger(__name__)
 
@@ -17,24 +17,7 @@ class Experiment:
     def __init__(
         self,
         root_folder: str,
-        interp_config: dict = {
-            "screen": {"rescale": False},
-            "responses": {
-                "keep_nans": False,
-                "interpolation_mode": "linear",
-                "interp_window": 5,
-            },
-            "eye_tracker": {
-                "keep_nans": False,
-                "interpolation_mode": "linear",
-                "interp_window": 5,
-            },
-            "treadmill": {
-                "keep_nans": False,
-                "interpolation_mode": "linear",
-                "interp_window": 5,
-            },
-        },
+        interp_config: dict = DEFAULT_INTERP_CONFIG,
     ) -> None:
         """
         root_folder: path to the data folder
