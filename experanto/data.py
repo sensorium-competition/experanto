@@ -240,3 +240,94 @@ class Mouse2pVideoDataset(Dataset):
         if "responses" in data:
             data["responses"] = data["responses"].T
         return self.DataPoint(**data)
+
+
+class ChunkDataset(Dataset):
+    def __init__(
+        self,
+        root_folder: str,
+        chunk_size: int,
+        tier: str,
+        interp_config: dict = DEFAULT_INTERP_CONFIG,
+        sampling_rate: float = None,
+        transforms: Iterable = None,
+        sample_stride = None,
+        include_blanks=False,
+    ) -> None:
+        self.root_folder = Path(root_folder)
+        self.chunk_size = chunk_size
+        self.sampling_rate = sampling_rate
+        self.chunk_s = self.chunk_size / self.sampling_rate
+        self.tier = tier
+        self.sample_stride = sample_stride if sample_stride is not None else self.chunk_size
+        self.include_blanks = include_blanks
+        self._experiment = Experiment(
+            root_folder,
+            interp_config,
+        )
+        self.device_names = self._experiment.device_names
+        self.start_time, self.end_time = self._experiment.get_valid_range("screen")
+
+        self._read_trials()
+        self._screen_sample_times = np.arange(
+            self.start_time, self.end_time, 1.0 / self.sampling_rate
+        )
+        # get all indices of the sample times that belong to the tier
+        if self.include_blanks:
+            self.sample_time_in_tier = self._tier_sample_times[self.tier] + self._tier_sample_times["blank"]
+        else:
+            self.sample_time_in_tier = self._tier_sample_times[self.tier]
+        # check sample point if it is a valid item, such that index + chunk size must be within the tier
+        self._full_valid_sample_times = self.get_full_valid_screen_times(self.sample_time_in_tier)
+        # use only
+        self._valid_screen_times = self._full_valid_sample_times[::self.sample_stride]
+
+    def _read_trials(self):
+        screen = self._experiment.devices["screen"]
+        self._trials = [t for t in screen.trials]
+        start_idx = np.array([t.first_frame_idx for t in self._trials])
+        self._start_times = screen.timestamps[start_idx]
+        self._end_times = np.append(screen.timestamps[start_idx[1:]], np.inf)
+        self._tiers = [t.get_meta("tier") if t.get_meta("tier") is not None else "blank" for t in self._trials]
+
+    @cached_property
+    def _tier_sample_times(self):
+        tier_sample_times = {}
+        for tier in np.unique(self._tiers):
+            tier_samples = []
+            for i, (trial_tier, start, end) in enumerate(zip(self._tiers, self._start_times, self._end_times)):
+                if trial_tier == tier:
+                    tier_samples.append(
+                        (self._screen_sample_times >= start) & (self._screen_sample_times < end)
+                    )
+            tier_sample_times[tier] = np.stack(tier_samples).sum(0).astype(bool)
+        return tier_sample_times
+
+    def get_full_valid_screen_times(self, sample_time_in_tier):
+        valid_times = []
+        for i, idx in enumerate(sample_time_in_tier[:-self.chunk_size]):
+            if ((np.all(sample_time_in_tier[i: i + self.chunk_size])) & (
+                    self._screen_sample_times[i + self.chunk_size] < self.end_time)):
+                valid_times.append(self._screen_sample_times[i])
+        return np.stack(valid_times)
+
+    def shuffle_valid_screen_times(self):
+        times = self._full_valid_sample_times
+        self._valid_screen_times = np.sort(np.random.choice(times, size=len(times) // self.sample_stride, replace=False))
+
+    def __len__(self):
+        return len(self._valid_screen_times)
+
+    def __getitem__(self, idx):
+        s = self._valid_screen_times[idx]
+        times = np.linspace(s, s + self.chunk_s, self.chunk_size)
+        data, _ = self._experiment.interpolate(times)
+        phase_shifts = self._experiment.devices["responses"]._phase_shifts
+        timestamps_neurons = (times - times.min())[:, None] + phase_shifts[None, :]
+        data["timestamps"] = timestamps_neurons
+
+        # Hack-2: add batch dimension for screen
+        if len(data["screen"].shape) != 4:
+            data["screen"] = data["screen"][:, None, ...]
+        return data
+
