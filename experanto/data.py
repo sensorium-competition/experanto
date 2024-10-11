@@ -2,48 +2,14 @@ from __future__ import annotations
 
 from collections import namedtuple
 from collections.abc import Iterable
+from functools import cached_property
 from pathlib import Path
 
 import numpy as np
-import torch
 from torch.utils.data import Dataset
 
 from .experiment import Experiment
-from .interpolators import ImageTrial, VideoTrial
-
-DEFAULT_INTERP_CONFIG = {
-    "screen": {
-        "rescale": True,
-        "normalize": True,
-    },
-    "responses": {
-        "keep_nans": False,
-        #                            'interpolation_mode' : 'nearest_neighbor',
-        "interpolation_mode": "linear",
-        "interp_window": 5,
-        "normalize": True,
-        "normalize_subtract_mean": False,
-        "normalize_std_threshold": 0.01,
-    },
-    "eye_tracker": {
-        "keep_nans": False,
-        "interpolation_mode": "linear",
-        "interp_window": 5,
-        "normalize": True,
-        "normalize_subtract_mean": True,
-        "normalize_std_threshold": None,
-    },
-    "treadmill": {
-        "keep_nans": False,
-        "interpolation_mode": "linear",
-        "interp_window": 5,
-        "normalize": True,
-        "normalize_subtract_mean": True,
-        "normalize_std_threshold": None,
-    },
-}
-
-
+from .interpolators import ImageTrial, VideoTrial, DEFAULT_INTERP_CONFIG
 
 class SimpleChunkedDataset(Dataset):
     def __init__(
