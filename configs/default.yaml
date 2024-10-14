@@ -1,0 +1,58 @@
+dataset:
+  global_sampling_rate: null
+  global_chunk_size: null
+  modality_config:
+    screen:
+      sampling_rate: null
+      chunk_size: null
+      valid_condition:
+        tier: "train"
+      offset: 0
+      sample_stride: 4
+      include_blanks: True
+      transforms:
+        Normalize:
+          _target_: "torchvision.transforms.v2.Normalize"
+          mean: [80.0]
+          std: [60.0]
+        Resize:
+          _target_: "torchvision.transforms.v2.Resize"
+          size: [144, 256]
+      interpolation:
+        rescale: True
+        rescale_size: [144, 256]
+    responses:
+      sampling_rate: null
+      chunk_size: null
+      offset: 0.1 # in seconds
+      transforms:
+        standardize: True
+      interpolation:
+        interpolation_mode: "nearest_neighbor"
+    eye_tracker:
+      sampling_rate: null
+      chunk_size: null
+      offset: 0
+      transforms:
+        normalize: True
+      interpolation:
+        interpolation_mode: "nearest_neighbor"
+    treadmill:
+      sampling_rate: null
+      chunk_size: null
+      offset: 0
+      transforms:
+        normalize: True
+      interpolation:
+        interpolation_mode: "nearest_neighbor"
+
+dataloader:
+  batch_size: 32
+  shuffle: true
+  num_workers: 1
+  pin_memory: True
+  drop_last: True
+  prefetch_factor: 1
+
+
+
