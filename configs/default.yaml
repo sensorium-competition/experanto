@@ -18,9 +18,6 @@ dataset:
         Resize:
           _target_: "torchvision.transforms.v2.Resize"
           size: [144, 256]
-        CenterCrop:
-          _target_: "torchvision.transforms.v2.CenterCrop"
-          size: 144
       interpolation:
         rescale: True
         rescale_size: [144, 256]
