@@ -15,23 +15,6 @@ import yaml
 from .utils import linear_interpolate_1d_sequence, linear_interpolate_sequences
 
 
-DEFAULT_INTERP_CONFIG = {
-    "screen": {"rescale": False, "normalize": False},
-    "responses": {
-        "keep_nans": True,
-        "interpolation_mode": "nearest_neighbor",
-    },
-    "eye_tracker": {
-        "keep_nans": True,
-        "interpolation_mode": "nearest_neighbor",
-    },
-    "treadmill": {
-        "keep_nans": True,
-        "interpolation_mode": "nearest_neighbor",
-    },
-}
-
-
 class TimeInterval(typing.NamedTuple):
     start: float
     end: float
@@ -60,7 +43,7 @@ class Interpolator:
 
     def load_meta(self):
         with open(self.root_folder / "meta.yml") as f:
-            meta = yaml.load(f, Loader=yaml.FullLoader)
+            meta = yaml.load(f, Loader=yaml.Loader)
         return meta
 
     @abstractmethod
@@ -74,7 +57,7 @@ class Interpolator:
     @staticmethod
     def create(root_folder: str, **kwargs) -> "Interpolator":
         with open(Path(root_folder) / "meta.yml", "r") as file:
-            meta_data = yaml.safe_load(file)
+            meta_data = yaml.load(file, Loader=yaml.Loader)
         modality = meta_data.get("modality")
         class_name = modality.capitalize() + "Interpolator"
         assert class_name in globals(), f"Unknown modality: {modality}"
@@ -89,12 +72,12 @@ class SequenceInterpolator(Interpolator):
         self,
         root_folder: str,
         keep_nans: bool = False,
-        # interpolation_mode: str = 'nearest_neighbor',
-        interpolation_mode: str = "linear",
+        interpolation_mode: str = "nearest_neighbor",
         interp_window: int = 5,
         normalize: bool = False,
         normalize_subtract_mean: bool = False,
         normalize_std_threshold: typing.Optional[float] = None,  # or 0.01
+        **kwargs,
     ) -> None:
         """
         interpolation_mode - nearest neighbor or linear
@@ -263,6 +246,7 @@ class ScreenInterpolator(Interpolator):
         rescale: bool = False,
         rescale_size: typing.Optional[tuple(int, int)] = None,
         normalize: bool = False,
+        **kwargs,
     ) -> None:
         """
         rescale would rescale images to the _image_size if true
@@ -289,14 +273,6 @@ class ScreenInterpolator(Interpolator):
                     break
         else:
             self._image_size = rescale_size
-
-        if not self.rescale:
-            assert np.all(
-                [
-                    (t.image_size == self._image_size) or (t.image_size is None)
-                    for t in self.trials
-                ]
-            ), "All files must have the same image size"
         self.normalize = normalize
         if self.normalize:
             self.normalize_init()
@@ -377,12 +353,6 @@ class ScreenInterpolator(Interpolator):
         Changes the resolution of the image to this size.
         Returns: Rescaled image
         """
-
-        if (
-            not frame.shape[0] / self._image_size[0]
-            == frame.shape[1] / self._image_size[1]
-        ):
-            warnings.warn("Image size changes aspect ratio.")
         return cv2.resize(frame, self._image_size, interpolation=cv2.INTER_AREA).astype(
             np.float32
         )
@@ -409,7 +379,7 @@ class ScreenTrial:
     @staticmethod
     def create(file_name: str) -> "ScreenTrial":
         with open(file_name, "r") as file:
-            meta_data = yaml.safe_load(file)
+            meta_data = yaml.load(file, Loader=yaml.Loader)
         modality = meta_data.get("modality")
         class_name = modality.capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"
@@ -453,7 +423,7 @@ class BlankTrial(ScreenTrial):
             data.get("first_frame_idx"),
             1,
         )
-        self.fill_value = data.get("fill_value")
+        self.interleave_value = data.get("interleave_value")
 
     def get_data(self) -> np.array:
-        return np.full((1,) + self.image_size, self.fill_value)
+        return np.full((1,) + self.image_size, self.interleave_value)

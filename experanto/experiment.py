@@ -8,7 +8,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .interpolators import Interpolator, DEFAULT_INTERP_CONFIG
+from .interpolators import Interpolator
+from .configs import DEFAULT_MODALITY_CONFIG
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class Experiment:
     def __init__(
         self,
         root_folder: str,
-        interp_config: dict = DEFAULT_INTERP_CONFIG,
+        modality_config: dict = DEFAULT_MODALITY_CONFIG,
     ) -> None:
         """
         root_folder: path to the data folder
@@ -28,17 +29,20 @@ class Experiment:
         self.devices = dict()
         self.start_time = np.inf
         self.end_time = -np.inf
-        self.interp_config = interp_config
+        self.modality_config = modality_config
         self._load_devices()
 
     def _load_devices(self) -> None:
         # Populate devices by going through subfolders
         # Assumption: blocks are sorted by start time
-        device_folders = [d for d in self.root_folder.iterdir() if d.is_dir()]
+        device_folders = [d for d in self.root_folder.iterdir() if (d.is_dir())]
 
         for d in device_folders:
+            if d.name not in self.modality_config:
+                log.info(f"Skipping {d.name} data... ")
+                continue
             log.info(f"Parsing {d.name} data... ")
-            dev = Interpolator.create(d, **self.interp_config[d.name])
+            dev = Interpolator.create(d, **self.modality_config[d.name]["interpolation"])
             self.devices[d.name] = dev
             self.start_time = dev.start_time
             self.end_time = dev.end_time
