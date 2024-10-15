@@ -345,7 +345,7 @@ class ChunkDataset(Dataset):
         self._end_times = np.append(screen.timestamps[start_idx[1:]], np.inf)
         self.meta_conditions = {}
         for k in self.modality_config.screen.valid_condition.keys():
-            self.meta_conditions[k] = [t.get_meta(k) if t.get_meta("tier") is not None else "blank" for t in self._trials]
+            self.meta_conditions[k] = [t.get_meta(k) if t.get_meta(k) is not None else "blank" for t in self._trials]
 
     def initialize_statistics(self) -> None:
         self._statistics = {}
