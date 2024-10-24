@@ -351,10 +351,18 @@ class ChunkDataset(Dataset):
         self._statistics = {}
         for device_name in self.device_names:
             self._statistics[device_name] = {}
-            means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
-            self._statistics[device_name]["mean"] = means.T # (n, 1) -> (1, n) for broadcasting in __get_item__
-            stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
-            self._statistics[device_name]["std"] = stds.T # same as above
+            # If modality should be normalized, load respective statistics from file.
+            if self.modality_config[device_name].transforms.get("normalization", False):
+                mode = self.modality_config[device_name].transforms.normalization
+                assert mode in ['standardize', 'normalize']
+                means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
+                stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
+                if mode == 'standardize':
+                    # If modality should only be standarized, set means to 0.
+                    means = np.zeros_like(means)
+
+                self._statistics[device_name]["mean"] = means.reshape(1, -1)  # (n, 1) -> (1, n) for broadcasting in __get_item__
+                self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
 
     def initialize_transforms(self):
         transforms = {}
@@ -366,14 +374,13 @@ class ChunkDataset(Dataset):
                 transform_list.insert(0, add_channel)
                 transforms[device_name] = Compose(transform_list)
             else:
-                if self.modality_config[device_name].transforms.get("normalize", False):
-                    f = lambda x: torch.from_numpy((x - self._statistics[device_name]["mean"]) / self._statistics[device_name]["std"])
-                elif self.modality_config[device_name].transforms.get("standardize", False):
-                    f = lambda x:torch.from_numpy(x / self._statistics[device_name]["std"])
+                if self.modality_config[device_name].transforms:
+                    transforms[device_name] = Compose([
+                        ToTensor(),
+                        torchvision.transforms.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])])
                 else:
-                    f = lambda x: torch.from_numpy(x)
-                transforms[device_name] = Compose([torchvision.transforms.Lambda(f)])
-
+                    transforms[device_name] = Compose([
+                        ToTensor()])
         return transforms
 
     def get_sample_in_meta_condition(self) -> dict:
@@ -432,7 +439,7 @@ class ChunkDataset(Dataset):
             times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
             times = times + self.modality_config[device_name].offset
             data, _ = self._experiment.interpolate(times, device=device_name)
-            out[device_name] = self.transforms[device_name](data)
+            out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
 
         phase_shifts = self._experiment.devices["responses"]._phase_shifts
         times_with_phase_shifts = (times - times.min())[:, None] + phase_shifts[None, :]
