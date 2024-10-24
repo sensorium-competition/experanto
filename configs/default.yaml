@@ -26,7 +26,7 @@ dataset:
       chunk_size: null
       offset: 0.1 # in seconds
       transforms:
-        standardize: True
+        normalization: "standardize"
       interpolation:
         interpolation_mode: "nearest_neighbor"
     eye_tracker:
@@ -34,7 +34,7 @@ dataset:
       chunk_size: null
       offset: 0
       transforms:
-        normalize: True
+        normalization: "normalize"
       interpolation:
         interpolation_mode: "nearest_neighbor"
     treadmill:
@@ -42,7 +42,7 @@ dataset:
       chunk_size: null
       offset: 0
       transforms:
-        normalize: True
+        normalization: "normalize"
       interpolation:
         interpolation_mode: "nearest_neighbor"
 
