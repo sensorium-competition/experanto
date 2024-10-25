@@ -57,19 +57,24 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
     and
     https://github.com/huggingface/pytorch-image-models/blob/d72ac0db259275233877be8c1d4872163954dfbb/timm/data/loader.py#L209-L238
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, shuffle_each_epoch=True, **kwargs, ):
         super().__init__(*args, **kwargs)
         self._DataLoader__initialized = False
         self.batch_sampler = _RepeatSampler(self.batch_sampler)
         self._DataLoader__initialized = True
         self.iterator = super().__iter__()
+        self.shuffle_each_epoch = shuffle_each_epoch
 
     def __len__(self):
         return len(self.batch_sampler.sampler)
 
     def __iter__(self):
+        if self.shuffle_each_epoch and hasattr(self.dataset, "shuffle_valid_screen_times"):
+            self.dataset.shuffle_valid_screen_times()
         for i in range(len(self)):
             yield next(self.iterator)
+
+
 
 
 class _RepeatSampler(object):
