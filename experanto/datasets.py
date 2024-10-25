@@ -368,19 +368,19 @@ class ChunkDataset(Dataset):
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
-                # for the screen, we'll utilize torchvision.transforms
                 add_channel = Lambda(lambda x: torch.from_numpy(x[:, None, ...]) if len(x.shape) == 3 else torch.from_numpy(x))
-                transform_list = [v for v in self.modality_config.screen.transforms.values()]
+                transform_list = [v for v in self.modality_config.screen.transforms.values() if isinstance(v, torch.nn.Module)]
                 transform_list.insert(0, add_channel)
-                transforms[device_name] = Compose(transform_list)
             else:
-                if self.modality_config[device_name].transforms:
-                    transforms[device_name] = Compose([
-                        ToTensor(),
-                        torchvision.transforms.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])])
-                else:
-                    transforms[device_name] = Compose([
-                        ToTensor()])
+                transform_list = [ToTensor()]
+            
+            # Normalization.
+            if self.modality_config[device_name].transforms.get("normalization", False):
+                transform_list.append(
+                    torchvision.transforms.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])
+                )
+
+            transforms[device_name] = Compose(transform_list)
         return transforms
 
     def get_sample_in_meta_condition(self) -> dict:
