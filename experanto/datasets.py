@@ -385,7 +385,7 @@ class ChunkDataset(Dataset):
 
     def get_sample_in_meta_condition(self) -> dict:
         """
-        iterates through all
+        iterates through all stimuli, selects the ones which match the meta conditions (tiers or stimuli types) and creates a mask to select the correct times using `self._screen_sample_times` as the clock/reference times
            for example:
               if meta_conditions = {"tier": [train,train, ...], "stim_type": [type1, type2, ...]}
               and valid_condition = {"tier": train, "stim_type": type2}
