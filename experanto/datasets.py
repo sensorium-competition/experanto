@@ -354,7 +354,7 @@ class ChunkDataset(Dataset):
             # If modality should be normalized, load respective statistics from file.
             if self.modality_config[device_name].transforms.get("normalization", False):
                 mode = self.modality_config[device_name].transforms.normalization
-                assert mode in ['standardize', 'normalize']
+                assert mode in ['standardize', 'normalize'], f"transforms.normalization should be in 'standardize' or 'normalize', not {mode}"
                 means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
                 stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
                 if mode == 'standardize':
