@@ -7,5 +7,5 @@ setup(
     url="https://github.com/sensorium-competition/experanto",
     packages=find_packages(),
     # requried packages
-    install_requires=["numpy", "hydra-core"],
+    install_requires=["numpy", "hydra-core", "opencv-python",],
 )
