@@ -348,6 +348,11 @@ class ChunkDataset(Dataset):
             self.meta_conditions[k] = [t.get_meta(k) if t.get_meta(k) is not None else "blank" for t in self._trials]
 
     def initialize_statistics(self) -> None:
+        """
+        Initializes the statistics for each device based on the modality config.
+        :return:
+            instantiates self._statistics with the mean and std for each device
+        """
         self._statistics = {}
         for device_name in self.device_names:
             self._statistics[device_name] = {}
@@ -365,6 +370,10 @@ class ChunkDataset(Dataset):
                 self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
 
     def initialize_transforms(self):
+        """
+        Initializes the transforms for each device based on the modality config.
+        :return:
+        """
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
@@ -404,8 +413,11 @@ class ChunkDataset(Dataset):
 
     def get_full_valid_sample_times(self, ) -> Iterable:
         """
-        iterates through all sample times and checks if they are in the meta condition of interest
-        :return:
+        iterates through all sample times and checks if they could be used as
+        start times, eg if the next `self.chunk_sizes["screen"]` points are still valid
+        based on the previous meta condition filtering
+        :returns:
+            valid_times: np.array of valid starting points
         """
         valid_times = []
         for i, _ in enumerate(self._screen_sample_times[:-self.chunk_sizes["screen"]]):
