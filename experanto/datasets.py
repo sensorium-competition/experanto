@@ -436,6 +436,8 @@ class ChunkDataset(Dataset):
     def shuffle_valid_screen_times(self) -> None:
         """
         convenience function to randomly select new starting points for each chunk. Use this in training after each epoch.
+        If the sample stride is 1, all starting points will be used and this convenience function is not needed.
+        If the sample stride is larger than 1, this function will shuffle the starting points and select a subset of them.
         """
         times = self._full_valid_sample_times
         self._valid_screen_times = np.sort(np.random.choice(times, size=len(times) // self.sample_stride, replace=False))
