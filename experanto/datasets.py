@@ -333,7 +333,10 @@ class ChunkDataset(Dataset):
         # iterate over the valid condition in modality_config["screen"]["valid_condition"] to get the indices of self._screen_sample_times that meet all criteria
         self._sample_in_meta_condition = self.get_sample_in_meta_condition()
         self._full_valid_sample_times = self.get_full_valid_sample_times()
+
         # the _valid_screen_times are the indices from which the starting points for the chunks will be taken
+        # sampling stride is used to reduce the number of starting points by the stride
+        # default of stride is 1, so all starting points are used
         self._valid_screen_times = self._full_valid_sample_times[::self.sample_stride]
         self.transforms = self.initialize_transforms()
 
