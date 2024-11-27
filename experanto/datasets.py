@@ -12,7 +12,6 @@ from torchvision.transforms.v2 import ToTensor, Compose, Lambda
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
 
-from .configs import DEFAULT_MODALITY_CONFIG
 from .experiment import Experiment
 from .interpolators import ImageTrial, VideoTrial
 from .utils import add_behavior_as_channels, replace_nan_with_batch_mean
