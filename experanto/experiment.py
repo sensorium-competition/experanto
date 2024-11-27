@@ -9,7 +9,6 @@ from pathlib import Path
 import numpy as np
 
 from .interpolators import Interpolator
-from .configs import DEFAULT_MODALITY_CONFIG
 
 log = logging.getLogger(__name__)
 
