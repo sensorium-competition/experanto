@@ -12,6 +12,8 @@ from .interpolators import Interpolator
 
 log = logging.getLogger(__name__)
 
+# see .configs.py for the definition of DEFAULT_MODALITY_CONFIG
+DEFAULT_MODALITY_CONFIG = dict()
 
 class Experiment:
     def __init__(
