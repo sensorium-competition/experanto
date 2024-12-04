@@ -339,7 +339,10 @@ class ChunkDataset(Dataset):
         # iterate over the valid condition in modality_config["screen"]["valid_condition"] to get the indices of self._screen_sample_times that meet all criteria
         self._sample_in_meta_condition = self.get_sample_in_meta_condition()
         self._full_valid_sample_times = self.get_full_valid_sample_times()
+
         # the _valid_screen_times are the indices from which the starting points for the chunks will be taken
+        # sampling stride is used to reduce the number of starting points by the stride
+        # default of stride is 1, so all starting points are used
         self._valid_screen_times = self._full_valid_sample_times[::self.sample_stride]
         self.transforms = self.initialize_transforms()
 
@@ -354,6 +357,11 @@ class ChunkDataset(Dataset):
             self.meta_conditions[k] = [t.get_meta(k) if t.get_meta(k) is not None else "blank" for t in self._trials]
 
     def initialize_statistics(self) -> None:
+        """
+        Initializes the statistics for each device based on the modality config.
+        :return:
+            instantiates self._statistics with the mean and std for each device
+        """
         self._statistics = {}
         for device_name in self.device_names:
             self._statistics[device_name] = {}
@@ -380,6 +388,10 @@ class ChunkDataset(Dataset):
                 self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
 
     def initialize_transforms(self):
+        """
+        Initializes the transforms for each device based on the modality config.
+        :return:
+        """
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
@@ -400,7 +412,8 @@ class ChunkDataset(Dataset):
 
     def get_sample_in_meta_condition(self) -> dict:
         """
-        iterates through all samples and checks if they are in the meta condition of interest
+        iterates through all stimuli, selects the ones which match the meta conditions (tiers or stimuli types) and creates a mask to select the correct times using `self._screen_sample_times` as the clock/reference times
+
            for example:
               if meta_conditions = {"tier": [train,train, ...], "stim_type": [type1, type2, ...]}
               and valid_condition = {"tier": train, "stim_type": type2}
@@ -419,8 +432,11 @@ class ChunkDataset(Dataset):
 
     def get_full_valid_sample_times(self, ) -> Iterable:
         """
-        iterates through all sample times and checks if they are in the meta condition of interest
-        :return:
+        iterates through all sample times and checks if they could be used as
+        start times, eg if the next `self.chunk_sizes["screen"]` points are still valid
+        based on the previous meta condition filtering
+        :returns:
+            valid_times: np.array of valid starting points
         """
         valid_times = []
         for i, _ in enumerate(self._screen_sample_times[:-self.chunk_sizes["screen"]]):
@@ -436,6 +452,8 @@ class ChunkDataset(Dataset):
     def shuffle_valid_screen_times(self) -> None:
         """
         convenience function to randomly select new starting points for each chunk. Use this in training after each epoch.
+        If the sample stride is 1, all starting points will be used and this convenience function is not needed.
+        If the sample stride is larger than 1, this function will shuffle the starting points and select a subset of them.
         """
         times = self._full_valid_sample_times
         self._valid_screen_times = np.sort(np.random.choice(times, size=len(times) // self.sample_stride, replace=False))
