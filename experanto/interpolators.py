@@ -329,7 +329,7 @@ class ScreenInterpolator(Interpolator):
         out = np.zeros([len(valid_times)] + list(self._image_size))
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
-            if len(data.shape) == 2:
+            if (len(data.shape) == 2) or (data.shape[-1] == 3):
                 data = np.expand_dims(data, axis=0)
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
             if self.rescale:
