@@ -462,8 +462,11 @@ class ChunkDataset(Dataset):
             out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
         if self.add_behavior_as_channels:
             out = add_behavior_as_channels(out)
-        phase_shifts = self._experiment.devices["responses"]._phase_shifts
-        times_with_phase_shifts = (times - times.min())[:, None] + phase_shifts[None, :]
-        out["timestamps"] = torch.from_numpy(times_with_phase_shifts)
+        if self._experiment.devices["responses"].use_phase_shifts:
+            phase_shifts = self._experiment.devices["responses"]._phase_shifts
+            times = (times - times.min())[:, None] + phase_shifts[None, :]
+        else:
+            times = times - times.min()
+        out["timestamps"] = torch.from_numpy(times)
         return out
 
