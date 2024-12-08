@@ -6,10 +6,10 @@ from .datasets import ChunkDataset
 from .utils import MultiEpochsDataLoader, LongCycler
 
 
-def get_multisession_dataloader(paths, config: DictConfig) -> DataLoader:
+def get_multisession_dataloader(paths, config: DictConfig,) -> DataLoader:
     dataloaders = {}
     for i, path in enumerate(paths):
-        dataset_name = path.split("dynamic")[1].split("-Video")[0]
+        dataset_name = i
         dataset = ChunkDataset(path, **config.dataset,)
         dataloaders[dataset_name] = MultiEpochsDataLoader(dataset,
                                                **config.dataloader,
