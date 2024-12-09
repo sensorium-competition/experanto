@@ -9,10 +9,11 @@ from pathlib import Path
 import numpy as np
 
 from .interpolators import Interpolator
-from .configs import DEFAULT_MODALITY_CONFIG
 
 log = logging.getLogger(__name__)
 
+# see .configs.py for the definition of DEFAULT_MODALITY_CONFIG
+DEFAULT_MODALITY_CONFIG = dict()
 
 class Experiment:
     def __init__(
