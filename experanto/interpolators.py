@@ -329,6 +329,7 @@ class ScreenInterpolator(Interpolator):
         out = np.zeros([len(valid_times)] + list(self._image_size))
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
+            # TODO: establish convention of dimensons for time/channels. Then we can remove this
             if ((len(data.shape) == 2) or (data.shape[-1] == 3)) and (len(data.shape) < 4):
                 data = np.expand_dims(data, axis=0)
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
