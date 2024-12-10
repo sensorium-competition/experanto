@@ -360,19 +360,19 @@ class ChunkDataset(Dataset):
             # If modality should be normalized, load respective statistics from file.
             if self.modality_config[device_name].transforms.get("normalization", False):
                 mode = self.modality_config[device_name].transforms.normalization
-                assert mode in ['standardize', 'normalize', "response_hack", "screen_hack", "behavior_hack"]
+                assert mode in ['standardize', 'normalize', "recompute_responses", "screen_default", "recompute_behavior"]
                 means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
                 stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
                 if mode == 'standardize':
                     # If modality should only be standarized, set means to 0.
                     means = np.zeros_like(means)
-                elif mode == 'response_hack':
+                elif mode == 'recompute_responses':
                     means = np.zeros_like(means)
                     stds = np.nanstd(self._experiment.devices["responses"]._data, 0)[None, ...]
-                elif mode == 'behavior_hack':
+                elif mode == 'recompute_behavior':
                     means = np.nanmean(self._experiment.devices[device_name]._data, 0)[None, ...]
                     stds = np.nanstd(self._experiment.devices[device_name]._data, 0)[None, ...]
-                elif mode == 'screen_hack':
+                elif mode == 'screen_default':
                     means = np.array((80))
                     stds = np.array((60))
 
@@ -436,6 +436,7 @@ class ChunkDataset(Dataset):
     def shuffle_valid_screen_times(self) -> None:
         """
         convenience function to randomly select new starting points for each chunk. Use this in training after each epoch.
+        Does only work when num_workers=0 in DataLoader.
         """
         times = self._full_valid_sample_times
         self._valid_screen_times = np.sort(np.random.choice(times, size=len(times) // self.sample_stride, replace=False))
