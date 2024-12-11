@@ -54,7 +54,7 @@ dataloader:
   pin_memory: True
   drop_last: True
   prefetch_factor: 1
-  shuffle_each_epoch: True
+  shuffle_each_epoch: False
 
 
 
