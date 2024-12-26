@@ -5,7 +5,8 @@ import torch
 def replace_nan_with_batch_mean(data: np.array) -> np.array:
     row, col = np.where(np.isnan(data))
     for i, j in zip(row, col):
-        data[i, j] = np.nanmean(data[:, j])
+        new_value = np.nanmean(data[:, j])
+        data[i, j] = new_value if not np.isnan(new_value) else 0
     return data
 
 
