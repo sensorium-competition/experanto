@@ -19,7 +19,10 @@ def get_multisession_dataloader(paths: List[str],
 
     dataloaders = {}
     for i, (path, cfg) in enumerate(zip(paths, configs)):
-        dataset_name = f"session_{i}"
+        if "dynamic" in path:
+            dataset_name = path.split("dynamic")[1].split("-Video")[0]
+        else:
+            dataset_name = f"session_{i}"
         dataset = ChunkDataset(path, **cfg.dataset)
         dataloaders[dataset_name] = MultiEpochsDataLoader(dataset,
                                                           **cfg.dataloader,)
