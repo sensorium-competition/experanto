@@ -339,7 +339,10 @@ class ChunkDataset(Dataset):
         # iterate over the valid condition in modality_config["screen"]["valid_condition"] to get the indices of self._screen_sample_times that meet all criteria
         self._sample_in_meta_condition = self.get_sample_in_meta_condition()
         self._full_valid_sample_times = self.get_full_valid_sample_times()
+
         # the _valid_screen_times are the indices from which the starting points for the chunks will be taken
+        # sampling stride is used to reduce the number of starting points by the stride
+        # default of stride is 1, so all starting points are used
         self._valid_screen_times = self._full_valid_sample_times[::self.sample_stride]
         self.transforms = self.initialize_transforms()
 
@@ -354,6 +357,11 @@ class ChunkDataset(Dataset):
             self.meta_conditions[k] = [t.get_meta(k) if t.get_meta(k) is not None else "blank" for t in self._trials]
 
     def initialize_statistics(self) -> None:
+        """
+        Initializes the statistics for each device based on the modality config.
+        :return:
+            instantiates self._statistics with the mean and std for each device
+        """
         self._statistics = {}
         for device_name in self.device_names:
             self._statistics[device_name] = {}
@@ -380,6 +388,10 @@ class ChunkDataset(Dataset):
                 self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
 
     def initialize_transforms(self):
+        """
+        Initializes the transforms for each device based on the modality config.
+        :return:
+        """
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":

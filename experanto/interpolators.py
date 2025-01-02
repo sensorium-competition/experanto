@@ -224,9 +224,7 @@ class SequenceInterpolator(Interpolator):
                     assert (
                         local_data.shape[0] == local_time.shape[0]
                     ), "times and data should be same length before interpolation"
-                    out = linear_interpolate_1d_sequence(
-                        local_data, local_time, valid_times, self.keep_nans
-                    )
+
                     data[:, n_idx] = linear_interpolate_1d_sequence(
                         local_data, local_time, valid_times, self.keep_nans
                     )
