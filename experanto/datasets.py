@@ -360,7 +360,7 @@ class ChunkDataset(Dataset):
             # If modality should be normalized, load respective statistics from file.
             if self.modality_config[device_name].transforms.get("normalization", False):
                 mode = self.modality_config[device_name].transforms.normalization
-                assert mode in ['standardize', 'normalize', "recompute_responses", "screen_default", "recompute_behavior"]
+                assert mode in ['standardize', 'normalize'], f"transforms.normalization should be in 'standardize' or 'normalize', not {mode}"
                 means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
                 stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
                 if mode == 'standardize':
@@ -419,7 +419,7 @@ class ChunkDataset(Dataset):
 
     def get_full_valid_sample_times(self, ) -> Iterable:
         """
-        iterates through all sample times and checks if they are in the meta condition of interest
+        iterates through all stimuli, selects the ones which match the meta conditions (tiers or stimuli types) and creates a mask to select the correct times using `self._screen_sample_times` as the clock/reference times
         :return:
         """
         valid_times = []
@@ -436,7 +436,8 @@ class ChunkDataset(Dataset):
     def shuffle_valid_screen_times(self) -> None:
         """
         convenience function to randomly select new starting points for each chunk. Use this in training after each epoch.
-        Does only work when num_workers=0 in DataLoader.
+        If the sample stride is 1, all starting points will be used and this convenience function is not needed.
+        If the sample stride is larger than 1, this function will shuffle the starting points and select a subset of them.
         """
         times = self._full_valid_sample_times
         self._valid_screen_times = np.sort(np.random.choice(times, size=len(times) // self.sample_stride, replace=False))
