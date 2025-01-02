@@ -400,7 +400,7 @@ class ChunkDataset(Dataset):
 
     def get_sample_in_meta_condition(self) -> dict:
         """
-        iterates through all samples and checks if they are in the meta condition of interest
+        iterates through all stimuli, selects the ones which match the meta conditions (tiers or stimuli types) and creates a mask to select the correct times using `self._screen_sample_times` as the clock/reference times
            for example:
               if meta_conditions = {"tier": [train,train, ...], "stim_type": [type1, type2, ...]}
               and valid_condition = {"tier": train, "stim_type": type2}
@@ -419,8 +419,11 @@ class ChunkDataset(Dataset):
 
     def get_full_valid_sample_times(self, ) -> Iterable:
         """
-        iterates through all stimuli, selects the ones which match the meta conditions (tiers or stimuli types) and creates a mask to select the correct times using `self._screen_sample_times` as the clock/reference times
-        :return:
+        iterates through all sample times and checks if they could be used as
+        start times, eg if the next `self.chunk_sizes["screen"]` points are still valid
+        based on the previous meta condition filtering
+        :returns:
+            valid_times: np.array of valid starting points
         """
         valid_times = []
         for i, _ in enumerate(self._screen_sample_times[:-self.chunk_sizes["screen"]]):
