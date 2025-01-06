@@ -412,41 +412,79 @@ class ChunkDataset(Dataset):
 
     def get_sample_in_meta_condition(self) -> dict:
         """
-        iterates through all stimuli, selects the ones which match the meta conditions (tiers or stimuli types) and creates a mask to select the correct times using `self._screen_sample_times` as the clock/reference times
+        iterates through all samples and checks if they are in the meta condition of interest
            for example:
               if meta_conditions = {"tier": [train,train, ...], "stim_type": [type1, type2, ...]}
               and valid_condition = {"tier": train, "stim_type": type2}
            then the output would be {"tier": [True, True, ...], "stim_type": [False, True, ...]}
         """
+
         sample_in_meta_condition = {}
         for k, v in self.modality_config["screen"]["valid_condition"].items():
-            sample_in_meta = []
-            for i, (condition, start, end) in enumerate(zip(self.meta_conditions[k], self._start_times, self._end_times)):
-                if condition == v or (condition == "blank" and self.modality_config["screen"]["include_blanks"]):
-                    sample_in_meta.append(
-                        (self._screen_sample_times >= start) & (self._screen_sample_times < end)
-                    )
-            sample_in_meta_condition[k] = np.stack(sample_in_meta).sum(0).astype(bool)
+            # Pre-allocate a boolean array
+            result = np.zeros_like(self._screen_sample_times, dtype=bool)
+            
+            # Create masks for all trials at once
+            valid_conditions = np.array([
+                condition == v or (condition == "blank" and self.modality_config["screen"]["include_blanks"])
+                for condition in self.meta_conditions[k]
+            ])
+            
+            # Only process valid trials
+            valid_indices = np.where(valid_conditions)[0]
+            if len(valid_indices) > 0:
+                starts = self._start_times[valid_indices]
+                ends = self._end_times[valid_indices]
+                
+                # Vectorized comparison for all valid trials
+                for start, end in zip(starts, ends):
+                    mask = (self._screen_sample_times >= start) & (self._screen_sample_times < end)
+                    result |= mask
+                    
+            sample_in_meta_condition[k] = result
+
         return sample_in_meta_condition
 
-    def get_full_valid_sample_times(self, ) -> Iterable:
+
+
+    def get_full_valid_sample_times(self) -> Iterable:
         """
-        iterates through all sample times and checks if they could be used as
-        start times, eg if the next `self.chunk_sizes["screen"]` points are still valid
-        based on the previous meta condition filtering
-        :returns:
-            valid_times: np.array of valid starting points
+        Returns all valid sample times that can be used as starting points for chunks.
+        A sample time is valid if:
+        1. The chunk starting at this time does not extend beyond the end time
+        2. All samples in the chunk satisfy the meta conditions specified in the config
+           (e.g., all frames belong to the correct tier and stimulus type)
+
+        Returns:
+            Iterable: Array of valid sample times that can be used as chunk starting points
         """
-        valid_times = []
-        for i, _ in enumerate(self._screen_sample_times[:-self.chunk_sizes["screen"]]):
-            maybe_all_true = []
-            correct_duration = self._screen_sample_times[i + self.chunk_sizes["screen"]] < self.end_time
-            maybe_all_true.append(correct_duration)
-            for k, v in self._sample_in_meta_condition.items():
-                maybe_all_true.append(np.all(v[i: i + self.chunk_sizes["screen"]]))
-            if np.all(maybe_all_true):
-                valid_times.append(self._screen_sample_times[i])
-        return np.stack(valid_times)
+
+        # Calculate all possible end indices
+        chunk_size = self.chunk_sizes["screen"]
+        n_samples = len(self._screen_sample_times) - chunk_size
+        possible_indices = np.arange(n_samples)
+        
+        # Check duration condition vectorized
+        duration_mask = self._screen_sample_times[possible_indices + chunk_size] < self.end_time
+        
+        # Initialize all_conditions array with duration mask
+        all_conditions = duration_mask.copy()  # Make a copy to ensure correct shape
+
+        # Check meta conditions vectorized
+        for k, v in self._sample_in_meta_condition.items():
+            # Create a sliding window view of the meta condition array
+            windows = np.lib.stride_tricks.sliding_window_view(v[:n_samples + chunk_size], chunk_size)[:n_samples]
+            # Check if all values in each window are True
+            condition_mask = np.all(windows, axis=1)
+            # Ensure shapes match
+            assert condition_mask.shape == all_conditions.shape, f"Shape mismatch: {condition_mask.shape} vs {all_conditions.shape}"
+            # Combine with previous conditions
+            all_conditions &= condition_mask
+        
+        # Get the valid times
+        valid_times = self._screen_sample_times[possible_indices[all_conditions]]
+        return valid_times
+
 
     def shuffle_valid_screen_times(self) -> None:
         """

@@ -366,9 +366,8 @@ class ScreenTrial:
         first_frame_idx: int,
         num_frames: int,
     ) -> None:
-        f = Path(file_name)
-        self.file_name = f
-        self.data_file_name = f.parent.parent / "data" / (f.stem + ".npy")
+        base_filename = file_name.stem  # gets filename without extension
+        self.data_file_name = str(file_name.parent.parent / "data" / f"{base_filename}.npy")
         self._meta_data = meta_data
         self.modality = meta_data.get("modality")
         self.image_size = image_size
