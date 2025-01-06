@@ -434,7 +434,14 @@ class ChunkDataset(Dataset):
 
     def get_full_valid_sample_times(self) -> Iterable:
         """
-        Compare original and optimized implementations
+        Returns all valid sample times that can be used as starting points for chunks.
+        A sample time is valid if:
+        1. The chunk starting at this time does not extend beyond the end time
+        2. All samples in the chunk satisfy the meta conditions specified in the config
+           (e.g., all frames belong to the correct tier and stimulus type)
+
+        Returns:
+            Iterable: Array of valid sample times that can be used as chunk starting points
         """
 
         # Calculate all possible end indices
