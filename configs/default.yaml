@@ -13,9 +13,6 @@ dataset:
       include_blanks: True
       transforms:
         normalization: "screen_default"
-        #Resize:
-        #  _target_: "torchvision.transforms.v2.Resize"
-        #  size: [144, 256]
       interpolation:
         rescale: True
         rescale_size: [36, 64]
