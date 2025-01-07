@@ -257,6 +257,8 @@ class ChunkDataset(Dataset):
         root_folder: str,
         global_sampling_rate: None,
         global_chunk_size: None,
+        add_behavior_as_channels: bool = False,
+        replace_nans_with_means: bool = False,
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
         add_behavior_as_channels: bool = False,
         replace_nans_with_means: bool = False,
@@ -369,6 +371,7 @@ class ChunkDataset(Dataset):
             if self.modality_config[device_name].transforms.get("normalization", False):
                 mode = self.modality_config[device_name].transforms.normalization
                 assert mode in ['standardize', 'normalize', "recompute_responses", "screen_default", "recompute_behavior"], f"Unknown mode {mode}"
+                assert mode in ['standardize', 'normalize', "response_hack", "screen_hack", "behavior_hack"]
                 means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
                 stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
                 if mode == 'standardize':
@@ -412,7 +415,7 @@ class ChunkDataset(Dataset):
 
     def get_sample_in_meta_condition(self) -> dict:
         """
-        iterates through all samples and checks if they are in the meta condition of interest
+        iterates through all stimuli, selects the ones which match the meta conditions (tiers or stimuli types) and creates a mask to select the correct times using `self._screen_sample_times` as the clock/reference times
            for example:
               if meta_conditions = {"tier": [train,train, ...], "stim_type": [type1, type2, ...]}
               and valid_condition = {"tier": train, "stim_type": type2}
@@ -528,5 +531,6 @@ class ChunkDataset(Dataset):
         else:
             times = times - times.min()
         out["timestamps"] = torch.from_numpy(times)
+
         return out
 
