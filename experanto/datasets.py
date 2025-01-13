@@ -15,7 +15,6 @@ from hydra.utils import instantiate
 from .experiment import Experiment
 from .interpolators import ImageTrial, VideoTrial
 from .utils import add_behavior_as_channels, replace_nan_with_batch_mean
-
 # see .configs.py for the definition of DEFAULT_MODALITY_CONFIG
 DEFAULT_MODALITY_CONFIG = dict()
 
@@ -337,7 +336,6 @@ class ChunkDataset(Dataset):
             self.start_time, self.end_time, 1.0 / self.sampling_rates["screen"]
         )
         # iterate over the valid condition in modality_config["screen"]["valid_condition"] to get the indices of self._screen_sample_times that meet all criteria
-        self._sample_in_meta_condition = self.get_sample_in_meta_condition()
         self._full_valid_sample_times = self.get_full_valid_sample_times()
 
         # the _valid_screen_times are the indices from which the starting points for the chunks will be taken
@@ -353,7 +351,7 @@ class ChunkDataset(Dataset):
         self._start_times = screen.timestamps[start_idx]
         self._end_times = np.append(screen.timestamps[start_idx[1:]], np.inf)
         self.meta_conditions = {}
-        for k in self.modality_config.screen.valid_condition.keys():
+        for k in ["modality", "valid_trial"] + list(self.modality_config.screen.valid_condition.keys()):
             self.meta_conditions[k] = [t.get_meta(k) if t.get_meta(k) is not None else "blank" for t in self._trials]
 
     def initialize_statistics(self) -> None:
@@ -409,43 +407,76 @@ class ChunkDataset(Dataset):
 
             transforms[device_name] = Compose(transform_list)
         return transforms
+    
+        
+    def get_condition_mask_from_meta_conditions(self, valid_conditions_sum_of_product: List[dict]) -> np.ndarray:
+        """Creates a boolean mask for trials that satisfy any of the given condition combinations.
+        
+        Args:
+            valid_conditions_sum_of_product: List of dictionaries, where each dictionary represents a set of
+                conditions that should be satisfied together (AND). Multiple dictionaries are combined with OR.
+                Example: [{'tier': 'train', 'stim_type': 'natural'}, {'tier': 'blank'}] matches trials that
+                are either (train AND natural) OR blank.
 
-    def get_sample_in_meta_condition(self) -> dict:
+        Returns:
+            np.ndarray: Boolean mask indicating which trials satisfy at least one set of conditions.
         """
-        iterates through all samples and checks if they are in the meta condition of interest
-           for example:
-              if meta_conditions = {"tier": [train,train, ...], "stim_type": [type1, type2, ...]}
-              and valid_condition = {"tier": train, "stim_type": type2}
-           then the output would be {"tier": [True, True, ...], "stim_type": [False, True, ...]}
+
+        all_conditions = None
+
+        for valid_conditions_product in valid_conditions_sum_of_product:
+
+            conditions_of_product = None
+
+            for k, valid_condition in valid_conditions_product.items():
+
+                trial_conditions = self.meta_conditions[k]
+
+                condition_mask = np.array([condition == valid_condition for condition in trial_conditions])
+
+                if conditions_of_product is None:
+                    conditions_of_product = condition_mask
+                else:
+                    conditions_of_product &= condition_mask
+
+            if all_conditions is None:
+                all_conditions = conditions_of_product
+            else:
+                all_conditions |= conditions_of_product
+
+        return all_conditions
+    
+    def get_screen_sample_mask_from_meta_conditions(self, satisfy_for_next: int, valid_conditions_sum_of_product: List[dict]) -> np.ndarray:
+        """Creates a boolean mask indicating which screen samples satisfy the given conditions.
+
+        Args:
+            satisfy_for_next: Number of consecutive samples that must satisfy conditions
+            valid_conditions_sum_of_product: List of condition dictionaries combined with OR logic,
+                where conditions within each dictionary use AND logic
+
+        Returns:
+            Boolean array matching screen sample times, True where conditions are met
         """
 
-        sample_in_meta_condition = {}
-        for k, v in self.modality_config["screen"]["valid_condition"].items():
-            # Pre-allocate a boolean array
-            result = np.zeros_like(self._screen_sample_times, dtype=bool)
-            
-            # Create masks for all trials at once
-            valid_conditions = np.array([
-                condition == v or (condition == "blank" and self.modality_config["screen"]["include_blanks"])
-                for condition in self.meta_conditions[k]
-            ])
-            
-            # Only process valid trials
-            valid_indices = np.where(valid_conditions)[0]
-            if len(valid_indices) > 0:
-                starts = self._start_times[valid_indices]
-                ends = self._end_times[valid_indices]
-                
-                # Vectorized comparison for all valid trials
-                for start, end in zip(starts, ends):
-                    mask = (self._screen_sample_times >= start) & (self._screen_sample_times < end)
-                    result |= mask
-                    
-            sample_in_meta_condition[k] = result
+        all_conditions = self.get_condition_mask_from_meta_conditions(valid_conditions_sum_of_product)
 
-        return sample_in_meta_condition
+        sample_mask = np.zeros_like(self._screen_sample_times, dtype=bool)
 
+        valid_indices = np.where(all_conditions)[0]
 
+        if len(valid_indices) > 0:
+            starts = self._start_times[valid_indices]
+            ends = self._end_times[valid_indices]
+
+            for start, end in zip(starts, ends):
+                mask = (self._screen_sample_times >= start) & (self._screen_sample_times < end)
+                sample_mask |= mask
+
+        if satisfy_for_next > 1:
+            windows = np.lib.stride_tricks.sliding_window_view(sample_mask, satisfy_for_next)
+            sample_mask = np.all(windows, axis=1)
+
+        return sample_mask
 
     def get_full_valid_sample_times(self) -> Iterable:
         """
@@ -461,30 +492,25 @@ class ChunkDataset(Dataset):
 
         # Calculate all possible end indices
         chunk_size = self.chunk_sizes["screen"]
-        n_samples = len(self._screen_sample_times) - chunk_size
+        n_samples = len(self._screen_sample_times) - chunk_size + 1
         possible_indices = np.arange(n_samples)
         
         # Check duration condition vectorized
-        duration_mask = self._screen_sample_times[possible_indices + chunk_size] < self.end_time
-        
-        # Initialize all_conditions array with duration mask
-        all_conditions = duration_mask.copy()  # Make a copy to ensure correct shape
+        duration_mask = self._screen_sample_times[possible_indices + chunk_size - 1] < self.end_time
 
-        # Check meta conditions vectorized
-        for k, v in self._sample_in_meta_condition.items():
-            # Create a sliding window view of the meta condition array
-            windows = np.lib.stride_tricks.sliding_window_view(v[:n_samples + chunk_size], chunk_size)[:n_samples]
-            # Check if all values in each window are True
-            condition_mask = np.all(windows, axis=1)
-            # Ensure shapes match
-            assert condition_mask.shape == all_conditions.shape, f"Shape mismatch: {condition_mask.shape} vs {all_conditions.shape}"
-            # Combine with previous conditions
-            all_conditions &= condition_mask
-        
-        # Get the valid times
-        valid_times = self._screen_sample_times[possible_indices[all_conditions]]
-        return valid_times
+        # this assumes that the valid_condition is a single condition
+        valid_conditions = [self.modality_config["screen"]["valid_condition"]]
 
+        if self.modality_config["screen"]["include_blanks"]:
+            additional_valid_conditions = {"tier": "blank"}  
+            valid_conditions.append(additional_valid_conditions)
+
+        sample_mask_from_meta_conditions = self.get_screen_sample_mask_from_meta_conditions(chunk_size, valid_conditions)
+
+        final_mask = duration_mask & sample_mask_from_meta_conditions
+
+        return self._screen_sample_times[possible_indices[final_mask]]
+     
 
     def shuffle_valid_screen_times(self) -> None:
         """
@@ -529,4 +555,132 @@ class ChunkDataset(Dataset):
             times = times - times.min()
         out["timestamps"] = torch.from_numpy(times)
         return out
+
+
+from experanto.utils import add_behavior_as_channels, replace_nan_with_batch_mean
+from typing import Optional, Union, List
+
+
+class TargetedChunkDataset(ChunkDataset):
+    def __init__(
+            self,
+            root_folder: str,
+            global_sampling_rate: None,
+            global_chunk_size: None,
+            modality_config: dict = DEFAULT_MODALITY_CONFIG,
+            add_behavior_as_channels: bool = False,
+            replace_nans_with_means: bool = False,
+            sample_times: Optional[Iterable] = None,
+            history: float = 0.,
+            valid_time_difference: list = [0.04, 0.160],
+
+    ) -> None:
+        """
+        :param sample_times: a list of timestamps. Each timestamp will be turned into a chunk
+        :param history: history in seconds of where the chunk should start
+        :param valid_time_difference: the interval in seconds, relative to the timestamp of interest
+        """
+        super().__init__(root_folder=root_folder,
+                         global_sampling_rate=global_sampling_rate,
+                         global_chunk_size=global_chunk_size,
+                         modality_config=modality_config,
+                         add_behavior_as_channels=add_behavior_as_channels,
+                         replace_nans_with_means=replace_nans_with_means,
+                         )
+
+        self._sample_times = sample_times
+        self.history = history
+        self.valid_time_difference = valid_time_difference
+
+        # check if all offsets in the modality config are zero:
+        for device_name in self.device_names:
+            if self.modality_config[device_name].offset != 0:
+                raise ValueError(f"Offset in modality config for {device_name} has to be Zero for this dataloader. ")
+        
+        # set the sample times for the targeted chunks
+        tier = self.modality_config["screen"]["valid_condition"]["tier"]
+        self._set_sample_times_for_targeted_chunks(tier, True, True)
+
+    def __getitem__(self, idx) -> dict:
+        out = {}
+        s = self._valid_screen_times[idx] # s is the start time of the sample of interest
+        for device_name in self.device_names:
+            sampling_rate = self.sampling_rates[device_name]
+            chunk_size = self.chunk_sizes[device_name]
+            chunk_s = chunk_size / sampling_rate
+
+            times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
+            times = times - self.history
+            data, _ = self._experiment.interpolate(times, device=device_name)
+            if device_name == "responses":
+                relative_times = times - s
+                delta_min = self.valid_time_difference[0]
+                delta_max = self.valid_time_difference[1]
+                valid_mask = ((relative_times) >= delta_min) & ((relative_times) <= delta_max)
+                valid_indices = np.where(valid_mask)[0] # these are the indices of the samples that are of interest
+
+            if self.replace_nans_with_means:
+                if np.any(np.isnan(data)):
+                    data = replace_nan_with_batch_mean(data)
+
+            out[device_name] = self.transforms[device_name](data).squeeze(
+                0)  # remove dim0 for response/eye_tracker/treadmill
+            # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
+            if device_name == "screen":
+                if out[device_name].shape[-1] == 3:
+                    out[device_name] = out[device_name].permute(0, 3, 1, 2)
+
+        if self.add_behavior_as_channels:
+            out = add_behavior_as_channels(out)
+        if self._experiment.devices["responses"].use_phase_shifts:
+            phase_shifts = self._experiment.devices["responses"]._phase_shifts
+            times = (times - times.min())[:, None] + phase_shifts[None, :]
+        else:
+            times = times - times.min()
+        out["timestamps"] = torch.from_numpy(times)
+        out["valid_indices"] = torch.from_numpy(valid_indices)
+        return out
+    
+    def _set_sample_times_for_targeted_chunks(
+            self,
+            tier: Optional[Union[str, List[str]]],
+            valid_trials_only: bool = False,
+            use_first_frame: bool = True
+    ) -> None:
+        """Sets valid sample times by filtering trials based on tier and validity.
+
+        Args:
+            tier: Trial tier(s) to include (e.g., 'train', 'test').
+            valid_trials_only: If True, only includes valid trials.
+            use_first_frame: If True, uses only first frame timestamp per trial, else uses all frames.
+        """
+
+        # Get all trials
+        trials = np.array(self._trials)
+        
+        valid_conditions = [{"tier" : tier}]
+        if valid_trials_only:
+            valid_conditions[0]["valid_trial"] = True
+
+        condition_mask = self.get_condition_mask_from_meta_conditions(valid_conditions)
+        
+        trials = trials[condition_mask]
+
+        # Get timestamps
+        timestamps = self._experiment.devices['screen'].timestamps
+        
+        # Extract times based on first_frame or all frames
+        sample_times = []
+        if use_first_frame:
+            for trial in trials:
+                first_frame_idx = trial.get_meta('first_frame_idx')
+                if first_frame_idx is not None:
+                    sample_times.append(timestamps[first_frame_idx])
+        else:
+            for trial in trials:
+                frame_indices = trial.get_meta('frame_idx')
+                if frame_indices is not None:
+                    sample_times.extend(timestamps[frame_indices])
+                    
+        self._valid_screen_times = np.array(sample_times)
 
