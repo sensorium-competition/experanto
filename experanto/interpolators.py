@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 import numpy.lib.format as fmt
 import yaml
+import torch
 
 from .utils import linear_interpolate_1d_sequence, linear_interpolate_sequences
 
@@ -168,6 +169,7 @@ class SequenceInterpolator(Interpolator):
                 int
             )
             data = self._data[idx]
+            
         if self.interpolation_mode == "nearest_neighbor":
             return data, valid
         elif self.interpolation_mode == "linear":
@@ -237,7 +239,21 @@ class SequenceInterpolator(Interpolator):
             raise NotImplementedError(
                 f"interpolation_mode should be linear or nearest_neighbor"
             )
+    def interpolate_bins(self, times:np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        values, valid = self.interpolate(times)
+        valid = self.valid_times(times)
+        valid_times = times[valid]
 
+        # Convert start_time and end_time to indices
+        start_idx = int(np.floor(valid_times[0] * self.sampling_rate))
+        end_idx = int(np.ceil(valid_times[-1] * self.sampling_rate))
+
+        # Extract the interval from spikes
+        interval_res = self._data[start_idx:end_idx,:]
+        #spike_counts = torch.tensor([np.sum(each)*(1000/self.sampling_rate) for each in interval_res.T])
+        spike_counts = torch.tensor([np.trapz(each, dx=1/self.sampling_rate, axis=0)*1000 for each in interval_res.T]) #original_smapling_rate =1000
+        
+        return spike_counts, valid
 
 class ScreenInterpolator(Interpolator):
     def __init__(
@@ -265,6 +281,7 @@ class ScreenInterpolator(Interpolator):
         self._data_file_idx = np.concatenate(
             [np.full(t.num_frames, i) for i, t in enumerate(self.trials)]
         )
+        #print("num_frame:{}\nfirst_fframe_idx:{}".format(self._num_frames, self._first_frame_idx))
         # infer image size
         if not rescale_size:
             for m in self.trials:

@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+from torchvision.transforms import functional as F
+import torch.nn.functional as pad_F
 
 def linear_interpolate_1d_sequence(row, times_old, times_new, keep_nans=False):
     """
@@ -166,3 +168,120 @@ class ShortCycler:
 
     def __len__(self):
         return len(self.loaders) * self.min_batches
+
+class GazeBasedCrop(torch.nn.Module):
+    def __init__(self, crop_size, pixel_per_degree):
+        """
+        Custom transform to crop an image based on a given center point in degrees
+        and pad it to maintain the target crop size.
+
+        Args:
+            crop_size (tuple): (height, width) of the crop in pixels.
+            pixel_per_degree (float): Conversion factor from degrees to pixels.
+        """
+        super().__init__()
+        self.crop_size = crop_size
+        self.pixel_per_degree = pixel_per_degree
+
+    def forward(self, inputs):
+        """
+        Perform cropping and padding based on the gaze center and ensure consistent output size.
+
+        Args:
+            inputs (tuple): A tuple of (image, center), where:
+                - image (Tensor): Input image tensor of shape (C, H, W).
+                - center (tuple): (x, y) coordinates of the gaze point in degrees.
+
+        Returns:
+            Tensor: Cropped and padded image tensor of shape (C, target_height, target_width).
+        """
+        image, center = inputs
+        h, w = self.crop_size
+
+        # Ensure center is unpacked into Python scalars
+        if isinstance(center, torch.Tensor) and center.numel() == 2:
+            x_deg, y_deg = center.tolist()
+        elif isinstance(center, (list, tuple)):
+            x_deg, y_deg = center
+        else:
+            raise ValueError(f"Unexpected center format: {type(center)}, {center}")
+
+        # Convert gaze points from degrees to pixels
+        x_px = x_deg * self.pixel_per_degree
+        y_px = y_deg * self.pixel_per_degree
+
+        # Compute crop bounds
+        left = max(0, int(x_px - w // 2))
+        top = max(0, int(y_px - h // 2))
+        right = min(image.shape[-1], left + w)  # Ensure crop stays within bounds
+        bottom = min(image.shape[-2], top + h)
+
+        # Crop the image
+        cropped_image = F.crop(image, top, left, bottom - top, right - left)
+
+        # Pad the cropped image to ensure consistent size
+        cropped_image = self._pad_to_size(cropped_image, (h, w))
+
+        return cropped_image
+
+    def _pad_to_size(self, image, size):
+        """
+        Pad an image to the desired size, ensuring consistent dimensions.
+
+        Args:
+            image (Tensor): Input image tensor of shape (C, H, W) or (1, C, H, W).
+            size (tuple): Desired output size (height, width).
+
+        Returns:
+            Tensor: Padded image of shape (C, target_height, target_width).
+        """
+        # Remove any batch dimension if present
+        if image.ndim == 4 and image.size(0) == 1:
+            image = image.squeeze(0)
+
+        if image.ndim != 3:
+            raise ValueError(f"Unexpected image shape: {image.shape}. Expected (C, H, W).")
+
+        _, h, w = image.shape
+        target_h, target_w = size
+
+        # Calculate required padding for each side
+        pad_h = target_h - h
+        pad_w = target_w - w
+
+        pad_top = pad_h // 2
+        pad_bottom = pad_h - pad_top
+        pad_left = pad_w // 2
+        pad_right = pad_w - pad_left
+
+        # Ensure padding is non-negative
+        pad_top = max(0, pad_top)
+        pad_bottom = max(0, pad_bottom)
+        pad_left = max(0, pad_left)
+        pad_right = max(0, pad_right)
+
+        # Apply padding
+        return pad_F.pad(image, (pad_left, pad_right, pad_top, pad_bottom), mode="constant", value=0)
+
+def replace_nans_with_neighbors(data):
+    """
+    Replace NaN values in a tensor with the previous value if available,
+    otherwise with the next valid value.
+
+    Args:
+        data (torch.Tensor): 2D tensor of shape (N, 2) where NaNs may exist.
+
+    Returns:
+        torch.Tensor: Tensor with NaNs replaced.
+    """
+    data = data.clone()  # Create a copy to avoid modifying the original tensor
+    for i in range(data.size(0)):  # Iterate over rows
+        if torch.isnan(data[i]).any():
+            if i > 0 and not torch.isnan(data[i - 1]).any():  # Use previous value
+                data[i] = data[i - 1]
+            elif i < data.size(0) - 1 and not torch.isnan(data[i + 1]).any():  # Use next value
+                data[i] = data[i + 1]
+            else:
+                # If no previous or next valid value, replace with zeros or a default value
+                data[i] = torch.zeros_like(data[i])
+    return data
