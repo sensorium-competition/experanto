@@ -20,9 +20,10 @@ dataset:
         #Resize:
         #  _target_: "torchvision.transforms.v2.Resize"
         # size: [144, 256]
+        #  size: 0.5
       interpolation:
         rescale: True
-        rescale_size: [144, 256]
+        rescale_size: [118, 210]
     responses:
       keep_nans : False
       sampling_rate: 100
