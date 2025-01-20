@@ -291,10 +291,14 @@ class ScreenInterpolator(Interpolator):
     def normalize_data(self, data):
         return (data - self.mean) / self.std
 
-    def _parse_trials(self) -> None:
+    def _combine_metadatas(self) -> None:
+        
         # Function to check if a file is a numbered yml file
         def is_numbered_yml(file_name):
             return re.fullmatch(r"\d{5}\.yml", file_name) is not None
+
+        # Initialize an empty dictionary to store all YAML contents
+        all_yaml_data = {}
 
         # Get block subfolders and sort by number
         meta_files = [
@@ -302,11 +306,46 @@ class ScreenInterpolator(Interpolator):
             for f in (self.root_folder / "meta").iterdir()
             if f.is_file() and is_numbered_yml(f.name)
         ]
-        meta_files.sort(key=lambda f: int(os.path.splitext(f.name)[0]))
+        meta_files.sort(key=lambda f: int(os.path.splitext(f.name)[0]))        
+
+        # Read each YAML file and store under its filename
+        for meta_file in meta_files:
+            with open(meta_file, 'r') as file:
+                file_base_name = meta_file.stem # here it should be the yaml file's name without the .yml extension
+                yaml_content = yaml.safe_load(file)
+                all_yaml_data[file_base_name] = yaml_content
+
+        output_path = self.root_folder / "combined_meta.yml"
+        with open(output_path, 'w') as file:
+            yaml.dump(all_yaml_data, file)
+
+    def read_combined_meta(self) -> None:
+
+        if not (self.root_folder / "combined_meta.yml").exists():
+            print("Combining metadatas...")
+            self._combine_metadatas()
+
+        with open(self.root_folder / "combined_meta.yml", 'r') as file:
+            self.combined_meta = yaml.safe_load(file)
+        
+        metadatas = []
+        keys = []
+        for key, value in self.combined_meta.items():
+            metadatas.append(value)
+            keys.append(key)
+
+        return metadatas, keys
+    
+    def _parse_trials(self) -> None:
 
         self.trials = []
-        for f in meta_files:
-            self.trials.append(ScreenTrial.create(f))
+
+        metadatas, keys = self.read_combined_meta()
+
+        for key, metadata in zip(keys, metadatas):
+
+            data_file_name = self.root_folder / "data" / f"{key}.npy"
+            self.trials.append(ScreenTrial.create(data_file_name, metadata))
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
@@ -360,14 +399,13 @@ class ScreenInterpolator(Interpolator):
 class ScreenTrial:
     def __init__(
         self,
-        file_name: str,
+        data_file_name: str,
         meta_data: dict,
         image_size: tuple,
         first_frame_idx: int,
         num_frames: int,
     ) -> None:
-        base_filename = file_name.stem  # gets filename without extension
-        self.data_file_name = str(file_name.parent.parent / "data" / f"{base_filename}.npy")
+        self.data_file_name = data_file_name
         self._meta_data = meta_data
         self.modality = meta_data.get("modality")
         self.image_size = image_size
@@ -375,13 +413,11 @@ class ScreenTrial:
         self.num_frames = num_frames
 
     @staticmethod
-    def create(file_name: str) -> "ScreenTrial":
-        with open(file_name, "r") as file:
-            meta_data = yaml.load(file, Loader=yaml.SafeLoader)
+    def create(data_file_name: str, meta_data: dict) -> "ScreenTrial":
         modality = meta_data.get("modality")
         class_name = modality.capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"
-        return globals()[class_name](file_name, meta_data)
+        return globals()[class_name](data_file_name, meta_data)
 
     def get_data(self) -> np.array:
         return np.load(self.data_file_name)
@@ -391,37 +427,37 @@ class ScreenTrial:
 
 
 class ImageTrial(ScreenTrial):
-    def __init__(self, file_name, data) -> None:
+    def __init__(self, data_file_name, meta_data) -> None:
         super().__init__(
-            file_name,
-            data,
-            tuple(data.get("image_size")),
-            data.get("first_frame_idx"),
+            data_file_name,
+            meta_data,
+            tuple(meta_data.get("image_size")),
+            meta_data.get("first_frame_idx"),
             1,
         )
 
 
 class VideoTrial(ScreenTrial):
-    def __init__(self, file_name, data) -> None:
+    def __init__(self, data_file_name, meta_data) -> None:
         super().__init__(
-            file_name,
-            data,
-            tuple(data.get("image_size")),
-            data.get("first_frame_idx"),
-            data.get("num_frames"),
+            data_file_name,
+            meta_data,
+            tuple(meta_data.get("image_size")),
+            meta_data.get("first_frame_idx"),
+            meta_data.get("num_frames"),
         )
 
 
 class BlankTrial(ScreenTrial):
-    def __init__(self, file_name, data) -> None:
+    def __init__(self, data_file_name, meta_data) -> None:
         super().__init__(
-            file_name,
-            data,
-            tuple(data.get("image_size")),
-            data.get("first_frame_idx"),
+            data_file_name,
+            meta_data,
+            tuple(meta_data.get("image_size")),
+            meta_data.get("first_frame_idx"),
             1,
         )
-        self.interleave_value = data.get("interleave_value")
+        self.interleave_value = meta_data.get("interleave_value")
 
     def get_data(self) -> np.array:
         return np.full((1,) + self.image_size, self.interleave_value)
