@@ -927,15 +927,10 @@ class TargetedChunkDataset(ChunkDataset):
                 num_weird_images += 1
                 continue
 
-            groundtruth_datas = groundtruth_datas.mean(axis=0)
-            predictions_datas = predictions_datas.mean(axis=0)
-
             groundtruth_datas = torch.tensor(groundtruth_datas)
             predictions_datas = torch.tensor(predictions_datas)
 
-
             pearson.update(predictions_datas, groundtruth_datas)
-
 
         result = pearson.compute()
 
