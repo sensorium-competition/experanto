@@ -1,45 +1,6 @@
 import numpy as np
 import torch
 
-
-def replace_nan_with_batch_mean(data: np.array) -> np.array:
-    row, col = np.where(np.isnan(data))
-    for i, j in zip(row, col):
-        new_value = np.nanmean(data[:, j])
-        data[i, j] = new_value if not np.isnan(new_value) else 0
-
-    return data
-
-
-def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
-    """
-    Adds the behavior as additional channels to the datapoint of the datasets __getitem__.
-    data = {
-        'screen': torch.Tensor: (n_timepoints, channels, height, width)
-        'eye_tracker': torch.Tensor: (n_timepoints, channels)
-        'treadmill': torch.Tensor: (n_timepoints, channels)
-    }
-    The function apends the ey tracker and treadmill behavioral varialbes as entire channels to the screen data.
-    data = {
-        'screen': torch.Tensor,  # shape: (n_timepoints, channels+behavior_channels ,...)
-        ...
-    }
-    """
-    screen = data["screen"]
-    h, w = screen.shape[-2:]
-    eye_tracker = data["eye_tracker"]
-    treadmill = data["treadmill"]
-
-    # Add eye tracker and treadmill as channels
-    eye_tracker = eye_tracker[..., None, None].repeat(1, 1, h, w)
-    treadmill = treadmill[..., None, None,].repeat(1, 1, h, w)
-    screen = torch.cat([screen, eye_tracker, treadmill], dim=1)
-
-    data["screen"] = screen
-    return data
-
-
-
 def linear_interpolate_1d_sequence(row, times_old, times_new, keep_nans=False):
     """
     Interpolates columns in a NumPy array and replaces NaNs with interpolated values
@@ -112,6 +73,8 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
             self.dataset.shuffle_valid_screen_times()
         for i in range(len(self)):
             yield next(self.iterator)
+
+
 
 
 class _RepeatSampler(object):
