@@ -12,20 +12,19 @@ dataset:
       sample_stride: 4
       include_blanks: True
       transforms:
-        normalization: "normalize"
-        Resize:
-          _target_: "torchvision.transforms.v2.Resize"
-          size: [144, 256]
+        normalization: "screen_default"
+
       interpolation:
         rescale: True
-        rescale_size: [144, 256]
+        rescale_size: [36, 64]
     responses:
       keep_nans : False
       sampling_rate: null
       chunk_size: null
       offset: 0.1 # in seconds
       transforms:
-        normalization: "standardize"
+        normalization: "recompute_responses"
+
       interpolation:
         interpolation_mode: "nearest_neighbor"
     eye_tracker:
@@ -34,7 +33,7 @@ dataset:
       chunk_size: null
       offset: 0
       transforms:
-        normalization: "normalize"
+        normalization: "recompute_behavior"
       interpolation:
         interpolation_mode: "nearest_neighbor"
     treadmill:
@@ -43,7 +42,8 @@ dataset:
       chunk_size: null
       offset: 0
       transforms:
-        normalization: "normalize"
+        normalization: "recompute_behavior"
+        normalization: "behavior_hack"
       interpolation:
         interpolation_mode: "nearest_neighbor"
 
@@ -54,7 +54,7 @@ dataloader:
   pin_memory: True
   drop_last: True
   prefetch_factor: 1
-  shuffle_each_epoch: True
+  shuffle_each_epoch: False
 
 
 
