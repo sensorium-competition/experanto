@@ -256,9 +256,9 @@ class ChunkDataset(Dataset):
         root_folder: str,
         global_sampling_rate: None,
         global_chunk_size: None,
-        modality_config: dict = DEFAULT_MODALITY_CONFIG,
         add_behavior_as_channels: bool = False,
         replace_nans_with_means: bool = False,
+        modality_config: dict = DEFAULT_MODALITY_CONFIG,
     ) -> None:
         """
         The full modality config is a nested dictionary.
@@ -367,6 +367,7 @@ class ChunkDataset(Dataset):
             if self.modality_config[device_name].transforms.get("normalization", False):
                 mode = self.modality_config[device_name].transforms.normalization
                 assert mode in ['standardize', 'normalize', "recompute_responses", "screen_default", "recompute_behavior"], f"Unknown mode {mode}"
+                assert mode in ['standardize', 'normalize', "response_hack", "screen_hack", "behavior_hack"]
                 means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
                 stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
                 if mode == 'standardize':
@@ -421,7 +422,6 @@ class ChunkDataset(Dataset):
         Returns:
             np.ndarray: Boolean mask indicating which trials satisfy at least one set of conditions.
         """
-
         all_conditions = None
 
         for valid_conditions_product in valid_conditions_sum_of_product:
@@ -554,6 +554,7 @@ class ChunkDataset(Dataset):
         else:
             times = times - times.min()
         out["timestamps"] = torch.from_numpy(times)
+
         return out
 
 

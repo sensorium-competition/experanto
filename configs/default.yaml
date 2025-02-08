@@ -13,6 +13,7 @@ dataset:
       include_blanks: True
       transforms:
         normalization: "screen_default"
+
       interpolation:
         rescale: True
         rescale_size: [36, 64]
@@ -23,6 +24,7 @@ dataset:
       offset: 0.1 # in seconds
       transforms:
         normalization: "recompute_responses"
+
       interpolation:
         interpolation_mode: "nearest_neighbor"
     eye_tracker:
@@ -41,6 +43,7 @@ dataset:
       offset: 0
       transforms:
         normalization: "recompute_behavior"
+        normalization: "behavior_hack"
       interpolation:
         interpolation_mode: "nearest_neighbor"
 
