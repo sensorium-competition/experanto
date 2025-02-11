@@ -1,15 +1,17 @@
 dataset:
   global_sampling_rate: null
   global_chunk_size: null
+  add_behavior_as_channels: True
+  replace_nans_with_means: True
   modality_config:
     screen:
       keep_nans : False
-      sampling_rate: null
-      chunk_size: null
+      sampling_rate: 30
+      chunk_size: 60
       valid_condition:
         tier: "train"
       offset: 0
-      sample_stride: 4
+      sample_stride: 1
       include_blanks: True
       transforms:
         normalization: "screen_default"
@@ -18,17 +20,17 @@ dataset:
         rescale_size: [36, 64]
     responses:
       keep_nans : False
-      sampling_rate: null
-      chunk_size: null
-      offset: 0.1 # in seconds
+      sampling_rate: 8
+      chunk_size: 16
+      offset: 0.0 # in seconds
       transforms:
         normalization: "recompute_responses"
       interpolation:
         interpolation_mode: "nearest_neighbor"
     eye_tracker:
       keep_nans : False
-      sampling_rate: null
-      chunk_size: null
+      sampling_rate: 30
+      chunk_size: 60
       offset: 0
       transforms:
         normalization: "recompute_behavior"
@@ -36,8 +38,8 @@ dataset:
         interpolation_mode: "nearest_neighbor"
     treadmill:
       keep_nans : False
-      sampling_rate: null
-      chunk_size: null
+      sampling_rate: 30
+      chunk_size: 60
       offset: 0
       transforms:
         normalization: "recompute_behavior"
@@ -45,12 +47,12 @@ dataset:
         interpolation_mode: "nearest_neighbor"
 
 dataloader:
-  batch_size: 32
+  batch_size: 16
   shuffle: true
-  num_workers: 1
+  num_workers: 2
   pin_memory: True
   drop_last: True
-  prefetch_factor: 1
+  prefetch_factor: 2
   shuffle_each_epoch: False
 
 
