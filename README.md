@@ -7,22 +7,25 @@ Python package to interpolate recordings and stimuli of neuroscience experiments
 experanto/
 ├── experanto/
 │   ├── __init__.py
-│   ├── configs/
-│   │   ├── __init__.py
-│   │   └── default.yaml
+│   ├── configs.py
+│   ├── dataloaders.py
 │   ├── datasets.py
 │   ├── experiment.py
 │   ├── interpolators.py
 │   ├── utils.py
+├── configs/
+│   ├── __init__.py
+│   ├── default.yaml
 ├── tests/
 │   ├── __init__.py
-│   ├── test_datasets.py
-│   ├── test_experiment.py
-│   ├── test_interpolators.py
-│   ├── test_utils.py
-├── notebooks/                        # Jupyter notebooks
-├── logs/                             # Log files (gitignored)
-├── pyproject.toml                    # Project configuration
-├── requirements.txt                  # Dependencies
+│   ├── create_mock_data.py
+│   ├── test_sequence_interpolators.py
+├── examples/                        
+├── logs/                             
+├── Dockerfile
+├── docker-compose.yml
+├── setup.py                    
+├── requirements.txt                  
+├── pytest.ini                  
 └── README.md    
 ```
