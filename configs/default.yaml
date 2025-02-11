@@ -43,7 +43,6 @@ dataset:
       offset: 0
       transforms:
         normalization: "recompute_behavior"
-        normalization: "behavior_hack"
       interpolation:
         interpolation_mode: "nearest_neighbor"
 
