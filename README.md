@@ -1,5 +1,5 @@
-# Experanto
-Python package to interpolate recordings and stimuli of neuroscience experiments 
+#### fast-forward pytorch dataloaders for neuroscience 
+ 
 
 ## Project structure
 
