@@ -367,7 +367,6 @@ class ChunkDataset(Dataset):
             if self.modality_config[device_name].transforms.get("normalization", False):
                 mode = self.modality_config[device_name].transforms.normalization
                 assert mode in ['standardize', 'normalize', "recompute_responses", "screen_default", "recompute_behavior"], f"Unknown mode {mode}"
-                assert mode in ['standardize', 'normalize', "response_hack", "screen_hack", "behavior_hack"]
                 means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
                 stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
                 if mode == 'standardize':
