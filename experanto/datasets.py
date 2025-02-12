@@ -15,6 +15,7 @@ from hydra.utils import instantiate
 from .experiment import Experiment
 from .interpolators import ImageTrial, VideoTrial
 from .utils import add_behavior_as_channels, replace_nan_with_batch_mean
+
 # see .configs.py for the definition of DEFAULT_MODALITY_CONFIG
 DEFAULT_MODALITY_CONFIG = dict()
 

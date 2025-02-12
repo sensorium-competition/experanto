@@ -140,9 +140,6 @@ class SequenceInterpolator(Interpolator):
         else:
             self._precision = 1 / self.std
 
-    #         if len(self._precision.shape) == 1:
-    #             self._precision = self._precision.reshape(1, -1)
-
     def normalize_data(self, data):
         if self.normalize_subtract_mean:
             data = data - self.mean
@@ -169,67 +166,6 @@ class SequenceInterpolator(Interpolator):
             )
             data = self._data[idx]
         if self.interpolation_mode == "nearest_neighbor":
-            return data, valid
-        elif self.interpolation_mode == "linear":
-            # we are interested to take the data a bit before and after to have better interpolation
-            # if the target time sequence starts / ends with nan
-            if len(idx.shape) == 1:
-                start_idx = int(max(0, idx[0] - self.interp_window))
-                end_idx = int(
-                    min(
-                        idx[-1] + self.interp_window,
-                        np.floor(
-                            (self.valid_interval.end - self.valid_interval.start)
-                            / self.time_delta
-                        ),
-                    )
-                )
-
-                # time is always first dim
-                array = self._data[start_idx:end_idx]
-                orig_times = (
-                    np.arange(start_idx, end_idx) * self.time_delta
-                    + self.valid_interval.start
-                )
-                assert (
-                    array.shape[0] == orig_times.shape[0]
-                ), "times and data should be same length before interpolation"
-                data = linear_interpolate_sequences(
-                    array, orig_times, valid_times, self.keep_nans
-                )
-
-            else:
-                # this probably should be changed to be more efficient
-                start_idx = np.where(
-                    idx[0, :] - self.interp_window > 0,
-                    idx[0, :] - self.interp_window,
-                    0,
-                ).astype(int)
-                max_idx = np.floor(
-                    (self.valid_interval.end - self.valid_interval.start)
-                    / self.time_delta
-                ).astype(int)
-                end_idx = np.where(
-                    idx[-1, :] + self.interp_window < max_idx,
-                    idx[-1, :] + self.interp_window,
-                    max_idx,
-                ).astype(int)
-                data = np.full((len(valid_times), self._data.shape[-1]), np.nan)
-                for n_idx, st_idx in enumerate(start_idx):
-                    local_data = self._data[st_idx : end_idx[n_idx], n_idx]
-                    local_time = (
-                        np.arange(st_idx, end_idx[n_idx]) * self.time_delta
-                        + self.valid_interval.start
-                    )
-                    assert (
-                        local_data.shape[0] == local_time.shape[0]
-                    ), "times and data should be same length before interpolation"
-
-                    data[:, n_idx] = linear_interpolate_1d_sequence(
-                        local_data, local_time, valid_times, self.keep_nans
-                    )
-            if self.normalize:
-                data = self.normalize_data(data)
             return data, valid
         else:
             raise NotImplementedError(
@@ -327,7 +263,7 @@ class ScreenInterpolator(Interpolator):
 
         with open(self.root_folder / "combined_meta.yml", 'r') as file:
             self.combined_meta = yaml.safe_load(file)
-        
+
         metadatas = []
         keys = []
         for key, value in self.combined_meta.items():
@@ -367,6 +303,7 @@ class ScreenInterpolator(Interpolator):
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
             # TODO: establish convention of dimensons for time/channels. Then we can remove this
+            # TODO: revisit this for on the fly decoding
             if ((len(data.shape) == 2) or (data.shape[-1] == 3)) and (len(data.shape) < 4):
                 data = np.expand_dims(data, axis=0)
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
