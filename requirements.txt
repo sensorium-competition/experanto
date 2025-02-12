@@ -1,0 +1,7 @@
+numpy>1.22.0
+opencv-python>=4.7.0
+scipy>=1.13.1
+jaxtyping>=0.2.30
+plotly>=5.22.0
+pandas
+hydra-core>=1.2
