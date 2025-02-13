@@ -1,5 +1,6 @@
 #### fast-forward pytorch dataloaders for neuroscience 
  
+[demo notebook](./examples/demo.ipynb)
 
 ## Project structure
 
