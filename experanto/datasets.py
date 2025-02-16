@@ -553,14 +553,16 @@ class ChunkDataset(Dataset):
                 if out[device_name].shape[-1] == 3:
                     out[device_name] = out[device_name].permute(0, 3, 1, 2)
 
+            if device_name == 'responses':
+                if self._experiment.devices["responses"].use_phase_shifts:
+                    phase_shifts = self._experiment.devices["responses"]._phase_shifts
+                    times = (times - times.min())[:, None] + phase_shifts[None, :]
+
+            timestamps[device_name] = torch.from_numpy(times)
+
         if self.add_behavior_as_channels:
             out = add_behavior_as_channels(out)
-        if self._experiment.devices["responses"].use_phase_shifts:
-            phase_shifts = self._experiment.devices["responses"]._phase_shifts
-            times = (times - times.min())[:, None] + phase_shifts[None, :]
-        else:
-            times = times - times.min()
-        out["timestamps"] = torch.from_numpy(times)
+        out["timestamps"] = timestamps
 
         return out
 
