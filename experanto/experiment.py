@@ -35,10 +35,8 @@ class Experiment:
     def _load_devices(self) -> None:
         # Populate devices by going through subfolders
         # Assumption: blocks are sorted by start time
-        #print("loading devices")
+        
         device_folders = [d for d in self.root_folder.iterdir() if (d.is_dir())]
-        #print(device_folders)
-
         for d in device_folders:
             print(d)
             if d.name not in self.modality_config:
@@ -66,18 +64,6 @@ class Experiment:
         elif isinstance(device, str):
             assert device in self.devices, "Unknown device '{}'".format(device)
             values, valid = self.devices[device].interpolate(times)
-        return values, valid
-
-    def interpolate_bins(self, times: slice, device=None) -> tuple[np.ndarray, np.ndarray]:
-        if device is None:
-            values = {}
-            valid = {}
-            for d, interp in self.devices.items():
-               values[d], valid[d] = interp.interpolate(times)
-        elif isinstance(device, str):
-            assert device in self.devices, "Unknown device '{}'".format(device)
-            values, valid = self.devices[device].interpolate_bins(times)
-        
         return values, valid
 
     def get_valid_range(self, device_name) -> tuple:

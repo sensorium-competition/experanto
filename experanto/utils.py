@@ -2,6 +2,8 @@ import numpy as np
 import torch
 from torchvision.transforms import functional as F
 import torch.nn.functional as pad_F
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 def linear_interpolate_1d_sequence(row, times_old, times_new, keep_nans=False):
     """
@@ -169,100 +171,6 @@ class ShortCycler:
     def __len__(self):
         return len(self.loaders) * self.min_batches
 
-class GazeBasedCrop(torch.nn.Module):
-    def __init__(self, crop_size, pixel_per_degree):
-        """
-        Custom transform to crop an image based on a given center point in degrees
-        and pad it to maintain the target crop size.
-
-        Args:
-            crop_size (tuple): (height, width) of the crop in pixels.
-            pixel_per_degree (float): Conversion factor from degrees to pixels.
-        """
-        super().__init__()
-        self.crop_size = crop_size
-        self.pixel_per_degree = pixel_per_degree
-
-    def forward(self, inputs):
-        """
-        Perform cropping and padding based on the gaze center and ensure consistent output size.
-
-        Args:
-            inputs (tuple): A tuple of (image, center), where:
-                - image (Tensor): Input image tensor of shape (C, H, W).
-                - center (tuple): (x, y) coordinates of the gaze point in degrees.
-
-        Returns:
-            Tensor: Cropped and padded image tensor of shape (C, target_height, target_width).
-        """
-        image, center = inputs
-        h, w = self.crop_size
-
-        # Ensure center is unpacked into Python scalars
-        if isinstance(center, torch.Tensor) and center.numel() == 2:
-            x_deg, y_deg = center.tolist()
-        elif isinstance(center, (list, tuple)):
-            x_deg, y_deg = center
-        else:
-            raise ValueError(f"Unexpected center format: {type(center)}, {center}")
-
-        # Convert gaze points from degrees to pixels
-        x_px = x_deg * self.pixel_per_degree
-        y_px = y_deg * self.pixel_per_degree
-
-        # Compute crop bounds
-        left = max(0, int(x_px - w // 2))
-        top = max(0, int(y_px - h // 2))
-        right = min(image.shape[-1], left + w)  # Ensure crop stays within bounds
-        bottom = min(image.shape[-2], top + h)
-
-        # Crop the image
-        cropped_image = F.crop(image, top, left, bottom - top, right - left)
-
-        # Pad the cropped image to ensure consistent size
-        cropped_image = self._pad_to_size(cropped_image, (h, w))
-
-        return cropped_image
-
-    def _pad_to_size(self, image, size):
-        """
-        Pad an image to the desired size, ensuring consistent dimensions.
-
-        Args:
-            image (Tensor): Input image tensor of shape (C, H, W) or (1, C, H, W).
-            size (tuple): Desired output size (height, width).
-
-        Returns:
-            Tensor: Padded image of shape (C, target_height, target_width).
-        """
-        # Remove any batch dimension if present
-        if image.ndim == 4 and image.size(0) == 1:
-            image = image.squeeze(0)
-
-        if image.ndim != 3:
-            raise ValueError(f"Unexpected image shape: {image.shape}. Expected (C, H, W).")
-
-        _, h, w = image.shape
-        target_h, target_w = size
-
-        # Calculate required padding for each side
-        pad_h = target_h - h
-        pad_w = target_w - w
-
-        pad_top = pad_h // 2
-        pad_bottom = pad_h - pad_top
-        pad_left = pad_w // 2
-        pad_right = pad_w - pad_left
-
-        # Ensure padding is non-negative
-        pad_top = max(0, pad_top)
-        pad_bottom = max(0, pad_bottom)
-        pad_left = max(0, pad_left)
-        pad_right = max(0, pad_right)
-
-        # Apply padding
-        return pad_F.pad(image, (pad_left, pad_right, pad_top, pad_bottom), mode="constant", value=0)
-
 def replace_nans_with_neighbors(data):
     """
     Replace NaN values in a tensor with the previous value if available,
@@ -285,3 +193,243 @@ def replace_nans_with_neighbors(data):
                 # If no previous or next valid value, replace with zeros or a default value
                 data[i] = torch.zeros_like(data[i])
     return data
+
+def get_validation_split(n_images, train_frac, seed):
+    """
+    Splits the total number of images into train and test set.
+    This ensures that in every session, the same train and validation images are being used.
+
+    Args:
+        n_images: Total number of images. These will be plit into train and validation set
+        train_frac: fraction of images used for the training set
+        seed: random seed
+
+    Returns: Two arrays, containing image IDs of the whole imageset, split into train and validation
+
+    """
+    if seed:
+        np.random.seed(seed)
+    train_idx, val_idx = np.split(
+        np.random.permutation(int(n_images)), [int(n_images * train_frac)]
+    )
+    assert not np.any(
+        np.isin(train_idx, val_idx)
+    ), "train_set and val_set are overlapping sets"
+
+    return train_idx, val_idx
+
+class GazeBasedCrop(torch.nn.Module):
+    def __init__(self, crop_size, pixel_per_degree, monitor_center, dest_rect, bg_color=(127.5, 127.5, 127.5)):
+        """
+        Crops an image centered on the receptive field (RF) location, adjusted for gaze.
+        The image is first resized to `dest_rect` and then padded to match the full monitor size.
+
+        Args:
+            crop_size (tuple): (height, width) of the crop in pixels.
+            pixel_per_degree (float): Conversion factor from degrees to pixels.
+            monitor_center (tuple): (x, y) pixel coordinates of the monitor center.
+            dest_rect (tuple): (x1, y1, x2, y2) defining stimulus area (where stimulus was shown).
+            bg_color (tuple): Background color in RGB (default is gray: 127.5, 127.5, 127.5).
+        """
+        super().__init__()
+        self.crop_size = crop_size
+        self.pixel_per_degree = pixel_per_degree
+        self.monitor_size = (monitor_center[0] * 2, monitor_center[1] * 2)  # Compute monitor size
+        self.dest_rect = dest_rect  # Resize image to match this region before padding
+        self.bg_color = bg_color  # Background color (default gray)
+
+    def forward(self, inputs, gaze, fix_spot, stim_location, dynamic=False):
+        """
+        Perform resizing, padding, and cropping based on gaze-adjusted RF location.
+
+        Args:
+            inputs (Tensor): Input image tensor of shape (C, H, W).
+            gaze (tuple or tensor): (x, y) current gaze position in degrees.
+            fix_spot (tuple): (x, y) fixation spot location in degrees.
+            stim_location (tuple): (x, y) RF center location in degrees.
+            dynamic (bool): If True, updates RF center per frame. If False, uses static mean gaze.
+
+        Returns:
+            Tensor: Cropped and padded image of shape (C, target_height, target_width).
+        """
+        image = self._ensure_correct_channels(inputs)
+        h, w = self.crop_size
+
+        # Step 1: Resize image to match `destRect`
+        dest_width = self.dest_rect[2] - self.dest_rect[0]
+        dest_height = self.dest_rect[3] - self.dest_rect[1]
+        image = F.resize(image, (dest_height, dest_width))  # Resize to `destRect`
+        #plt.imshow(image[0])
+        # Step 2: Pad image to match the full monitor size
+        image = self._pad_to_monitor_size(image)
+
+        # Step 3: Compute RF center offset based on gaze and fixation spot
+        rf_center_x, rf_center_y = self._compute_rf_center(gaze, fix_spot, stim_location, dynamic)
+
+        # Convert RF center from degrees to pixels (Monitor center is now origin)
+        x_px = rf_center_x  + self.monitor_size[0] // 2
+        y_px = rf_center_y  + self.monitor_size[1] // 2  # Flip y-axis
+
+        # Compute crop bounds
+        left = int(x_px - w // 2)
+        top = int(y_px - h // 2)
+        right = left + w
+        bottom = top + h
+
+        # Step 4: Crop and pad if necessary
+
+        #self._plot_debug(image, x_px, y_px, left, top, right, bottom, fix_spot, stim_location, gaze)
+        cropped_image = self._safe_crop(image, left, top, right, bottom)
+        return cropped_image
+
+    def _compute_rf_center(self, gaze, fix_spot, stim_location, dynamic):
+        """
+        Computes the receptive field center adjusted by gaze offset.
+
+        Args:
+            gaze (tuple): (x, y) gaze position in degrees.
+            fix_spot (tuple): (x, y) fixation spot in degrees.
+            stim_location (tuple): (x, y) RF center location in degrees.
+            dynamic (bool): Whether to use frame-by-frame gaze shift or static mean gaze.
+
+        Returns:
+            tuple: (rf_center_x, rf_center_y) adjusted RF location in degrees.
+        """
+        gaze = gaze * self.pixel_per_degree
+        if dynamic:
+            rf_center_x = stim_location[0] + (gaze[0] - fix_spot[0])
+            rf_center_y = stim_location[1] + (gaze[1] - fix_spot[1])
+        else:
+            mean_gaze_x, mean_gaze_y = torch.mean(torch.tensor(gaze), dim=0)
+            rf_center_x = stim_location[0] + (mean_gaze_x - fix_spot[0])
+            rf_center_y = stim_location[1] + (mean_gaze_y - fix_spot[1])
+
+        return rf_center_x, rf_center_y
+
+    def _pad_to_monitor_size(self, image):
+        """
+        Pads the resized image to match the full monitor size using `bg_color`.
+
+        Args:
+            image (Tensor): Input image tensor of shape (C, H, W).
+
+        Returns:
+            Tensor: Padded image of shape (C, monitor_height, monitor_width).
+        """
+        C, H, W = image.shape
+        monitor_w, monitor_h = self.monitor_size
+
+        # Compute padding
+        pad_left = (monitor_w - W) // 2
+        pad_right = monitor_w - W - pad_left
+        pad_top = (monitor_h - H) // 2
+        pad_bottom = monitor_h - H - pad_top
+
+        padding = (pad_left, pad_right, pad_top, pad_bottom)
+        return self._apply_padding(image, padding, C)
+
+    def _safe_crop(self, image, left, top, right, bottom):
+        """
+        Crops and pads the image with a background color if necessary.
+
+        Args:
+            image (Tensor): Input image tensor (C, H, W).
+            left, top, right, bottom: Cropping bounds.
+
+        Returns:
+            Tensor: Cropped and padded image of size (C, target_height, target_width).
+        """
+        C, H, W = image.shape  # Get image dimensions
+        crop_left = max(0, left)
+        crop_top = max(0, top)
+        crop_right = min(W, right)
+        crop_bottom = min(H, bottom)
+
+        # Crop the valid part of the image
+        cropped = F.crop(image, crop_top, crop_left, crop_bottom - crop_top, crop_right - crop_left)
+        #plt.imshow(cropped[0])
+
+        # Compute padding amounts
+        pad_left = max(0, -left)
+        pad_top = max(0, -top)
+        pad_right = max(0, right - W)
+        pad_bottom = max(0, bottom - H)
+
+        if any([pad_left, pad_top, pad_right, pad_bottom]):
+            padding = (pad_left, pad_right, pad_top, pad_bottom)
+            cropped = self._apply_padding(cropped, padding, C)
+
+        return cropped
+
+    def _apply_padding(self, image, padding, C):
+        """
+        Apply padding to the image while maintaining correct data types.
+        
+        Args:
+            image (Tensor): Image tensor of shape (C, H, W).
+            padding (tuple): Padding values (left, right, top, bottom).
+            C (int): Number of channels (1 for grayscale, 3 for RGB).
+        
+        Returns:
+            Tensor: Padded image.
+        """
+        # Convert padding values to integers
+        padding = tuple(int(p) for p in padding)
+
+        if C == 1:  # Grayscale image
+            fill_value = float(self.bg_color[0])
+        else:  # RGB image
+            fill_value = tuple(int(c) for c in self.bg_color)  # Convert RGB values to int
+        
+        return F.pad(image, padding, fill=fill_value)
+
+    def _ensure_correct_channels(self, image):
+        """
+        Ensures the image has the correct shape (C, H, W).
+
+        Args:
+            image (Tensor): Input image tensor.
+
+        Returns:
+            Tensor: Image in (C, H, W) format.
+        """
+        if image.ndim == 2:  # If grayscale (H, W), add a channel
+            image = image.unsqueeze(0)  # Convert to (1, H, W)
+        elif image.ndim == 3 and image.shape[-1] == 3:  # If (H, W, 3), permute to (3, H, W)
+            image = image.permute(2, 0, 1)
+        return image
+
+    def _plot_debug(self, image, x_px, y_px, left, top, right, bottom, fix_spot, stim_location, gaze):
+        """
+        Debugging function to visualize the cropping process.
+        """
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.imshow(image.permute(1, 2, 0).cpu().numpy(), cmap="gray", origin="upper")  # Convert CHW -> HWC
+
+        # Plot important points
+        ax.scatter(x_px, y_px, color = 'blue',marker="+", s=80, label="RF Center (x_px, y_px)")
+        print(x_px,y_px, stim_location)
+        ax.scatter(stim_location[0]  + self.monitor_size[0] // 2,
+                   stim_location[1]  + self.monitor_size[1] // 2, 
+                   color="red", marker="+", s=80, label="Stimulus Location")
+        ax.scatter(np.array(gaze[:,0]*self.pixel_per_degree) + self.monitor_size[0] // 2,
+                   np.array(gaze[:,1]*self.pixel_per_degree) + self.monitor_size[1] // 2,
+                   color="blue", marker="*", s=20, label="Gaze Location")
+        print(np.array(gaze[:,0])* self.pixel_per_degree  + self.monitor_size[0] // 2,
+                   np.array(gaze[:,1])* self.pixel_per_degree  + self.monitor_size[1] // 2)
+        ax.scatter(fix_spot[0] + self.monitor_size[0] // 2,
+                   fix_spot[1]  + self.monitor_size[1] // 2, 
+                   color="red", marker="*", s=80, label="Fixation Spot")
+        ax.scatter(self.monitor_size[0] // 2, self.monitor_size[1] // 2, 
+                   color="green", marker="o", s=40, label="Monitor Center")
+
+        # Plot bounding box
+        rect = patches.Rectangle(
+            (left, top), right - left, bottom - top,
+            linewidth=1, edgecolor="yellow", facecolor="none"
+        )
+        ax.add_patch(rect)
+
+        ax.legend()
+        plt.title("Debug Visualization: RF Center, Fixation Spot, and Crop Area")
+        plt.show()

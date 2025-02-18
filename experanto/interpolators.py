@@ -168,7 +168,9 @@ class SequenceInterpolator(Interpolator):
             idx = np.floor((valid_times - self.start_time) / self.time_delta).astype(
                 int
             )
+            #print(times, valid_times,idx)
             data = self._data[idx]
+            #print(data)
             
         if self.interpolation_mode == "nearest_neighbor":
             return data, valid
@@ -239,21 +241,6 @@ class SequenceInterpolator(Interpolator):
             raise NotImplementedError(
                 f"interpolation_mode should be linear or nearest_neighbor"
             )
-    def interpolate_bins(self, times:np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        values, valid = self.interpolate(times)
-        valid = self.valid_times(times)
-        valid_times = times[valid]
-
-        # Convert start_time and end_time to indices
-        start_idx = int(np.floor(valid_times[0] * self.sampling_rate))
-        end_idx = int(np.ceil(valid_times[-1] * self.sampling_rate))
-
-        # Extract the interval from spikes
-        interval_res = self._data[start_idx:end_idx,:]
-        #spike_counts = torch.tensor([np.sum(each)*(1000/self.sampling_rate) for each in interval_res.T])
-        spike_counts = torch.tensor([np.trapz(each, dx=1/self.sampling_rate, axis=0)*1000 for each in interval_res.T]) #original_smapling_rate =1000
-        
-        return spike_counts, valid
 
 class ScreenInterpolator(Interpolator):
     def __init__(
@@ -344,8 +331,10 @@ class ScreenInterpolator(Interpolator):
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
         out = np.zeros([len(valid_times)] + list(self._image_size))
+        meta = None
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
+            meta = self.trials[u_idx].get_meta('image_id')
             if len(data.shape) == 2:
                 data = np.expand_dims(data, axis=0)
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
@@ -363,7 +352,7 @@ class ScreenInterpolator(Interpolator):
                 ]
         if self.normalize:
             out = self.normalize_data(out)
-        return out, valid
+        return (out,meta), valid
 
     def rescale_frame(self, frame: np.array) -> np.array:
         """
@@ -444,3 +433,86 @@ class BlankTrial(ScreenTrial):
 
     def get_data(self) -> np.array:
         return np.full((1,) + self.image_size, self.interleave_value)
+
+
+class SpikesInterpolator(Interpolator):
+    def __init__(
+        self,
+        root_folder: str,
+        sampling_rate: float = 100.0,  # Default to 100 Hz
+        normalize: bool = False,
+        **kwargs,
+    ) -> None:
+        """
+        Interpolator specifically designed for spike train data.
+
+        Args:
+            root_folder (str): Path to the root folder containing spike data.
+            sampling_rate (float): Sampling rate in Hz (default: 100 Hz).
+            normalize (bool): Whether to normalize spike counts.
+        """
+        super().__init__(root_folder)
+        meta = self.load_meta()
+        self.sampling_rate = meta.get("sampling_rate", sampling_rate)
+        self.time_delta = 1.0 / self.sampling_rate
+        self.start_time = meta["start_time"]
+        self.end_time = meta["end_time"]
+        self.valid_interval = TimeInterval(self.start_time, self.end_time)
+
+        self.n_units = meta["n_signals"]  # Number of recorded spike units
+        self.normalize = normalize
+
+        # Load spike data from .npy or .mem file
+        if (self.root_folder / "spikes.npy").exists():
+            self._data = np.load(self.root_folder / "spikes.npy")
+        else:
+            self._data = np.memmap(
+                self.root_folder / "data.mem",
+                dtype=meta["dtype"],
+                mode="r",
+                shape=(meta["n_timestamps"], self.n_units),
+            )
+
+        # Load normalization parameters if needed
+        if self.normalize:
+            self._init_normalization()
+
+    def _init_normalization(self):
+        """Load normalization parameters (mean & std) for spike data."""
+        self.mean = np.load(self.root_folder / "meta/means.npy")
+        self.std = np.load(self.root_folder / "meta/stds.npy")
+        self.mean = self.mean.T
+        self.std = self.std.T
+        self._precision = 1 / self.std
+
+    def interpolate(self, times: np.ndarray) -> tuple[torch.Tensor, np.ndarray]:
+        """
+        Interpolates spike data using binned counts.
+
+        Args:
+            times (np.ndarray): Query timestamps.
+
+        Returns:
+            tuple:
+                - torch.Tensor: Spike counts per bin.
+                - np.ndarray: Boolean mask indicating valid times.
+        """
+        valid = self.valid_times(times)
+        valid_times = times[valid]
+
+        # Convert times to indices in spike data
+        idx = np.round(valid_times * self.sampling_rate).astype(int)
+
+        # Extract spike count data for the interval
+        interval_res = self._data[idx]
+
+        # Compute spike counts per bin (to match old binned counts format) (trapezoidal integration)
+        spike_counts = torch.tensor([
+            np.trapz(each[2:], dx=1 / self.sampling_rate, axis=0) * 1000
+            for each in interval_res.T  # Scale to spikes per second (Hz) # original frequency 1000 Hz
+        ])
+
+        if self.normalize:
+            spike_counts = (spike_counts - self.mean) / self.std
+
+        return spike_counts, valid

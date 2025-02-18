@@ -12,11 +12,14 @@ from torchvision.transforms.v2 import ToTensor, Compose, Lambda
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
 import yaml
+from torch.utils.data import Subset
+import numpy as np
+import matplotlib.pyplot as plt
 
 from .configs import DEFAULT_MODALITY_CONFIG
 from .experiment import Experiment
 from .interpolators import ImageTrial, VideoTrial
-from .utils import GazeBasedCrop, replace_nans_with_neighbors
+from .utils import GazeBasedCrop, replace_nans_with_neighbors, get_validation_split
 
 
 class SimpleChunkedDataset(Dataset):
@@ -478,18 +481,18 @@ class MonkeyFixation(Dataset):
         self.device_names = self._experiment.device_names
         self.start_time, self.end_time = self._experiment.get_valid_range("screen")
         self._read_trials()
-        #print("read_trials")
+
         self.initialize_statistics()
-        #print("initialized statistics")
+
         self._screen_sample_times = np.arange(
             self.start_time, self.end_time, 1.0 / self.sampling_rates["screen"]
         )
-        #print("pre transforms")
+
         self.transforms = self.initialize_transforms()
 
         # Dynamically filter swap times based on meta_conditions
         self._swap_times_valid_trial = self.get_swap_time_valid_conditions()
-
+        self.DataPoint = namedtuple("DataPoint", self.device_names)
 
     def _read_trials(self) -> None:
         screen = self._experiment.devices["screen"]
@@ -549,13 +552,44 @@ class MonkeyFixation(Dataset):
             valid_indices &= (condition_array == condition_value) | (
                 (condition_array == "blank") & include_blanks
             )
-
+        self._valid_indices = valid_indices
         # Return the swap times that satisfy all conditions
         return self._experiment.devices['screen'].timestamps[valid_indices]
+
 
     def shuffle_valid_screen_times(self) -> None:
         times = self._full_valid_sample_times
         self._valid_screen_times = np.sort(np.random.choice(times, size=len(times) // self.sample_stride, replace=False))
+    
+
+    @staticmethod
+    def get_batch_aligned_split(n_images, train_frac, batch_size, seed):
+        if seed is not None:
+            np.random.seed(seed)
+
+        indices = np.arange(n_images)
+        np.random.shuffle(indices)
+
+        # Compute training size and align up to the next batch
+        train_size = int(n_images * train_frac)
+        train_size = ((train_size + batch_size - 1) // batch_size) * batch_size  # Align up
+        train_size = min(train_size, n_images)  # Ensure it doesn't exceed total images
+
+        train_indices = indices[:train_size]
+        val_indices = indices[train_size:]
+        return train_indices, val_indices
+
+    def split(self, train_frac=0.8, seed=None):
+        """
+        Split the dataset into train and validation subsets using the same logic as the static loader.
+        """
+        # Get train and validation indices using the static loader's logic
+        train_indices, val_indices = get_validation_split(len(self), train_frac, seed)
+
+        # Create train and validation subsets
+        train_dataset = Subset(self, train_indices)
+        val_dataset = Subset(self, val_indices)
+        return train_dataset, val_dataset
 
     def __len__(self):
         return len(self._swap_times_valid_trial)
@@ -569,10 +603,63 @@ class MonkeyFixation(Dataset):
             chunk_s = chunk_size / sampling_rate
             times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
             times = times + self.modality_config[device_name].offset
-            if device_name == "responses":
-                data, _ = self._experiment.interpolate_bins(times, device=device_name)
+            if device_name == "screen":
+                (data,meta), _ = self._experiment.interpolate(times, device=device_name)
+                out['image_id'] = meta
             else:
                 data, _ = self._experiment.interpolate(times, device=device_name)
             out[device_name] = self.transforms[device_name](data).squeeze(0)
+            
         out["timestamps"] = torch.from_numpy(times)
+        datapoint = {'screen':out['screen'], 'responses':out['responses']}
+        return out
+        #return self.DataPoint(**datapoint)
+
+
+class MonkeyFixationGazeCrop(MonkeyFixation):
+    def __init__(
+        self,
+        root_folder: str,
+        global_sampling_rate: None,
+        global_chunk_size: None,
+        modality_config: dict = DEFAULT_MODALITY_CONFIG,
+    ) -> None:
+        
+        super().__init__(root_folder, global_sampling_rate, global_chunk_size, modality_config)
+        gaze_params = ['destRect','bgColor','fixSpotColor','fixSpotLocation','monitorCenter','stimulusLocation']
+        self.gaze_params = {each: self._experiment.devices['screen'].load_meta()[each] for each in gaze_params}
+        self.gaze_cropper = GazeBasedCrop(
+            crop_size=(100,100),
+            pixel_per_degree=62.86,
+            monitor_center=[1920/2,1080/2],
+            dest_rect=[0, 0, 1920, 1080],  # Full-screen stimulus
+        )
+
+    def __getitem__(self, idx) -> dict:
+        out = {}
+        s = self._swap_times_valid_trial[idx]  # Select the swap time for this index
+        for device_name in self.device_names:
+            sampling_rate = self.sampling_rates[device_name]
+            chunk_size = self.chunk_sizes[device_name]
+            chunk_s = chunk_size / sampling_rate
+            times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
+            times = times + self.modality_config[device_name].offset
+            if device_name == "screen":
+                (data,meta), _ = self._experiment.interpolate(times, device=device_name)
+                out['image_id'] = meta
+            else:
+                data, _ = self._experiment.interpolate(times, device=device_name)
+            out[device_name] = self.transforms[device_name](data).squeeze(0)
+        
+        # Apply Gaze-Based Cropping for each image in the sequence
+        screen_images = out["screen"]  # Shape (T, C, H, W) if multiple images
+        if screen_images.dim() == 4:  # Multiple images (T, C, H, W)
+            cropped_screens = torch.stack([
+                self.gaze_cropper(img, out['eye_tracker'], self.gaze_params['fixSpotLocation'], self.gaze_params['StimulusLocation'], dynamic=True) for img in screen_images
+            ])
+        else:  # Single image case
+            cropped_screens = self.gaze_cropper(screen_images, out['eye_tracker'], self.gaze_params['fixSpotLocation'], self.gaze_params['stimulusLocation'], dynamic=False)
+
+        out["screen"] = cropped_screens
+        plt.imshow(out['screen'][0], cmap='gray')
         return out
