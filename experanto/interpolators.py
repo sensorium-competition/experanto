@@ -168,7 +168,6 @@ class SequenceInterpolator(Interpolator):
             idx = np.floor((valid_times - self.start_time) / self.time_delta).astype(
                 int
             )
-            #print(times, valid_times,idx)
             data = self._data[idx]
             #print(data)
             
