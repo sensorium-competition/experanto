@@ -325,6 +325,7 @@ class ScreenInterpolator(Interpolator):
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
         out = np.zeros([len(valid_times)] + list(self._image_size))
+        print(f'This is image_size {self._image_size}')
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
             if len(data.shape) == 2:
@@ -367,7 +368,7 @@ class ScreenTrial:
     ) -> None:
         f = Path(file_name)
         self.file_name = f
-        self.data_file_name = f.parent.parent / "data" / (f.stem + ".npy")
+        self.data_file_name = f.parent.parent / "data" / (meta_data.get('image_name')+ ".npy")
         self._meta_data = meta_data
         self.modality = meta_data.get("modality")
         self.image_size = image_size
