@@ -327,7 +327,7 @@ class ScreenInterpolator(Interpolator):
 
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
-        out = torch.zeros((len(idx), 3, 144, 256), dtype=torch.uint8) # need to make this flexible
+        out = torch.zeros((len(idx), 3, self._image_size[0], self._image_size[1]), dtype=torch.uint8)
 
         for u_idx in unique_file_idx:
             is_video = self.trials[u_idx].modality == 'video'            
@@ -342,8 +342,9 @@ class ScreenInterpolator(Interpolator):
                     
                     for frame in frames:
                         frame = frame.unsqueeze(0)  # Add batch dimension to make it [1, 3, 480, 640]
+                        
                         # not sure about this interpolate method is the exact same as resize, have to research
-                        resized_frame = F.interpolate(frame, size=(144, 256), mode='bilinear', align_corners=False)
+                        resized_frame = F.interpolate(frame, size=(self._image_size[0], self._image_size[1]), mode='nearest')
                         
                         resized_frames.append(resized_frame.squeeze(0))  # Remove batch dimension
                     
@@ -353,6 +354,7 @@ class ScreenInterpolator(Interpolator):
                 
                 else:
                     out[idx_for_this_file] = frames
+
 
             else:
                 # Handle non-video data (grayscale images) might have to improve this to also work with multi channel images
@@ -371,19 +373,22 @@ class ScreenInterpolator(Interpolator):
                     img_tensor = torch.from_numpy(resized_frames).to(dtype=torch.uint8)
                     # not sure if it is actually fine to use uint here or if I have to stick to floats
                     
-                    # fixing dimensionality to fit the 3 channel out tensor
-                    img_tensor = img_tensor.unsqueeze(1)
-                    img_tensor = img_tensor.expand(-1, 3, -1, -1) 
-                        
+                    # fixing dimensionality to fit the 3 channel out tensor if not already 3 dimensional
+                    if img_tensor.ndimension() == 3:
+                        frames, height, width = img_tensor.shape
+                        img_tensor = img_tensor.unsqueeze(1).expand(frames, 3, height, width) 
+
+                    
                     out[idx_for_this_file] = img_tensor
                     
                 else:
                     frames = data[frame_idx]
                     img_tensor = torch.from_numpy(frames).to(dtype=torch.uint8)
 
-                    # fixing dimensionality to fit the 3 channel out tensor
-                    img_tensor = img_tensor.unsqueeze(1)
-                    img_tensor = img_tensor.expand(-1, 3, -1, -1) 
+                    # fixing dimensionality to fit the 3 channel out tensor if not already 3 dimensional
+                    if img_tensor.ndimension() == 3:
+                        frames, height, width = img_tensor.shape
+                        img_tensor = img_tensor.unsqueeze(1).expand(frames, 3, height, width) 
 
                     out[idx_for_this_file] = img_tensor
                     
@@ -477,4 +482,4 @@ class BlankTrial(ScreenTrial):
         self.interleave_value = data.get("interleave_value")
 
     def get_data(self) -> np.array:
-        return np.full((1,) + self.image_size, 128) # hardcoded
+        return np.full((1,) + self.image_size, self.interleave_value)
