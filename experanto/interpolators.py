@@ -8,6 +8,9 @@ from abc import abstractmethod
 from pathlib import Path
 
 import cv2
+from torchcodec.decoders import VideoDecoder
+import torch
+import torch.nn.functional as F
 import numpy as np
 import numpy.lib.format as fmt
 import yaml
@@ -324,25 +327,67 @@ class ScreenInterpolator(Interpolator):
 
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
-        out = np.zeros([len(valid_times)] + list(self._image_size))
-        print(f'This is image_size {self._image_size}')
+        out = torch.zeros((len(idx), 3, 144, 256), dtype=torch.uint8) # need to make this flexible
+
         for u_idx in unique_file_idx:
-            data = self.trials[u_idx].get_data()
-            if len(data.shape) == 2:
-                data = np.expand_dims(data, axis=0)
+            is_video = self.trials[u_idx].modality == 'video'            
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
-            if self.rescale:
-                orig_size = data[idx[idx_for_this_file] - self._first_frame_idx[u_idx]]
-                out[idx_for_this_file] = np.stack(
-                    [
-                        self.rescale_frame(np.asarray(frame, dtype=np.float32).T).T
-                        for frame in orig_size
-                    ]
-                )
+            frame_idx = idx[idx_for_this_file] - self._first_frame_idx[u_idx]
+
+            if is_video:
+                frames = self.trials[u_idx].video_decoder.get_frames_at(frame_idx.tolist()).data
+                
+                if self.rescale:
+                    resized_frames = []
+                    
+                    for frame in frames:
+                        frame = frame.unsqueeze(0)  # Add batch dimension to make it [1, 3, 480, 640]
+                        # not sure about this interpolate method is the exact same as resize, have to research
+                        resized_frame = F.interpolate(frame, size=(144, 256), mode='bilinear', align_corners=False)
+                        
+                        resized_frames.append(resized_frame.squeeze(0))  # Remove batch dimension
+                    
+                    # Stack all resized frames back into a single tensor
+                    out[idx_for_this_file] = torch.stack(resized_frames)
+                    
+                
+                else:
+                    out[idx_for_this_file] = frames
+
             else:
-                out[idx_for_this_file] = data[
-                    idx[idx_for_this_file] - self._first_frame_idx[u_idx]
-                ]
+                # Handle non-video data (grayscale images) might have to improve this to also work with multi channel images
+                data = self.trials[u_idx].get_data()
+                if len(data.shape) == 2:
+                    data = np.expand_dims(data, axis=0)
+                
+                if self.rescale:
+                    orig_frames = data[frame_idx]
+                    
+                    resized_frames = np.stack([
+                        self.rescale_frame(np.asarray(frame, dtype=np.float32).T).T
+                        for frame in orig_frames
+                    ])
+                    
+                    img_tensor = torch.from_numpy(resized_frames).to(dtype=torch.uint8)
+                    # not sure if it is actually fine to use uint here or if I have to stick to floats
+                    
+                    # fixing dimensionality to fit the 3 channel out tensor
+                    img_tensor = img_tensor.unsqueeze(1)
+                    img_tensor = img_tensor.expand(-1, 3, -1, -1) 
+                        
+                    out[idx_for_this_file] = img_tensor
+                    
+                else:
+                    frames = data[frame_idx]
+                    img_tensor = torch.from_numpy(frames).to(dtype=torch.uint8)
+
+                    # fixing dimensionality to fit the 3 channel out tensor
+                    img_tensor = img_tensor.unsqueeze(1)
+                    img_tensor = img_tensor.expand(-1, 3, -1, -1) 
+
+                    out[idx_for_this_file] = img_tensor
+                    
+                
         if self.normalize:
             out = self.normalize_data(out)
         return out, valid
@@ -368,13 +413,20 @@ class ScreenTrial:
     ) -> None:
         f = Path(file_name)
         self.file_name = f
-        self.data_file_name = f.parent.parent / "data" / (meta_data.get('image_name')+ ".npy")
+        self.data_file_name = f.parent.parent / "data" / f.stem
         self._meta_data = meta_data
         self.modality = meta_data.get("modality")
         self.image_size = image_size
         self.first_frame_idx = first_frame_idx
         self.num_frames = num_frames
 
+        # Initialize the decoder once if this is a video upon creating trial
+        if self.modality == "video":
+            self.video_decoder = VideoDecoder(self.data_file_name.with_suffix(".mp4"))
+        else:
+            self.video_decoder = None
+
+            
     @staticmethod
     def create(file_name: str) -> "ScreenTrial":
         with open(file_name, "r") as file:
@@ -385,7 +437,7 @@ class ScreenTrial:
         return globals()[class_name](file_name, meta_data)
 
     def get_data(self) -> np.array:
-        return np.load(self.data_file_name)
+        return np.load(self.data_file_name.with_suffix(".npy"))
 
     def get_meta(self, property: str):
         return self._meta_data.get(property)
@@ -425,4 +477,4 @@ class BlankTrial(ScreenTrial):
         self.interleave_value = data.get("interleave_value")
 
     def get_data(self) -> np.array:
-        return np.full((1,) + self.image_size, self.interleave_value)
+        return np.full((1,) + self.image_size, 128) # hardcoded
