@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torchvision
 from torch.utils.data import Dataset
+from torchvision.transforms import v2
 from torchvision.transforms.v2 import ToTensor, Compose, Lambda
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
@@ -392,6 +393,13 @@ class ChunkDataset(Dataset):
                 self._statistics[device_name]["mean"] = means.reshape(1, -1)  # (n, 1) -> (1, n) for broadcasting in __get_item__
                 self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
 
+    @staticmethod
+    def add_channel_function(x):
+        if len(x.shape) == 3:
+            return torch.from_numpy(x[:, None, ...])
+        else:
+            return torch.from_numpy(x)
+
     def initialize_transforms(self):
         """
         Initializes the transforms for each device based on the modality config.
@@ -400,7 +408,7 @@ class ChunkDataset(Dataset):
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
-                add_channel = Lambda(lambda x: torch.from_numpy(x[:, None, ...]) if len(x.shape) == 3 else torch.from_numpy(x))
+                add_channel = Lambda(self.add_channel_function)
                 transform_list = [v for v in self.modality_config.screen.transforms.values() if isinstance(v, torch.nn.Module)]
                 transform_list.insert(0, add_channel)
             else:
