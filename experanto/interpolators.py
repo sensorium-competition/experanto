@@ -417,7 +417,7 @@ class ScreenTrial:
     ) -> None:
         f = Path(file_name)
         self.file_name = f
-        self.data_file_name = f.parent.parent / "data" / f.stem
+        self.data_file_name = f.parent.parent.parent / "stimuli" / f.stem
         self._meta_data = meta_data
         self.modality = meta_data.get("modality")
         self.image_size = image_size
