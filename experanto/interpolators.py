@@ -392,7 +392,6 @@ class ScreenInterpolator(Interpolator):
 
                     out[idx_for_this_file] = img_tensor
                     
-                
         if self.normalize:
             out = self.normalize_data(out)
         return out, valid
