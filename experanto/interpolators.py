@@ -417,12 +417,13 @@ class ScreenTrial:
     ) -> None:
         f = Path(file_name)
         self.file_name = f
-        self.data_file_name = f.parent.parent.parent / "stimuli" / f.stem
         self._meta_data = meta_data
         self.modality = meta_data.get("modality")
         self.image_size = image_size
         self.first_frame_idx = first_frame_idx
         self.num_frames = num_frames
+        self.image_name = meta_data.get('image_name')
+        self.data_file_name = f.parent.parent.parent / "stimuli" / self.image_name
 
         # Initialize the decoder once if this is a video upon creating trial
         if self.modality == "video":
