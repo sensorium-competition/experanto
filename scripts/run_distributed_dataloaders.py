@@ -254,7 +254,7 @@ def prepare_synced_dataloaders(dataloaders, rank, world_size):
     return SyncedLongCycler(dataloaders, global_max_length)
 
 
-def profile_dataloader(dataloader, max_batches=5000, dtype=torch.bfloat16, log_every=10):
+def profile_dataloader(dataloader, cfg, max_batches=5000, dtype=torch.bfloat16, log_every=10):
     """
     Profile the performance of a dataloader with synchronized length across ranks.
 
@@ -271,6 +271,9 @@ def profile_dataloader(dataloader, max_batches=5000, dtype=torch.bfloat16, log_e
     # Get distributed information
     rank = dist.get_rank()
     world_size = dist.get_world_size()
+
+    frames_per_batch = cfg.dataloader.batch_size * cfg.dataset.modality_config.screen.chunk_size
+    logger.info(f"Rank {rank}: Profiling dataloader with {frames_per_batch} frames per batch")
 
     # Performance tracking variables
     start_time = time.time()
@@ -297,9 +300,9 @@ def profile_dataloader(dataloader, max_batches=5000, dtype=torch.bfloat16, log_e
 
         # Report throughput every 10 seconds
         if time_since_last_report >= log_every:
-            throughput = batches_since_last_report / time_since_last_report
+            throughput = (batches_since_last_report / time_since_last_report) * frames_per_batch
             logger.info(
-                f"Rank {rank}: Throughput: {throughput:.2f} batches/second (over last {time_since_last_report:.2f}s)")
+                f"Rank {rank}: Throughput: {throughput/1000:.1f}k frames/second (over last {time_since_last_report:.2f}s)")
 
             # Reset counters
             batches_since_last_report = 0
@@ -307,8 +310,8 @@ def profile_dataloader(dataloader, max_batches=5000, dtype=torch.bfloat16, log_e
 
     # Print final statistics
     total_time = time.time() - start_time
-    overall_throughput = (i + 1) / total_time
-    logger.info(f"Rank {rank}: Overall throughput: {overall_throughput:.2f} batches/second over {total_time:.2f}s")
+    overall_throughput = ((i + 1) * frames_per_batch) / total_time
+    logger.info(f"Rank {rank}: Overall throughput: {frames_per_batch/1000:.1f}k frames/second over {total_time:.2f}s")
 
     # Gather statistics from all ranks
     throughputs = [torch.tensor([0.0], device="cuda") for _ in range(world_size)]
@@ -375,7 +378,8 @@ def main(cfg: DictConfig):
 
     # Profile dataloader
     throughput = profile_dataloader(
-        synced_dl,
+        dataloader=synced_dl,
+        cfg=cfg,
         max_batches=cfg.distributed.max_batches,
     )
 
