@@ -19,6 +19,8 @@ root = rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True
 
 import logging
 import time
+import datetime
+import os
 import os.path as path
 import numpy as np
 from dataclasses import dataclass
@@ -31,7 +33,7 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
-from experanto.dataloaders import get_multisession_dataloader
+from experanto.dataloaders import get_multisession_dataloader, LongCycler
 
 # Set up logging
 logging.basicConfig(
@@ -252,7 +254,7 @@ def prepare_synced_dataloaders(dataloaders, rank, world_size):
     return SyncedLongCycler(dataloaders, global_max_length)
 
 
-def profile_dataloader(dataloader, cfg, max_batches=5000, dtype=torch.float32, log_every=10):
+def profile_dataloader(dataloader, max_batches=5000, dtype=torch.bfloat16, log_every=10):
     """
     Profile the performance of a dataloader with synchronized length across ranks.
 
@@ -277,12 +279,11 @@ def profile_dataloader(dataloader, cfg, max_batches=5000, dtype=torch.float32, l
 
     for i, (key, batch) in tqdm(
             enumerate(dataloader),
-            total=len(dataloader),
-            desc=f"Epoch {current_epoch}",
+            total=max_batches,
             disable=rank != 0,
             mininterval=1.0,
     ):
-        if i >= num_batches:
+        if i >= max_batches:
             break
 
         # Transfer to GPU
@@ -327,21 +328,19 @@ def profile_dataloader(dataloader, cfg, max_batches=5000, dtype=torch.float32, l
     return overall_throughput
 
 
-@hydra.main(config_path=f"{root}/configs", config_name="mouse_default", version_base=None)
+@hydra.main(config_path=f"{root}/configs", config_name="benchmarking", version_base=None)
 def main(cfg: DictConfig):
     """Main entry point for the distributed dataloader profiling."""
-    # Extract local_rank from environment (set by torchrun)
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
 
     # Set up the distributed environment
-    rank, world_size = setup_distributed(local_rank)
+    rank, local_rank, world_size = setup_distributed()
 
     # Print configuration on rank 0
     if rank == 0:
         logger.info(f"Configuration:\n{OmegaConf.to_yaml(cfg)}")
 
     # Get paths from config
-    full_paths = np.array([path.join("/data/mouse/", f) for f in base_paths])
+    full_paths = np.array([os.path.join(cfg.datapath.root, f) for f in cfg.datapath.files])
 
     # Get paths for this rank
     rank_paths = get_dataset_paths(
@@ -350,14 +349,6 @@ def main(cfg: DictConfig):
         full_paths
     )
     print(f"Rank {rank}: Dataset paths: {rank_paths}")
-
-    # Map dtype string to torch dtype
-    dtype_map = {
-        "float32": torch.float32,
-        "float16": torch.float16,
-        "bfloat16": torch.bfloat16
-    }
-    dtype = dtype_map.get(cfg.trainer.dtype, torch.float32)
 
     # Create dataloader
     logger.info(f"creating dataloader on rank {rank}")
@@ -385,9 +376,7 @@ def main(cfg: DictConfig):
     # Profile dataloader
     throughput = profile_dataloader(
         synced_dl,
-        cfg,
         max_batches=cfg.distributed.max_batches,
-        dtype=dtype
     )
 
     # Clean up
