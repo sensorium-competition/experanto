@@ -567,10 +567,10 @@ class ChunkDataset(Dataset):
                     times = (times - times.min())[:, None] + phase_shifts[None, :]
 
             timestamps[device_name] = torch.from_numpy(times)
-
+        out["timestamps"] = timestamps
         if self.add_behavior_as_channels:
             out = add_behavior_as_channels(out)
-        out["timestamps"] = timestamps
+
 
         return out
 

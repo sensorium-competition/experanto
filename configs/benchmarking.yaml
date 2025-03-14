@@ -1,0 +1,75 @@
+dataset:
+  global_sampling_rate: null
+  global_chunk_size: null
+  add_behavior_as_channels: True
+  replace_nans_with_means: True
+  modality_config:
+    screen:
+      keep_nans : False
+      sampling_rate: 30
+      chunk_size: 60
+      valid_condition:
+        tier: "train"
+      offset: 0
+      sample_stride: 1
+      include_blanks: True
+      transforms:
+        normalization: "screen_default"
+      interpolation:
+        rescale: False
+    responses:
+      keep_nans : False
+      sampling_rate: 8
+      chunk_size: 16
+      offset: 0.0 # in seconds
+      transforms:
+        normalization: "recompute_responses"
+      interpolation:
+        interpolation_mode: "nearest_neighbor"
+    eye_tracker:
+      keep_nans : False
+      sampling_rate: 30
+      chunk_size: 60
+      offset: 0
+      transforms:
+        normalization: "recompute_behavior"
+      interpolation:
+        interpolation_mode: "nearest_neighbor"
+    treadmill:
+      keep_nans : False
+      sampling_rate: 30
+      chunk_size: 60
+      offset: 0
+      transforms:
+        normalization: "recompute_behavior"
+      interpolation:
+        interpolation_mode: "nearest_neighbor"
+
+
+dataloader:
+  batch_size: 16
+  shuffle: true
+  num_workers: 2
+  pin_memory: True
+  drop_last: True
+  prefetch_factor: 2
+  shuffle_each_epoch: False
+
+
+datapath:
+  files: ["dynamic21067-8-9-Video-heroic_movie",
+        "dynamic24620-8-24-Video-natural_movies_hiera",
+        "dynamic25830-4-9-Video-natural_movies_hiera",
+        "dynamic26614-6-24-Video-natural_movies",]
+  root: "/path/to/dataset" # path to the dataset root directory
+
+
+distributed:
+  backend: "nccl"
+  datasets_per_rank: 4
+  sync_epochs: True
+  min_samples_per_epoch: 10000
+  max_batches: 5000
+
+
+
