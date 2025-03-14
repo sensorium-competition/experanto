@@ -329,12 +329,12 @@ class ScreenInterpolator(Interpolator):
         unique_file_idx = np.unique(data_file_idx)
         out = torch.zeros((len(idx), 3, self._image_size[0], self._image_size[1]), dtype=torch.uint8)
 
-        for u_idx in unique_file_idx:
-            is_video = self.trials[u_idx].modality == 'video'            
+        for u_idx in unique_file_idx:         
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
             frame_idx = idx[idx_for_this_file] - self._first_frame_idx[u_idx]
 
-            if is_video:
+            ### using a different processing here since we already get tensors from the decoder. Keep this or convert to npy?
+            if self.trials[u_idx].modality == 'encodedvideo':
                 frames = self.trials[u_idx].video_decoder.get_frames_at(frame_idx.tolist()).data
                 
                 if self.rescale:
@@ -361,6 +361,7 @@ class ScreenInterpolator(Interpolator):
                 data = self.trials[u_idx].get_data()
                 if len(data.shape) == 2:
                     data = np.expand_dims(data, axis=0)
+
                 
                 if self.rescale:
                     orig_frames = data[frame_idx]
@@ -394,6 +395,8 @@ class ScreenInterpolator(Interpolator):
                     
         if self.normalize:
             out = self.normalize_data(out)
+            
+        out = out.permute(1, 0, 2, 3) # change channels and time columns for C T H W order
         return out, valid
 
     def rescale_frame(self, frame: np.array) -> np.array:
@@ -424,12 +427,6 @@ class ScreenTrial:
         self.num_frames = num_frames
         self.image_name = meta_data.get('image_name')
         self.data_file_name = f.parent.parent.parent / "stimuli" / self.image_name
-
-        # Initialize the decoder once if this is a video upon creating trial
-        if self.modality == "video":
-            self.video_decoder = VideoDecoder(self.data_file_name.with_suffix(".mp4"))
-        else:
-            self.video_decoder = None
 
             
     @staticmethod
@@ -469,6 +466,22 @@ class VideoTrial(ScreenTrial):
             data.get("num_frames"),
         )
 
+
+class EncodedvideoTrial(ScreenTrial):
+    def __init__(self, file_name, data) -> None:
+        super().__init__(
+            file_name,
+            data,
+            tuple(data.get("image_size")),
+            data.get("first_frame_idx"),
+            data.get("num_frames"),
+        )
+        # file_format added here for flexibility between mp4 and mov. Necesarry or just one format hardcoded? 
+        self.video_decoder = self.get_data(data.get("file_format"))
+
+    def get_data(self, file_format) -> VideoDecoder:
+        return VideoDecoder(self.data_file_name.with_suffix(file_format))
+        
 
 class BlankTrial(ScreenTrial):
     def __init__(self, file_name, data) -> None:
