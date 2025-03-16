@@ -46,8 +46,8 @@ class SimpleChunkedDataset(Dataset):
         s = idx * self.chunk_size
         times = self._sample_times[s : s + self.chunk_size]
         data, _ = self._experiment.interpolate(times)
-        phase_shifts = self._experiment.devices["responses"]._phase_shifts
-        timestamps_neurons = (times - times.min())[:, None] + phase_shifts[None, :]
+        #phase_shifts = self._experiment.devices["responses"]._phase_shifts
+        timestamps_neurons = (times - times.min())[:, None]
         data["timestamps"] = timestamps_neurons
 
         # Hack-2: add batch dimension for screen
@@ -324,9 +324,17 @@ class ChunkDataset(Dataset):
             modality_config,
         )
         self.device_names = self._experiment.device_names
-        self.start_time, self.end_time = self._experiment.get_valid_range("screen")
+        self.start_time_screen, self.end_time_screen = self._experiment.get_valid_range("screen")
+
+        # use this response times to narrow down the scree_times to ensure that we always get full chunks
+        self.start_time_responses, self.end_time_responses = self._experiment.get_valid_range("responses")
+        
         self._read_trials()
         self.initialize_statistics()
+
+        self.start_time = max(self.start_time_screen, self.start_time_responses)
+        self.end_time = min(self.end_time_screen, self.end_time_responses)
+        
         self._screen_sample_times = np.arange(
             self.start_time, self.end_time, 1.0 / self.sampling_rates["screen"]
         )
@@ -338,6 +346,7 @@ class ChunkDataset(Dataset):
         # sampling stride is used to reduce the number of starting points by the stride
         # default of stride is 1, so all starting points are used
         self._valid_screen_times = self._full_valid_sample_times[::self.sample_stride]
+
         self.transforms = self.initialize_transforms()
 
     def _read_trials(self) -> None:
@@ -372,6 +381,7 @@ class ChunkDataset(Dataset):
                 self._statistics[device_name]["mean"] = means.reshape(1, -1)  # (n, 1) -> (1, n) for broadcasting in __get_item__
                 self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
 
+    # removed the dim transforms here since it is already handled in the interpolator
     def initialize_transforms(self):
         """
         Initializes the transforms for each device based on the modality config.
@@ -380,9 +390,8 @@ class ChunkDataset(Dataset):
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
-                add_channel = Lambda(lambda x: torch.from_numpy(x[:, None, ...]) if len(x.shape) == 3 else torch.from_numpy(x))
                 transform_list = [v for v in self.modality_config.screen.transforms.values() if isinstance(v, torch.nn.Module)]
-                transform_list.insert(0, add_channel)
+
             else:
                 transform_list = [ToTensor()]
             
@@ -458,8 +467,8 @@ class ChunkDataset(Dataset):
             data, _ = self._experiment.interpolate(times, device=device_name)
             out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
 
-        phase_shifts = self._experiment.devices["responses"]._phase_shifts
-        times_with_phase_shifts = (times - times.min())[:, None] + phase_shifts[None, :]
+        #phase_shifts = self._experiment.devices["responses"]._phase_shifts
+        times_with_phase_shifts = (times - times.min())[:, None]# + phase_shifts[None, :]
         out["timestamps"] = torch.from_numpy(times_with_phase_shifts)
         return out
 

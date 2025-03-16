@@ -327,7 +327,7 @@ class ScreenInterpolator(Interpolator):
 
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
-        out = torch.zeros((len(idx), 3, self._image_size[0], self._image_size[1]), dtype=torch.uint8)
+        out = torch.zeros((len(idx), 3, self._image_size[0], self._image_size[1]), dtype=torch.float)
 
         for u_idx in unique_file_idx:         
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
@@ -371,7 +371,7 @@ class ScreenInterpolator(Interpolator):
                         for frame in orig_frames
                     ])
                     
-                    img_tensor = torch.from_numpy(resized_frames).to(dtype=torch.uint8)
+                    img_tensor = torch.from_numpy(resized_frames).to(dtype=torch.float)
                     # not sure if it is actually fine to use uint here or if I have to stick to floats
                     
                     # fixing dimensionality to fit the 3 channel out tensor if not already 3 dimensional
@@ -384,7 +384,7 @@ class ScreenInterpolator(Interpolator):
                     
                 else:
                     frames = data[frame_idx]
-                    img_tensor = torch.from_numpy(frames).to(dtype=torch.uint8)
+                    img_tensor = torch.from_numpy(frames).to(dtype=torch.float)
 
                     # fixing dimensionality to fit the 3 channel out tensor if not already 3 dimensional
                     if img_tensor.ndimension() == 3:
