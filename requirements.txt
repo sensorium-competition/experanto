@@ -5,3 +5,5 @@ jaxtyping>=0.2.30
 plotly>=5.22.0
 pandas
 hydra-core>=1.2
+rootutils>=1.0.7
+optree>=0.13.0
