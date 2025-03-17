@@ -367,9 +367,15 @@ class ChunkDataset(Dataset):
             # If modality should be normalized, load respective statistics from file.
             if self.modality_config[device_name].transforms.get("normalization", False):
                 mode = self.modality_config[device_name].transforms.normalization
-                assert mode in ['standardize', 'normalize', "recompute_responses", "screen_default", "recompute_behavior"], f"Unknown mode {mode}"
+
                 means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
                 stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
+
+                # if mode is a dict, it will override the means and stds
+                if not isinstance(mode, str):
+                    means = np.array(mode.get("means", means))
+                    stds = np.array(mode.get("stds", stds))
+
                 if mode == 'standardize':
                     # If modality should only be standarized, set means to 0.
                     means = np.zeros_like(means)
@@ -526,6 +532,7 @@ class ChunkDataset(Dataset):
 
     def __getitem__(self, idx) -> dict:
         out = {}
+        timestamps = {}
         s = self._valid_screen_times[idx]
         for device_name in self.device_names:
             sampling_rate = self.sampling_rates[device_name]
@@ -546,14 +553,16 @@ class ChunkDataset(Dataset):
                 if out[device_name].shape[-1] == 3:
                     out[device_name] = out[device_name].permute(0, 3, 1, 2)
 
+            if device_name == 'responses':
+                if self._experiment.devices["responses"].use_phase_shifts:
+                    phase_shifts = self._experiment.devices["responses"]._phase_shifts
+                    times = (times - times.min())[:, None] + phase_shifts[None, :]
+
+            timestamps[device_name] = torch.from_numpy(times)
+
         if self.add_behavior_as_channels:
             out = add_behavior_as_channels(out)
-        if self._experiment.devices["responses"].use_phase_shifts:
-            phase_shifts = self._experiment.devices["responses"]._phase_shifts
-            times = (times - times.min())[:, None] + phase_shifts[None, :]
-        else:
-            times = times - times.min()
-        out["timestamps"] = torch.from_numpy(times)
+        out["timestamps"] = timestamps
 
         return out
 
