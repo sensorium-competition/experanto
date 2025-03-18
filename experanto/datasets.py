@@ -260,6 +260,7 @@ class ChunkDataset(Dataset):
         add_behavior_as_channels: bool = False,
         replace_nans_with_means: bool = False,
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
+        cache_data: bool = False,
     ) -> None:
         """
         The full modality config is a nested dictionary.
@@ -328,6 +329,7 @@ class ChunkDataset(Dataset):
         self._experiment = Experiment(
             root_folder,
             modality_config,
+            cache_data=cache_data,
         )
         self.device_names = self._experiment.device_names
         self.start_time, self.end_time = self._experiment.get_valid_range("screen")
