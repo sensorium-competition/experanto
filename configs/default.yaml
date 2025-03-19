@@ -45,6 +45,7 @@ dataset:
         normalization: "recompute_behavior"
       interpolation:
         interpolation_mode: "nearest_neighbor"
+  out_keys: ["screen", "responses", "eye_tracker", "treadmill"]
 
 dataloader:
   batch_size: 16

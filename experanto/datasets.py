@@ -260,6 +260,7 @@ class ChunkDataset(Dataset):
         global_chunk_size: None,
         add_behavior_as_channels: bool = False,
         replace_nans_with_means: bool = False,
+        out_keys: Optional[Iterable] = None,
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
     ) -> None:
         """
@@ -331,6 +332,7 @@ class ChunkDataset(Dataset):
             modality_config,
         )
         self.device_names = self._experiment.device_names
+        self.out_keys = out_keys or self.device_names
         self.start_time, self.end_time = self._experiment.get_valid_range("screen")
         self._read_trials()
         self.initialize_statistics()
@@ -571,6 +573,8 @@ class ChunkDataset(Dataset):
         if self.add_behavior_as_channels:
             out = add_behavior_as_channels(out)
 
+        # remove any keys that are not in the out_keys
+        out = {k: out[k] for k in self.out_keys if k in out}
 
         return out
 
