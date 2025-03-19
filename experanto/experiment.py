@@ -46,7 +46,7 @@ class Experiment:
                 log.info(f"Skipping {d.name} data... ")
                 continue
             log.info(f"Parsing {d.name} data... ")
-            dev = Interpolator.create(d, **self.modality_config[d.name]["interpolation"], cache_data=self.cache_data)
+            dev = Interpolator.create(d, cache_data=self.cache_data, **self.modality_config[d.name]["interpolation"])
             self.devices[d.name] = dev
             self.start_time = dev.start_time
             self.end_time = dev.end_time

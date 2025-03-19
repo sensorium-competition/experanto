@@ -72,13 +72,13 @@ class SequenceInterpolator(Interpolator):
     def __init__(
         self,
         root_folder: str,
+        cache_data: bool = False, # already cached, put it here for consistency
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
         interp_window: int = 5,
         normalize: bool = False,
         normalize_subtract_mean: bool = False,
         normalize_std_threshold: typing.Optional[float] = None,  # or 0.01
-        cache_data: bool = False, # already cached, put it here for consistency
         **kwargs,
     ) -> None:
         """
@@ -179,10 +179,10 @@ class ScreenInterpolator(Interpolator):
     def __init__(
         self,
         root_folder: str,
+        cache_data: bool = False,  # New parameter
         rescale: bool = False,
         rescale_size: typing.Optional[tuple(int, int)] = None,
         normalize: bool = False,
-        cache_data: bool = False,  # New parameter
         **kwargs,
     ) -> None:
         """
@@ -406,6 +406,9 @@ class VideoTrial(ScreenTrial):
 
 class BlankTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+
+        self.interleave_value = meta_data.get("interleave_value")
+
         super().__init__(
             data_file_name,
             meta_data,
@@ -414,7 +417,6 @@ class BlankTrial(ScreenTrial):
             1,
             cache_data=cache_data,
         )
-        self.interleave_value = meta_data.get("interleave_value")
 
     def get_data_(self) -> np.array:
         """Override base implementation to generate blank data"""
