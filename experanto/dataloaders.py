@@ -8,7 +8,6 @@ from .utils import MultiEpochsDataLoader, LongCycler
 
 def get_multisession_dataloader(paths: List[str],
                                 configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None, 
-                                cache_data: bool = False,
                                 **kwargs) -> DataLoader:
 
     if configs is None and "config" in kwargs:
@@ -27,7 +26,7 @@ def get_multisession_dataloader(paths: List[str],
             dataset_name = path.split("_gaze")[0].split("datasets/")[1]
         else:
             dataset_name = f"session_{i}"
-        dataset = ChunkDataset(path, **cfg.dataset, cache_data=cache_data)
+        dataset = ChunkDataset(path, **cfg.dataset)
         dataloaders[dataset_name] = MultiEpochsDataLoader(dataset,
                                                           **cfg.dataloader,)
     return LongCycler(dataloaders)

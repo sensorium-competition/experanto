@@ -260,8 +260,8 @@ class ChunkDataset(Dataset):
         global_chunk_size: None,
         add_behavior_as_channels: bool = False,
         replace_nans_with_means: bool = False,
-        modality_config: dict = DEFAULT_MODALITY_CONFIG,
         cache_data: bool = False,
+        modality_config: dict = DEFAULT_MODALITY_CONFIG,
     ) -> None:
         """
         The full modality config is a nested dictionary.

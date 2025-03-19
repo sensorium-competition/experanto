@@ -3,6 +3,7 @@ dataset:
   global_chunk_size: null
   add_behavior_as_channels: False
   replace_nans_with_means: False
+  cache_data: False
   modality_config:
     screen:
       keep_nans : False
