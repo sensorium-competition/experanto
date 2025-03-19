@@ -1,0 +1,25 @@
+version: '12.5.1'
+
+services:
+  jupyterlab:
+    build: .
+    # image: yongrong/nb-cuda-test  # Use the pre-built image
+    volumes:
+      - /mnt:/mnt 
+      - .:/src/foundation_models
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    command: >
+      /bin/bash -c "pip3 install torch torchvision torchaudio && 
+      pip3 install --upgrade jupyterlab &&
+      pip3 install -e /src/foundation_models && 
+      jupyter lab --ip=0.0.0.0 --no-browser --allow-root --NotebookApp.token='1234'"
+
+  jupyter_dev:
+    build: .
+    volumes:
+      - .:/notebooks
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    runtime: nvidia
+    shm_size: 1536g

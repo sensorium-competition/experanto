@@ -20,8 +20,11 @@ def get_multisession_dataloader(paths: List[str],
 
     dataloaders = {}
     for i, (path, cfg) in enumerate(zip(paths, configs)):
+        # TODO use saved meta dict to find data key
         if "dynamic" in path:
             dataset_name = path.split("dynamic")[1].split("-Video")[0]
+        elif "_gaze" in path:
+            dataset_name = path.split("_gaze")[0].split("datasets/")[1]
         else:
             dataset_name = f"session_{i}"
         dataset = ChunkDataset(path, **cfg.dataset, cache_data=cache_data)

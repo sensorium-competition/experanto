@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torchvision
 from torch.utils.data import Dataset
+from torchvision.transforms import v2
 from torchvision.transforms.v2 import ToTensor, Compose, Lambda
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
@@ -369,9 +370,15 @@ class ChunkDataset(Dataset):
             # If modality should be normalized, load respective statistics from file.
             if self.modality_config[device_name].transforms.get("normalization", False):
                 mode = self.modality_config[device_name].transforms.normalization
-                assert mode in ['standardize', 'normalize', "recompute_responses", "screen_default", "recompute_behavior"], f"Unknown mode {mode}"
+
                 means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
                 stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
+
+                # if mode is a dict, it will override the means and stds
+                if not isinstance(mode, str):
+                    means = np.array(mode.get("means", means))
+                    stds = np.array(mode.get("stds", stds))
+
                 if mode == 'standardize':
                     # If modality should only be standarized, set means to 0.
                     means = np.zeros_like(means)
@@ -388,6 +395,13 @@ class ChunkDataset(Dataset):
                 self._statistics[device_name]["mean"] = means.reshape(1, -1)  # (n, 1) -> (1, n) for broadcasting in __get_item__
                 self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
 
+    @staticmethod
+    def add_channel_function(x):
+        if len(x.shape) == 3:
+            return torch.from_numpy(x[:, None, ...])
+        else:
+            return torch.from_numpy(x)
+
     def initialize_transforms(self):
         """
         Initializes the transforms for each device based on the modality config.
@@ -396,7 +410,7 @@ class ChunkDataset(Dataset):
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
-                add_channel = Lambda(lambda x: torch.from_numpy(x[:, None, ...]) if len(x.shape) == 3 else torch.from_numpy(x))
+                add_channel = Lambda(self.add_channel_function)
                 transform_list = [v for v in self.modality_config.screen.transforms.values() if isinstance(v, torch.nn.Module)]
                 transform_list.insert(0, add_channel)
             else:
@@ -528,6 +542,7 @@ class ChunkDataset(Dataset):
 
     def __getitem__(self, idx) -> dict:
         out = {}
+        timestamps = {}
         s = self._valid_screen_times[idx]
         for device_name in self.device_names:
             sampling_rate = self.sampling_rates[device_name]
@@ -548,14 +563,16 @@ class ChunkDataset(Dataset):
                 if out[device_name].shape[-1] == 3:
                     out[device_name] = out[device_name].permute(0, 3, 1, 2)
 
+            if device_name == 'responses':
+                if self._experiment.devices["responses"].use_phase_shifts:
+                    phase_shifts = self._experiment.devices["responses"]._phase_shifts
+                    times = (times - times.min())[:, None] + phase_shifts[None, :]
+
+            timestamps[device_name] = torch.from_numpy(times)
+        out["timestamps"] = timestamps
         if self.add_behavior_as_channels:
             out = add_behavior_as_channels(out)
-        if self._experiment.devices["responses"].use_phase_shifts:
-            phase_shifts = self._experiment.devices["responses"]._phase_shifts
-            times = (times - times.min())[:, None] + phase_shifts[None, :]
-        else:
-            times = times - times.min()
-        out["timestamps"] = torch.from_numpy(times)
+
 
         return out
 
