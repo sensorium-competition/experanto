@@ -46,9 +46,15 @@ class SimpleChunkedDataset(Dataset):
         s = idx * self.chunk_size
         times = self._sample_times[s : s + self.chunk_size]
         data, _ = self._experiment.interpolate(times)
-        phase_shifts = self._experiment.devices["responses"]._phase_shifts
-        timestamps_neurons = (times - times.min())[:, None] + phase_shifts[None, :]
-        data["timestamps"] = timestamps_neurons
+
+        # check if we use phaseshifts before using them
+        if self._experiment.devices["responses"].use_phase_shifts:
+            phase_shifts = self._experiment.devices["responses"]._phase_shifts
+            timestamps_neurons = (times - times.min())[:, None] + phase_shifts[None, :]
+            data["timestamps"] = timestamps_neurons
+
+        else:
+            data["timestamps"] = (times - times.min())[:, None]
 
         # Hack-2: add batch dimension for screen
         if len(data["screen"].shape) != 4:
@@ -468,8 +474,14 @@ class ChunkDataset(Dataset):
             data, _ = self._experiment.interpolate(times, device=device_name)
             out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
 
-        phase_shifts = self._experiment.devices["responses"]._phase_shifts
-        times_with_phase_shifts = (times - times.min())[:, None] + phase_shifts[None, :]
-        out["timestamps"] = torch.from_numpy(times_with_phase_shifts)
+        # check if we use phaseshifts before using them
+        if self._experiment.devices["responses"].use_phase_shifts:
+            phase_shifts = self._experiment.devices["responses"]._phase_shifts
+            times_with_phase_shifts = (times - times.min())[:, None] + phase_shifts[None, :]
+            out["timestamps"] = torch.from_numpy(times_with_phase_shifts)
+
+        else:
+            out["timestamps"] = torch.from_numpy((times - times.min())[:, None])
+            
         return out
 

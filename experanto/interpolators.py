@@ -357,7 +357,7 @@ class ScreenInterpolator(Interpolator):
 
 
             else:
-                # Handle non-video data (grayscale images) might have to improve this to also work with multi channel images
+                # Handle non-encoded data
                 data = self.trials[u_idx].get_data()
                 if len(data.shape) == 2:
                     data = np.expand_dims(data, axis=0)
@@ -372,7 +372,6 @@ class ScreenInterpolator(Interpolator):
                     ])
                     
                     img_tensor = torch.from_numpy(resized_frames).to(dtype=torch.float)
-                    # not sure if it is actually fine to use uint here or if I have to stick to floats
                     
                     # fixing dimensionality to fit the 3 channel out tensor if not already 3 dimensional
                     if img_tensor.ndimension() == 3:
