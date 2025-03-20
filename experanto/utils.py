@@ -166,10 +166,10 @@ class LongCycler:
     Can randomize the order of keys with a fixed random state for reproducibility.
     """
 
-    def __init__(self, loaders, randomize_keys=False, random_seed=None):
+    def __init__(self, loaders, shuffle_keys=False, random_seed=None):
         self.loaders = loaders
         self.max_batches = max([len(loader) for loader in self.loaders.values()])
-        self.randomize_keys = randomize_keys
+        self.shuffle_keys = shuffle_keys
         self.random_seed = random_seed
         self.rng = random.Random(random_seed) if random_seed is not None else random.Random()
         # Store initial state for reset capability
@@ -182,11 +182,11 @@ class LongCycler:
 
     def get_rng_state(self):
         """Get the current RNG state for checkpointing"""
-        return self.rng.getstate() if self.randomize_keys else None
+        return self.rng.getstate() if self.shuffle_keys else None
 
     def set_rng_state(self, state):
         """Set the RNG state from a checkpoint"""
-        if self.randomize_keys and state is not None:
+        if self.shuffle_keys and state is not None:
             self.rng.setstate(state)
 
     def __iter__(self):
@@ -200,7 +200,7 @@ class LongCycler:
         while batches_yielded < total_batches:
             # Get keys in either randomized or fixed order
             keys = list(self.loaders.keys())
-            if self.randomize_keys:
+            if self.shuffle_keys:
                 # Use our seeded RNG for shuffling
                 self.rng.shuffle(keys)
 

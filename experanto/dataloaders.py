@@ -8,6 +8,7 @@ from .utils import MultiEpochsDataLoader, LongCycler
 
 def get_multisession_dataloader(paths: List[str],
                                 configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
+                                shuffle_keys: bool = False,
                                 **kwargs) -> DataLoader:
 
     if configs is None and "config" in kwargs:
@@ -16,6 +17,7 @@ def get_multisession_dataloader(paths: List[str],
     # Convert single config to list for uniform handling
     if isinstance(configs, (DictConfig, dict)):
         configs = [configs] * len(paths)
+
 
     dataloaders = {}
     for i, (path, cfg) in enumerate(zip(paths, configs)):
@@ -30,4 +32,4 @@ def get_multisession_dataloader(paths: List[str],
         dataset = ChunkDataset(path, **cfg.dataset)
         dataloaders[dataset_name] = MultiEpochsDataLoader(dataset,
                                                           **cfg.dataloader,)
-    return LongCycler(dataloaders, randomize_keys=cfg.dataloader.randomize_key_order)
+    return LongCycler(dataloaders, shuffle_keys=shuffle_keys)
