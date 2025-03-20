@@ -10,6 +10,16 @@ def get_multisession_dataloader(paths: List[str],
                                 configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
                                 shuffle_keys: bool = False,
                                 **kwargs) -> DataLoader:
+    """
+    Create a multisession dataloader from a list of paths and corresponding configs.
+    Args:
+        paths (List[str]): List of paths to the datasets.
+        configs (Union[DictConfig, Dict, List[Union[DictConfig, Dict]]]): Configuration for each dataset.
+            If a single config is provided, it will be applied to all datasets.
+            If a list is provided, it should match the length of paths.
+        shuffle_keys (bool): Whether to shuffle the keys of the dataloaders.
+        **kwargs: Additional keyword arguments for dataset and dataloader configuration.
+    """
 
     if configs is None and "config" in kwargs:
         configs = kwargs.pop("config")

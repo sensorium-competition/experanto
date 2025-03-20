@@ -178,7 +178,7 @@ class LongCycler:
         self.random_seed = random_seed
         self.rng = random.Random(random_seed) if random_seed is not None else random.Random()
         # Store initial state for reset capability
-        self._initial_state = self.rng.getstate() if randomize_keys else None
+        self._initial_state = self.rng.getstate() if shuffle_keys else None
 
     def reset_rng(self):
         """Reset the random number generator to its initial state"""
