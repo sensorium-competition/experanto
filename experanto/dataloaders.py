@@ -30,4 +30,4 @@ def get_multisession_dataloader(paths: List[str],
         dataset = ChunkDataset(path, **cfg.dataset)
         dataloaders[dataset_name] = MultiEpochsDataLoader(dataset,
                                                           **cfg.dataloader,)
-    return LongCycler(dataloaders)
+    return LongCycler(dataloaders, randomize_keys=cfg.dataloader.randomize_key_order)

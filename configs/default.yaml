@@ -55,6 +55,4 @@ dataloader:
   drop_last: True
   prefetch_factor: 2
   shuffle_each_epoch: False
-
-
-
+  randomize_key_order: False

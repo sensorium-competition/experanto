@@ -162,21 +162,55 @@ class Exhauster:
 class LongCycler:
     """
     Cycles through trainloaders until the loader with largest size is exhausted.
-        Needed for dataloaders of unequal size (as in the monkey data).
+    Needed for dataloaders of unequal size (as in the monkey data).
+    Can randomize the order of keys with a fixed random state for reproducibility.
     """
 
-    def __init__(self, loaders):
+    def __init__(self, loaders, randomize_keys=False, random_seed=None):
         self.loaders = loaders
         self.max_batches = max([len(loader) for loader in self.loaders.values()])
+        self.randomize_keys = randomize_keys
+        self.random_seed = random_seed
+        self.rng = random.Random(random_seed) if random_seed is not None else random.Random()
+        # Store initial state for reset capability
+        self._initial_state = self.rng.getstate() if randomize_keys else None
+
+    def reset_rng(self):
+        """Reset the random number generator to its initial state"""
+        if self._initial_state is not None:
+            self.rng.setstate(self._initial_state)
+
+    def get_rng_state(self):
+        """Get the current RNG state for checkpointing"""
+        return self.rng.getstate() if self.randomize_keys else None
+
+    def set_rng_state(self, state):
+        """Set the RNG state from a checkpoint"""
+        if self.randomize_keys and state is not None:
+            self.rng.setstate(state)
 
     def __iter__(self):
         cycles = [cycle(loader) for loader in self.loaders.values()]
-        for k, loader, _ in zip(
-            cycle(self.loaders.keys()),
-            (cycle(cycles)),
-            range(len(self.loaders) * self.max_batches),
-        ):
-            yield k, next(loader)
+        cycles_dict = dict(zip(self.loaders.keys(), cycles))
+
+        # Calculate total number of batches to yield
+        total_batches = len(self.loaders) * self.max_batches
+        batches_yielded = 0
+
+        while batches_yielded < total_batches:
+            # Get keys in either randomized or fixed order
+            keys = list(self.loaders.keys())
+            if self.randomize_keys:
+                # Use our seeded RNG for shuffling
+                self.rng.shuffle(keys)
+
+            # Yield each key and its corresponding batch
+            for k in keys:
+                if batches_yielded < total_batches:
+                    yield k, next(cycles_dict[k])
+                    batches_yielded += 1
+                else:
+                    break
 
     def __len__(self):
         return len(self.loaders) * self.max_batches
