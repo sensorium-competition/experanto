@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from torchvision.transforms import functional as F
+from torchvision.transforms.v2 import functional as F
 import torch.nn.functional as pad_F
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -219,7 +219,7 @@ def get_validation_split(n_images, train_frac, seed):
     return train_idx, val_idx
 
 class GazeBasedCrop(torch.nn.Module):
-    def __init__(self, crop_size, pixel_per_degree, monitor_center, dest_rect, bg_color=(127.5, 127.5, 127.5)):
+    def __init__(self, crop_size, pixel_per_degree, monitor_center, dest_rect,stimulus_location, bg_color=(127.5, 127.5, 127.5)):
         """
         Crops an image centered on the receptive field (RF) location, adjusted for gaze.
         The image is first resized to `dest_rect` and then padded to match the full monitor size.
@@ -237,6 +237,7 @@ class GazeBasedCrop(torch.nn.Module):
         self.monitor_size = (monitor_center[0] * 2, monitor_center[1] * 2)  # Compute monitor size
         self.dest_rect = dest_rect  # Resize image to match this region before padding
         self.bg_color = bg_color  # Background color (default gray)
+        self.stimulus_location = [dest_rect[0]+dest_rect[2]/2, dest_rect[1]+dest_rect[3]/2]
 
     def forward(self, inputs, gaze, fix_spot, stim_location, dynamic=False):
         """
@@ -262,6 +263,7 @@ class GazeBasedCrop(torch.nn.Module):
         #plt.imshow(image[0])
         # Step 2: Pad image to match the full monitor size
         image = self._pad_to_monitor_size(image)
+        #plt.imshow(image[0],cmap='gray')
 
         # Step 3: Compute RF center offset based on gaze and fixation spot
         rf_center_x, rf_center_y = self._compute_rf_center(gaze, fix_spot, stim_location, dynamic)
@@ -300,7 +302,7 @@ class GazeBasedCrop(torch.nn.Module):
             rf_center_x = stim_location[0] + (gaze[0] - fix_spot[0])
             rf_center_y = stim_location[1] + (gaze[1] - fix_spot[1])
         else:
-            mean_gaze_x, mean_gaze_y = torch.mean(torch.tensor(gaze), dim=0)
+            mean_gaze_x, mean_gaze_y = torch.mean(gaze.clone().detach(), dim=0)
             rf_center_x = stim_location[0] + (mean_gaze_x - fix_spot[0])
             rf_center_y = stim_location[1] + (mean_gaze_y - fix_spot[1])
 
@@ -316,16 +318,30 @@ class GazeBasedCrop(torch.nn.Module):
         Returns:
             Tensor: Padded image of shape (C, monitor_height, monitor_width).
         """
+        #plt.imshow(image[0],cmap='gray')
         C, H, W = image.shape
         monitor_w, monitor_h = self.monitor_size
+        stim_x, stim_y = self.stimulus_location  # Target center position on screen
 
-        # Compute padding
+        # Calculate padding to align image center with stimulus_location
+        pad_left = stim_x - W // 2
+        pad_right = monitor_w - (pad_left + W)
+        pad_top = stim_y - H // 2
+        pad_bottom = monitor_h - (pad_top + H)
+
+        # Ensure padding values are non-negative
+        pad_left = max(0, pad_left)
+        pad_right = max(0, pad_right)
+        pad_top = max(0, pad_top)
+        pad_bottom = max(0, pad_bottom)
+
+        """# Compute padding
         pad_left = (monitor_w - W) // 2
         pad_right = monitor_w - W - pad_left
         pad_top = (monitor_h - H) // 2
-        pad_bottom = monitor_h - H - pad_top
+        pad_bottom = monitor_h - H - pad_top"""
 
-        padding = (pad_left, pad_right, pad_top, pad_bottom)
+        padding = (pad_left,  pad_top, pad_right, pad_bottom)
         return self._apply_padding(image, padding, C)
 
     def _safe_crop(self, image, left, top, right, bottom):
@@ -373,6 +389,7 @@ class GazeBasedCrop(torch.nn.Module):
         Returns:
             Tensor: Padded image.
         """
+        #plt.imshow(image[0],cmap='gray')
         # Convert padding values to integers
         padding = tuple(int(p) for p in padding)
 
@@ -404,19 +421,18 @@ class GazeBasedCrop(torch.nn.Module):
         Debugging function to visualize the cropping process.
         """
         fig, ax = plt.subplots(figsize=(8, 6))
-        ax.imshow(image.permute(1, 2, 0).cpu().numpy(), cmap="gray", origin="upper")  # Convert CHW -> HWC
+        ax.set_xlim(0,self.monitor_size[0])
+        ax.set_ylim(self.monitor_size[1],0)
+        ax.imshow(image.permute(1, 2, 0).cpu().numpy(), cmap="gray", origin="upper")#, extent=[self.dest_rect[0],self.dest_rect[2],self.dest_rect[1],self.dest_rect[3]])  # Convert CHW -> HWC
 
         # Plot important points
         ax.scatter(x_px, y_px, color = 'blue',marker="+", s=80, label="RF Center (x_px, y_px)")
-        print(x_px,y_px, stim_location)
         ax.scatter(stim_location[0]  + self.monitor_size[0] // 2,
                    stim_location[1]  + self.monitor_size[1] // 2, 
                    color="red", marker="+", s=80, label="Stimulus Location")
         ax.scatter(np.array(gaze[:,0]*self.pixel_per_degree) + self.monitor_size[0] // 2,
                    np.array(gaze[:,1]*self.pixel_per_degree) + self.monitor_size[1] // 2,
                    color="blue", marker="*", s=20, label="Gaze Location")
-        print(np.array(gaze[:,0])* self.pixel_per_degree  + self.monitor_size[0] // 2,
-                   np.array(gaze[:,1])* self.pixel_per_degree  + self.monitor_size[1] // 2)
         ax.scatter(fix_spot[0] + self.monitor_size[0] // 2,
                    fix_spot[1]  + self.monitor_size[1] // 2, 
                    color="red", marker="*", s=80, label="Fixation Spot")

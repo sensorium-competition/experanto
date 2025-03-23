@@ -16,6 +16,8 @@ dataset:
         CenterCrop:
           _target_: "torchvision.transforms.v2.CenterCrop"
           size: 100
+        CustomCrop:
+          size: [100, 100]
         normalization: "normalize"
         #Resize:
         #  _target_: "torchvision.transforms.v2.Resize"
@@ -36,8 +38,8 @@ dataset:
         interpolation_mode: "nearest_neighbor"
     eye_tracker:
       keep_nans : False
-      sampling_rate: 8.33
-      chunk_size: 1
+      sampling_rate: 100
+      chunk_size: 13
       offset: 0
       transforms:
         normalization: null

@@ -169,7 +169,6 @@ class SequenceInterpolator(Interpolator):
                 int
             )
             data = self._data[idx]
-            #print(data)
             
         if self.interpolation_mode == "nearest_neighbor":
             return data, valid
@@ -267,7 +266,6 @@ class ScreenInterpolator(Interpolator):
         self._data_file_idx = np.concatenate(
             [np.full(t.num_frames, i) for i, t in enumerate(self.trials)]
         )
-        #print("num_frame:{}\nfirst_fframe_idx:{}".format(self._num_frames, self._first_frame_idx))
         # infer image size
         if not rescale_size:
             for m in self.trials:

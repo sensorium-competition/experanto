@@ -447,7 +447,6 @@ class ChunkDataset(Dataset):
 
             times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
             times = times + self.modality_config[device_name].offset
-            print(device_name)
             data, _ = self._experiment.interpolate(times, device=device_name)
             out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
 
@@ -492,7 +491,7 @@ class MonkeyFixation(Dataset):
 
         # Dynamically filter swap times based on meta_conditions
         self._swap_times_valid_trial = self.get_swap_time_valid_conditions()
-        self.DataPoint = namedtuple("DataPoint", self.device_names)
+        #self.DataPoint = namedtuple("DataPoint", self.device_names)
 
     def _read_trials(self) -> None:
         screen = self._experiment.devices["screen"]
@@ -519,7 +518,7 @@ class MonkeyFixation(Dataset):
                 self._statistics[device_name]["mean"] = means.reshape(1, -1)
                 self._statistics[device_name]["std"] = stds.reshape(1, -1)
 
-    def initialize_transforms(self):
+    """def initialize_transforms(self):
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
@@ -536,6 +535,34 @@ class MonkeyFixation(Dataset):
                     torchvision.transforms.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])
                 )
             transforms[device_name] = Compose(transform_list)
+        return transforms"""
+    def add_channel_fn(self, x):  # Regular method, can access self
+        if isinstance(x, torch.Tensor) and len(x.shape) == 3:
+            return x[:, None, ...]
+        elif isinstance(x, np.ndarray) and len(x.shape) == 3:
+            return torch.from_numpy(x[:, None, ...])
+        return x
+
+    def initialize_transforms(self):
+        transforms = {}
+
+        for device_name in self.device_names:
+            if device_name == "screen":
+                transform_list = [Lambda(self.add_channel_fn)]  # Use instance method
+                transform_list.extend(
+                    v for v in self.modality_config.screen.transforms.values() if isinstance(v, torch.nn.Module)
+                )
+                transforms[device_name] = Compose(transform_list)
+            else:
+                transform_list = [ToTensor()]
+
+            if self.modality_config[device_name].transforms.get("normalization", False):
+                transform_list.append(
+                    torchvision.transforms.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])
+                )
+
+            transforms[device_name] = Compose(transform_list)
+
         return transforms
 
     def get_swap_time_valid_conditions(self) -> np.ndarray:
@@ -558,10 +585,8 @@ class MonkeyFixation(Dataset):
 
 
     def shuffle_valid_screen_times(self) -> None:
-        times = self._full_valid_sample_times
-        self._valid_screen_times = np.sort(np.random.choice(times, size=len(times) // self.sample_stride, replace=False))
+        self._swap_times_valid_trial = np.random.permutation(self._swap_times_valid_trial)
     
-
     @staticmethod
     def get_batch_aligned_split(n_images, train_frac, batch_size, seed):
         if seed is not None:
@@ -629,11 +654,13 @@ class MonkeyFixationGazeCrop(MonkeyFixation):
         gaze_params = ['destRect','bgColor','fixSpotColor','fixSpotLocation','monitorCenter','stimulusLocation']
         self.gaze_params = {each: self._experiment.devices['screen'].load_meta()[each] for each in gaze_params}
         self.gaze_cropper = GazeBasedCrop(
-            crop_size=(100,100),
-            pixel_per_degree=62.86,
+            crop_size=modality_config['screen']['transforms']['CustomCrop']['size'],
+            pixel_per_degree= 62.86,
             monitor_center=[1920/2,1080/2],
-            dest_rect=[0, 0, 1920, 1080],  # Full-screen stimulus
+            dest_rect=[0,0,1920,1080],
+            stimulus_location=[960,540]
         )
+        #self.DataPoint = namedtuple("DataPoint", ['screen','responses'])
 
     def __getitem__(self, idx) -> dict:
         out = {}
@@ -661,5 +688,6 @@ class MonkeyFixationGazeCrop(MonkeyFixation):
             cropped_screens = self.gaze_cropper(screen_images, out['eye_tracker'], self.gaze_params['fixSpotLocation'], self.gaze_params['stimulusLocation'], dynamic=False)
 
         out["screen"] = cropped_screens
-        plt.imshow(out['screen'][0], cmap='gray')
-        return out
+        datapoint = {'inputs':out['screen'], 'targets':out['responses']}
+        #plt.imshow(out['screen'][0], cmap='gray')
+        return datapoint

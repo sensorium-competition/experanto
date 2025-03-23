@@ -38,13 +38,11 @@ class Experiment:
         
         device_folders = [d for d in self.root_folder.iterdir() if (d.is_dir())]
         for d in device_folders:
-            print(d)
             if d.name not in self.modality_config:
                 log.info(f"Skipping {d.name} data... ")
                 continue
             log.info(f"Parsing {d.name} data... ")
             dev = Interpolator.create(d, **self.modality_config[d.name]["interpolation"])
-            #print(dev)
             self.devices[d.name] = dev
             self.start_time = dev.start_time
             self.end_time = dev.end_time
@@ -59,7 +57,6 @@ class Experiment:
             values = {}
             valid = {}
             for d, interp in self.devices.items():
-                #print("\n\n d and interp ",d, interp)
                 values[d], valid[d] = interp.interpolate(times)
         elif isinstance(device, str):
             assert device in self.devices, "Unknown device '{}'".format(device)
