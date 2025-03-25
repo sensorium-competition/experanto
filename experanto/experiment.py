@@ -35,7 +35,6 @@ class Experiment:
     def _load_devices(self) -> None:
         # Define a specific order for key folders
         priority_folders = ['screen', 'responses']
-        print('priority', priority_folders)
         
         # Get all device folders
         device_folders = [d for d in self.root_folder.iterdir() if d.is_dir()]
@@ -46,7 +45,7 @@ class Experiment:
         
         for p in priority_folders:
             for d in device_folders:
-                if p in d:
+                if p in d.name:
                     priority_devices.append(d)
         
         other_devices = [d for d in device_folders if d not in priority_devices]
@@ -68,7 +67,6 @@ class Experiment:
             self.end_time = dev.end_time
             log.info("Parsing finished")
 
-        print(self.devices.keys())
 
     @property
     def device_names(self):
