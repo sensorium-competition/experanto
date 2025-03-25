@@ -33,11 +33,30 @@ class Experiment:
         self._load_devices()
 
     def _load_devices(self) -> None:
-        # Populate devices by going through subfolders
-        # Assumption: blocks are sorted by start time
-        device_folders = [d for d in self.root_folder.iterdir() if (d.is_dir())]
-
+        # Define a specific order for key folders
+        priority_folders = ['screen', 'responses']
+        print('priority', priority_folders)
+        
+        # Get all device folders
+        device_folders = [d for d in self.root_folder.iterdir() if d.is_dir()]
+        
+        # Separate priority and other folders
+        priority_devices = []
+        other_devices = []
+        
         for d in device_folders:
+            if d.name in priority_folders:
+                priority_devices.append(d)
+            else:
+                other_devices.append(d)
+        
+        # Sort other devices alphabetically to ensure consistent ordering
+        other_devices.sort(key=lambda x: x.name)
+        
+        # Combine priority devices with the sorted remaining devices
+        ordered_devices = priority_devices + other_devices
+
+        for d in ordered_devices:
             if d.name not in self.modality_config:
                 log.info(f"Skipping {d.name} data... ")
                 continue
@@ -47,6 +66,8 @@ class Experiment:
             self.start_time = dev.start_time
             self.end_time = dev.end_time
             log.info("Parsing finished")
+
+        print(self.devices.keys())
 
     @property
     def device_names(self):
