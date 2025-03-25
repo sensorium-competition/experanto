@@ -44,11 +44,12 @@ class Experiment:
         priority_devices = []
         other_devices = []
         
-        for d in device_folders:
-            if any(p in d.name for p in priority_folders):
-                priority_devices.append(d)
-            else:
-                other_devices.append(d)
+        for p in priority_folders:
+            for d in device_folders:
+                if p in d:
+                    priority_devices.append(d)
+        
+        other_devices = [d for d in device_folders if d not in priority_devices]
         
         # Sort other devices alphabetically to ensure consistent ordering
         other_devices.sort(key=lambda x: x.name)
