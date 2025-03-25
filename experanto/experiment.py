@@ -45,7 +45,7 @@ class Experiment:
         other_devices = []
         
         for d in device_folders:
-            if d.name in priority_folders:
+            if any(p in d.name for p in priority_folders):
                 priority_devices.append(d)
             else:
                 other_devices.append(d)
