@@ -1,56 +1,36 @@
 # Experanto
-Python package to interpolate recordings and stimuli of neuroscience experiments 
 
-## Use specification
-- Instantiation
+Experanto is a Python package designed for interpolating recordings and stimuli in neuroscience experiments. It enables users to load single or multiple experiments and create efficient dataloaders for machine learning applications.
+
+## Features
+- **Flexible Data Loading**: Load and process multiple experiments with ease.
+- **Neuroscience-Focused**: Designed for handling recordings and stimuli in neuroscience research.
+- **Seamless Machine Learning Integration**: Create dataloaders for ML models effortlessly.
+- **Examples**: The `examples` folder provides a variety of use cases to help you get started quickly.
+
+## Installation
+To install Experanto, clone locally and run:
+```bash
+pip install -e /path_to/experanto
+```
+
+To replicate the `generate_sample` example, install:
+```bash
+pip install -e /path_to/allen_exporter
+```
+(Repository: [allen_exporter](https://github.com/sensorium-competition/allen-exporter))
+
+To replicate the `sensorium_example`, also install the following with their dependencies:
+```bash
+pip install -e /path_to/neuralpredictors
+```
+(Repository: [neuralpredictors](https://github.com/sinzlab/neuralpredictors))
+
+Additionally, clone the `sensorium_2023` repository and add the directory to the Python path using:
 ```python
-dat = Experiment('dataset-folder', discretization=30) # 30Hz
+import sys
+sys.path.append('/path_to/sensorium_2023/')
 ```
+(Repository: [sensorium_2023](https://github.com/ecker-lab/sensorium_2023))
 
-- Single frame or sequence access
-```python
-item = dat[10]
-sequence = dat[10:100]
-```
-
-
-## Data Folder Structure
-Do we want 0001 blocks in eye_tracker/running_wheel/responses?
-```
-dataset-folder/
-
-  screen/
-    0001/ # this could be a block of images
-      meta.yaml #what type of interpolator should be used for which block / which data type each block is
-      timestamps.npz
-      meta/
-        condition_hash.npy
-        trial_idx.npy
-      data/
-        img01.png
-        img02.png
-        ...
-    0002/ # this could be a block of videos
-      ...
-    0003/ # this could be a abother block of images 
-      ...
-  eye_tracker/
-    meta.yaml
-    timestamps.npz
-  running_wheel/
-    meta.yaml
-    timestamps.npz
-  multiunit/
-    meta.yaml
-    timestamps.npz
-  poses/
-    meta.yaml
-    timestamps.npz
-```
-
-## Example for meta.yaml
-
-```
-modality: images
-```
-
+Ensure you replace `/path_to/` with the actual path to the cloned repositories.

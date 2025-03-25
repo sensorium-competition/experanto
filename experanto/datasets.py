@@ -399,6 +399,10 @@ class ChunkDataset(Dataset):
             if device_name == "screen":
                 transform_list = [v for v in self.modality_config.screen.transforms.values() if isinstance(v, torch.nn.Module)]
 
+                # Apply channel reduction if specified in the config to lower dimensionalit for greyscale
+                if self.modality_config.screen.transforms.get("greyscale", False):
+                    transform_list.append(torchvision.transforms.Lambda(lambda x: x[0:1, :, :, :].unsqueeze(0)))               
+
             else:
                 transform_list = [ToTensor()]
             
