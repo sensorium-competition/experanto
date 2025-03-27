@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
+from typing import Optional, Dict, Any
 
 
 def replace_nan_with_batch_mean(data: np.array) -> np.array:
@@ -203,3 +205,176 @@ class ShortCycler:
 
     def __len__(self):
         return len(self.loaders) * self.min_batches
+
+
+class OrderedSubsetSampler(torch.utils.data.Sampler):
+    """Samples elements sequentially from a given list of indices."""
+    def __init__(self, indices):
+        self.indices = indices
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __len__(self):
+        return len(self.indices)
+
+
+class StatefulDataLoader(DataLoader):
+    """
+    A DataLoader that maintains state for fault-tolerant training.
+    Inherits from torch.utils.data.DataLoader for full compatibility.
+    """
+    
+    def __init__(self, dataset, batch_size=1, shuffle=False, num_workers=0,
+                 pin_memory=False, drop_last=False, seed: Optional[int] = 0,
+                 **kwargs):
+        # Initialize with our custom OrderedSubsetSampler
+        self.indices = np.arange(len(dataset))
+        self.base_sampler = OrderedSubsetSampler(self.indices)
+        batch_sampler = torch.utils.data.BatchSampler(self.base_sampler, batch_size, drop_last)
+        
+        super().__init__(
+            dataset=dataset,
+            batch_sampler=batch_sampler,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            **kwargs
+        )
+        
+        # Rest of the initialization remains the same
+        self._DataLoader__initialized = False
+        self.batch_sampler = _RepeatSampler(self.batch_sampler)
+        self._DataLoader__initialized = True
+        self.iterator = super().__iter__()
+        
+        self.shuffle = shuffle
+        self.seed = seed
+        self._rng = np.random.RandomState(seed) 
+        self._prev_rng_state = None
+        self.current_batch = 0
+        self._init_indices()
+            
+    def _init_indices(self) -> None:
+        """Initialize or reset the indices for iteration."""
+        self.indices = np.arange(len(self.dataset))
+        if self.shuffle:
+            self._prev_rng_state = self._rng.get_state()
+            self._rng.shuffle(self.indices)
+
+        # Cyclically shift indices by current_batch
+        batch_size = self.batch_sampler.sampler.batch_size
+        shift = self.current_batch * batch_size
+        self.indices = np.roll(self.indices, -shift)
+
+        # Update the sampler's indices
+        self.base_sampler.indices = self.indices.tolist()
+
+        # Reset iterator with new indices order
+        self.iterator = super().__iter__()
+            
+    def get_state(self) -> Dict[str, Any]:
+        """Return the current state of the dataloader."""
+        return {
+            'batch': self.current_batch,
+            'prev_rng_state': self._prev_rng_state
+        }
+        
+    def set_state(self, state: Dict[str, Any]) -> None:
+        """Restore the dataloader state."""
+
+        self.current_batch = state['batch']
+        self._rng.set_state(state['prev_rng_state'])
+        
+
+        self._init_indices()
+
+    def __iter__(self):
+        
+        for _ in range(len(self) - self.current_batch):
+            self.current_batch += 1
+            yield next(self.iterator)
+        
+        # Reset batch counter when done
+        self.current_batch = 0
+        
+        self._init_indices()
+
+    def __len__(self):
+        return len(self.batch_sampler.sampler)
+
+class StatefulLongCycler:
+    """
+    Cycles through trainloaders until the loader with largest size is exhausted.
+    Maintains state for fault-tolerant training.
+    """
+
+    def __init__(self, loaders, seed: Optional[int] = 0):
+        self.loaders = loaders
+        self.loader_cyclers = {key: cycle(loader) for key, loader in self.loaders.items()}
+        self.max_batches = max([len(loader) for loader in self.loaders.values()])
+        self._rng = np.random.RandomState(seed)
+        self.cycle_order = None
+
+        # State tracking
+        self.current_cycle = 0
+        self.current_cycle_position = 0
+        self._prev_rng_state = None
+
+        self._generate_cycle_order()
+
+
+    def _generate_cycle_order(self):
+        """Generate the random order of loaders for current cycle."""
+        keys = sorted(list(self.loaders.keys()))
+        self._prev_rng_state = self._rng.get_state()
+        self._rng.shuffle(keys)
+        self.cycle_order = keys
+        
+    def get_state(self) -> Dict[str, Any]:
+        """Return the current state of the cycler and its dataloaders."""
+        return {
+            'current_cycle': self.current_cycle,
+            'current_cycle_position': self.current_cycle_position,
+            'prev_rng_state': self._prev_rng_state,
+            'dataloader_states': {
+                key: loader.get_state() 
+                for key, loader in self.loaders.items()
+            }
+        }
+        
+    def set_state(self, state: Dict[str, Any]) -> None:
+        """Restore the cycler state and its dataloaders."""
+        self.current_cycle = state['current_cycle']
+        self.current_cycle_position = state['current_cycle_position']
+        self._rng.set_state(state['prev_rng_state'])
+        
+        for key, loader_state in state['dataloader_states'].items():
+            self.loaders[key].set_state(loader_state)
+
+        self._generate_cycle_order()
+            
+    def __iter__(self):
+
+        while self.current_cycle < self.max_batches:
+            
+            # Continue from saved position in current cycle
+            while self.current_cycle_position < len(self.cycle_order):
+                key = self.cycle_order[self.current_cycle_position]
+                loader_cycler = self.loader_cyclers[key]
+                self.current_cycle_position += 1
+                yield key, next(loader_cycler)
+            
+            # Move to next cycle
+            self.current_cycle += 1
+            self.current_cycle_position = 0
+
+            print(f"Cycle {self.current_cycle} completed")
+
+            self._generate_cycle_order()
+            
+        # Reset state when done
+        self.current_cycle = 0
+        self.current_cycle_position = 0
+
+    def __len__(self):
+        return len(self.loaders) * self.max_batches
