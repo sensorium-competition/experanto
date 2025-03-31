@@ -7,7 +7,7 @@ from .utils import MultiEpochsDataLoader, LongCycler, ShuffledLongCycler
 
 
 def get_multisession_dataloader(paths: List[str],
-                                configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
+                                configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None, 
                                 **kwargs) -> DataLoader:
     """
     Create a multisession dataloader from a list of paths and corresponding configs.
@@ -37,7 +37,6 @@ def get_multisession_dataloader(paths: List[str],
             dataset_name = path.split("_gaze")[0].split("datasets/")[1]
         else:
             dataset_name = f"session_{i}"
-
         dataset = ChunkDataset(path, **cfg.dataset)
         dataloaders[dataset_name] = MultiEpochsDataLoader(dataset,
                                                           **cfg.dataloader,)

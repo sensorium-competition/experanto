@@ -330,6 +330,7 @@ class ChunkDataset(Dataset):
         self._experiment = Experiment(
             root_folder,
             modality_config,
+            cache_data=cache_data,
         )
         self.device_names = self._experiment.device_names
         self.out_keys = out_keys or self.device_names
