@@ -1,7 +1,9 @@
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+import math
+from .intervals import TimeInterval
 
 
 def replace_nan_with_batch_mean(data: np.array) -> np.array:
