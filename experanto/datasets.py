@@ -261,7 +261,6 @@ class ChunkDataset(Dataset):
         add_behavior_as_channels: bool = False,
         replace_nans_with_means: bool = False,
         cache_data: bool = False,
-        out_keys: Optional[Iterable] = None,
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
     ) -> None:
         """
