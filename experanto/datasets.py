@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import namedtuple
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Optional, Union, List, Dict, Any
 
 import numpy as np
 import torch
@@ -263,6 +264,7 @@ class ChunkDataset(Dataset):
         cache_data: bool = False,
         out_keys: Optional[Iterable] = None,
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
+        seed: Optional[int] = None,
     ) -> None:
         """
         The full modality config is a nested dictionary.
@@ -349,6 +351,9 @@ class ChunkDataset(Dataset):
         # default of stride is 1, so all starting points are used
         self._valid_screen_times = self._full_valid_sample_times[::self.sample_stride]
         self.transforms = self.initialize_transforms()
+
+        self.seed = seed
+        self._rng = np.random.RandomState(seed) if seed is not None else np.random
 
     def _read_trials(self) -> None:
         screen = self._experiment.devices["screen"]
@@ -532,12 +537,18 @@ class ChunkDataset(Dataset):
 
     def shuffle_valid_screen_times(self) -> None:
         """
-        convenience function to randomly select new starting points for each chunk. Use this in training after each epoch.
-        If the sample stride is 1, all starting points will be used and this convenience function is not needed.
-        If the sample stride is larger than 1, this function will shuffle the starting points and select a subset of them.
+        Shuffle valid screen times using the dataset's random number generator
+        for reproducibility.
         """
         times = self._full_valid_sample_times
-        self._valid_screen_times = np.sort(np.random.choice(times, size=len(times) // self.sample_stride, replace=False))
+        if self.seed is not None:
+            self._valid_screen_times = np.sort(
+                self._rng.choice(times, size=len(times) // self.sample_stride, replace=False)
+            )
+        else:
+            self._valid_screen_times = np.sort(
+                np.random.choice(times, size=len(times) // self.sample_stride, replace=False)
+            )
 
     def __len__(self):
         return len(self._valid_screen_times)
@@ -579,6 +590,19 @@ class ChunkDataset(Dataset):
         out = {k: out[k] for k in self.out_keys if k in out}
 
         return out
+
+    def get_state(self) -> Dict[str, Any]:
+        """Return the current state of the dataset's RNG."""
+        return {
+            'rng_state': self._rng.get_state() if self.seed is not None else None,
+            'valid_screen_times': self._valid_screen_times.copy()
+        }
+
+    def set_state(self, state: Dict[str, Any]) -> None:
+        """Restore the dataset's RNG state."""
+        if state['rng_state'] is not None and self.seed is not None:
+            self._rng.set_state(state['rng_state'])
+        self._valid_screen_times = state['valid_screen_times']
 
 
 from experanto.utils import add_behavior_as_channels, replace_nan_with_batch_mean
