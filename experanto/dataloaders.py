@@ -7,7 +7,8 @@ from .utils import MultiEpochsDataLoader, LongCycler, ShuffledLongCycler
 
 
 def get_multisession_dataloader(paths: List[str],
-                                configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None, 
+                                configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
+                                shuffle_keys: bool = False,
                                 **kwargs) -> DataLoader:
     """
     Create a multisession dataloader from a list of paths and corresponding configs.
