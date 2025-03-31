@@ -120,6 +120,11 @@ class SequenceInterpolator(Interpolator):
                 mode="r",
                 shape=(meta["n_timestamps"], meta["n_signals"]),
             )
+
+        is_memmap = isinstance(self._data, np.memmap)
+        if cache_data and is_memmap:
+            self._data = np.array(self._data).astype(np.float32)  # Convert memmap to ndarray
+
         if self.normalize:
             self.normalize_init()
 
