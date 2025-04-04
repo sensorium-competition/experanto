@@ -547,7 +547,8 @@ class ChunkDataset(Dataset):
         valid_indices = np.where(all_conditions)[0]
         
         filter_valid_intervals = self.get_valid_intervals_from_filters(visualize=True) if filter_for_valid_intervals else None
-
+        # filter_valid_intervals = None
+        
         if len(valid_indices) > 0:
             starts = self._start_times[valid_indices]
             ends = self._end_times[valid_indices]
