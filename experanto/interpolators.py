@@ -15,22 +15,7 @@ import json
 
 from .utils import linear_interpolate_1d_sequence, linear_interpolate_sequences
 
-
-class TimeInterval(typing.NamedTuple):
-    start: float
-    end: float
-
-    def __contains__(self, time):
-        return self.start <= time < self.end
-
-    def intersect(self, times):
-        return (times >= self.start) & (times < self.end)
-
-    def __repr__(self) -> str:
-        return f"TimeInterval [{self.start}, {self.end})"
-
-    def __iter__(self):
-        return iter((self.start, self.end))
+from .intervals import TimeInterval
 
 
 class Interpolator:

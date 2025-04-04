@@ -4,6 +4,7 @@ dataset:
   add_behavior_as_channels: False
   replace_nans_with_means: False
   cache_data: False
+  out_keys: ["screen", "responses", "eye_tracker", "treadmill"]
   modality_config:
     screen:
       keep_nans : False
@@ -28,6 +29,15 @@ dataset:
         normalization: "recompute_responses"
       interpolation:
         interpolation_mode: "nearest_neighbor"
+      filters:
+        nan_filter:
+          __target__: experanto.filters.common_filters.nan_filter
+          __partial__: True
+          vicinity: 0.05
+        # artifact_filter:
+        #   __target__: experanto.filters.responses_filters.artifact_filter
+        #   __partial__: True
+        #   vicinity: 0.05
     eye_tracker:
       keep_nans : False
       sampling_rate: 30
@@ -37,6 +47,11 @@ dataset:
         normalization: "recompute_behavior"
       interpolation:
         interpolation_mode: "nearest_neighbor"
+      filters:
+        nan_filter:
+          __target__: experanto.filters.common_filters.nan_filter
+          __partial__: True
+          vicinity: 0.05
     treadmill:
       keep_nans : False
       sampling_rate: 30
@@ -46,7 +61,11 @@ dataset:
         normalization: "recompute_behavior"
       interpolation:
         interpolation_mode: "nearest_neighbor"
-  out_keys: ["screen", "responses", "eye_tracker", "treadmill"]
+      filters:
+        nan_filter:
+          __target__: experanto.filters.common_filters.nan_filter
+          __partial__: True
+          vicinity: 0.05
 
 dataloader:
   batch_size: 16

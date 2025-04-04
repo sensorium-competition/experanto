@@ -11,12 +11,15 @@ import torchvision
 from torch.utils.data import Dataset
 from torchvision.transforms import v2
 from torchvision.transforms.v2 import ToTensor, Compose, Lambda
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 from hydra.utils import instantiate
+import functools
+import importlib
 
 from .experiment import Experiment
 from .interpolators import ImageTrial, VideoTrial
 from .utils import add_behavior_as_channels, replace_nan_with_batch_mean
+from .intervals import TimeInterval, find_intersection_between_two_interval_arrays, get_stats_for_valid_interval
 
 # see .configs.py for the definition of DEFAULT_MODALITY_CONFIG
 DEFAULT_MODALITY_CONFIG = dict()
@@ -344,12 +347,14 @@ class ChunkDataset(Dataset):
             self.start_time, self.end_time, 1.0 / self.sampling_rates["screen"]
         )
         # iterate over the valid condition in modality_config["screen"]["valid_condition"] to get the indices of self._screen_sample_times that meet all criteria
-        self._full_valid_sample_times = self.get_full_valid_sample_times()
+        self._full_valid_sample_times_filtered = self.get_full_valid_sample_times(filter_for_valid_intervals=True)
+        # self._full_valid_sample_times_unfiltered = self.get_full_valid_sample_times(filter_for_valid_intervals=False)
 
         # the _valid_screen_times are the indices from which the starting points for the chunks will be taken
         # sampling stride is used to reduce the number of starting points by the stride
         # default of stride is 1, so all starting points are used
-        self._valid_screen_times = self._full_valid_sample_times[::self.sample_stride]
+        self._valid_screen_times = self._full_valid_sample_times_filtered[::self.sample_stride]
+
         self.transforms = self.initialize_transforms()
 
         self.seed = seed
@@ -432,6 +437,65 @@ class ChunkDataset(Dataset):
             transforms[device_name] = Compose(transform_list)
         return transforms
     
+    def _get_callable_filter(self, filter_config):
+        """
+        Helper function to get a callable filter function from either a config or an already instantiated callable.
+        Handles partial instantiation using hydra.utils.instantiate.
+        
+        Args:
+            filter_config: Either a config dict/DictConfig or a callable function
+            
+        Returns:
+            callable: The final filter function ready to be called with device_
+        """
+        # Check if it's already a callable (function)
+        if callable(filter_config):
+            # print(f"DEBUG: callable(filter_config) returned True for type {type(filter_config)}. Returning config directly.")
+            return filter_config
+        
+        # Check if it's a config that needs instantiation
+        if isinstance(filter_config, (dict, DictConfig)) and '__target__' in filter_config:
+            try:
+                # Manually handle instantiation for factory pattern with __partial__=True
+                target_str = filter_config['__target__']
+                module_path, func_name = target_str.rsplit('.', 1)
+                
+                # Import the module and get the factory function
+                module = importlib.import_module(module_path)
+                factory_func = getattr(module, func_name)
+                
+                # Prepare arguments for the factory function (excluding special keys)
+                args = {k: v for k, v in filter_config.items() if k not in ('__target__', '__partial__')}
+                
+                # Call the factory function with its arguments to get the actual implementation function
+                implementation_func = factory_func(**args)
+                return implementation_func
+                
+            except (ImportError, AttributeError, KeyError, TypeError) as e:
+                raise TypeError(f"Failed to manually instantiate filter from config {filter_config}: {e}")
+            
+        raise TypeError(f"Filter config must be either callable or a valid config dict with __target__, got {type(filter_config)}")
+
+    def get_valid_intervals_from_filters(self, visualize: bool = False) -> List[TimeInterval]:
+        valid_intervals = None
+        for modality in self.modality_config:
+            if "filters" in self.modality_config[modality]:
+                device = self._experiment.devices[modality]
+                for filter_name, filter_config in self.modality_config[modality]["filters"].items():
+                    # Get the final callable filter function
+                    filter_function = self._get_callable_filter(filter_config)
+                    valid_intervals_ = filter_function(device_=device)
+                    if visualize:
+                        print(f"modality: {modality}, filter: {filter_name}")
+                        visualization_string = get_stats_for_valid_interval(valid_intervals_, self.start_time, self.end_time)
+                        print(visualization_string)
+                    if valid_intervals is None:
+                        valid_intervals = valid_intervals_
+                    else:
+                        valid_intervals = find_intersection_between_two_interval_arrays(valid_intervals, valid_intervals_)
+
+        return valid_intervals
+    
         
     def get_condition_mask_from_meta_conditions(self, valid_conditions_sum_of_product: List[dict]) -> np.ndarray:
         """Creates a boolean mask for trials that satisfy any of the given condition combinations.
@@ -469,7 +533,7 @@ class ChunkDataset(Dataset):
 
         return all_conditions
     
-    def get_screen_sample_mask_from_meta_conditions(self, satisfy_for_next: int, valid_conditions_sum_of_product: List[dict]) -> np.ndarray:
+    def get_screen_sample_mask_from_meta_conditions(self, satisfy_for_next: int, valid_conditions_sum_of_product: List[dict], filter_for_valid_intervals: bool = True) -> np.ndarray:
         """Creates a boolean mask indicating which screen samples satisfy the given conditions.
 
         Args:
@@ -480,19 +544,30 @@ class ChunkDataset(Dataset):
         Returns:
             Boolean array matching screen sample times, True where conditions are met
         """
-
         all_conditions = self.get_condition_mask_from_meta_conditions(valid_conditions_sum_of_product)
-
         sample_mask = np.zeros_like(self._screen_sample_times, dtype=bool)
-
         valid_indices = np.where(all_conditions)[0]
-
+        
+        filter_valid_intervals = self.get_valid_intervals_from_filters(visualize=True) if filter_for_valid_intervals else None
+        # filter_valid_intervals = None
+        
         if len(valid_indices) > 0:
             starts = self._start_times[valid_indices]
             ends = self._end_times[valid_indices]
+            
+            # Create TimeIntervals from starts and ends
+            trial_intervals = [TimeInterval(start, end) for start, end in zip(starts, ends)]
+            
+            # If we have filter_valid_intervals, find intersection with trial intervals
+            if filter_valid_intervals:
+                # Find intersection between trial intervals and filter valid intervals
+                valid_intervals = find_intersection_between_two_interval_arrays(trial_intervals, filter_valid_intervals)
+            else:
+                valid_intervals = trial_intervals
 
-            for start, end in zip(starts, ends):
-                mask = (self._screen_sample_times >= start) & (self._screen_sample_times < end)
+            # Apply mask only for the intersected intervals
+            for interval in valid_intervals:
+                mask = (self._screen_sample_times >= interval.start) & (self._screen_sample_times < interval.end)
                 sample_mask |= mask
 
         if satisfy_for_next > 1:
@@ -501,7 +576,7 @@ class ChunkDataset(Dataset):
 
         return sample_mask
 
-    def get_full_valid_sample_times(self) -> Iterable:
+    def get_full_valid_sample_times(self, filter_for_valid_intervals: bool = True) -> Iterable:
         """
         Returns all valid sample times that can be used as starting points for chunks.
         A sample time is valid if:
@@ -528,7 +603,7 @@ class ChunkDataset(Dataset):
             additional_valid_conditions = {"tier": "blank"}  
             valid_conditions.append(additional_valid_conditions)
 
-        sample_mask_from_meta_conditions = self.get_screen_sample_mask_from_meta_conditions(chunk_size, valid_conditions)
+        sample_mask_from_meta_conditions = self.get_screen_sample_mask_from_meta_conditions(chunk_size, valid_conditions, filter_for_valid_intervals)
 
         final_mask = duration_mask & sample_mask_from_meta_conditions
 
