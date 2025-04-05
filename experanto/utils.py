@@ -9,6 +9,11 @@ from torch.utils.data import DataLoader
 from typing import Optional, Dict, Any, List
 import math
 from .intervals import TimeInterval
+import torch
+from torch.utils.data import DataLoader, Sampler
+import numpy as np
+from typing import Dict, Any, Optional, List, Iterator
+from itertools import cycle
 
 
 def replace_nan_with_batch_mean(data: np.array) -> np.array:
@@ -123,21 +128,6 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
             yield next(self.iterator)
 
 
-class _RepeatSampler(object):
-    """ Sampler that repeats forever.
-
-    Args:
-        sampler (Sampler)
-    """
-
-    def __init__(self, sampler):
-        self.sampler = sampler
-
-    def __iter__(self):
-        while True:
-            yield from iter(self.sampler)
-
-
 # borrowed with <3 from
 # https://github.com/sinzlab/neuralpredictors/blob/main/neuralpredictors/training/cyclers.py
 def cycle(iterable):
@@ -191,63 +181,6 @@ class LongCycler:
         return len(self.loaders) * self.max_batches
 
 
-class ShuffledLongCycler:
-    """
-    Cycles through trainloaders until the loader with largest size is exhausted.
-    Needed for dataloaders of unequal size (as in the monkey data).
-    Can randomize the order of keys with a fixed random state for reproducibility.
-    """
-
-    def __init__(self, loaders, shuffle_keys=False, random_seed=None):
-        self.loaders = loaders
-        self.max_batches = max([len(loader) for loader in self.loaders.values()])
-        self.shuffle_keys = shuffle_keys
-        self.random_seed = random_seed
-        self.rng = random.Random(random_seed) if random_seed is not None else random.Random()
-        # Store initial state for reset capability
-        self._initial_state = self.rng.getstate() if shuffle_keys else None
-
-    def reset_rng(self):
-        """Reset the random number generator to its initial state"""
-        if self._initial_state is not None:
-            self.rng.setstate(self._initial_state)
-
-    def get_rng_state(self):
-        """Get the current RNG state for checkpointing"""
-        return self.rng.getstate() if self.shuffle_keys else None
-
-    def set_rng_state(self, state):
-        """Set the RNG state from a checkpoint"""
-        if self.shuffle_keys and state is not None:
-            self.rng.setstate(state)
-
-    def __iter__(self):
-        cycles = [cycle(loader) for loader in self.loaders.values()]
-        cycles_dict = dict(zip(self.loaders.keys(), cycles))
-
-        # Calculate total number of batches to yield
-        total_batches = len(self.loaders) * self.max_batches
-        batches_yielded = 0
-
-        while batches_yielded < total_batches:
-            # Get keys in either randomized or fixed order
-            keys = list(self.loaders.keys())
-            if self.shuffle_keys:
-                # Use our seeded RNG for shuffling
-                self.rng.shuffle(keys)
-
-            # Yield each key and its corresponding batch
-            for k in keys:
-                if batches_yielded < total_batches:
-                    yield k, next(cycles_dict[k])
-                    batches_yielded += 1
-                else:
-                    break
-
-    def __len__(self):
-        return len(self.loaders) * self.max_batches
-
-
 class ShortCycler:
     """
     Cycles through trainloaders until the loader with smallest size is exhausted.
@@ -271,174 +204,177 @@ class ShortCycler:
         return len(self.loaders) * self.min_batches
 
 
-class OrderedSubsetSampler(torch.utils.data.Sampler):
-    """Samples elements sequentially from a given list of indices."""
-    def __init__(self, indices):
-        self.indices = indices
+class _RepeatSampler(object):
+    """Sampler that repeats forever."""
+
+    def __init__(self, sampler):
+        self.sampler = sampler
 
     def __iter__(self):
-        return iter(self.indices)
-
-    def __len__(self):
-        return len(self.indices)
+        while True:
+            yield from iter(self.sampler)
 
 
-class StatefulDataLoader(DataLoader):
+class StatefulDataLoader(torch.utils.data.DataLoader):
     """
-    A DataLoader that maintains state for fault-tolerant training.
-    Inherits from torch.utils.data.DataLoader for full compatibility.
+    A highly optimized DataLoader that maintains state for fault-tolerant training.
+    Based on MultiEpochsDataLoader but with state tracking capabilities.
     """
-    
+
     def __init__(self, dataset, batch_size=1, shuffle=False, num_workers=0,
                  pin_memory=False, drop_last=False, seed: Optional[int] = 0,
                  **kwargs):
-        # Initialize with our custom OrderedSubsetSampler
-        self.indices = np.arange(len(dataset))
-        self.base_sampler = OrderedSubsetSampler(self.indices)
-        batch_sampler = torch.utils.data.BatchSampler(self.base_sampler, batch_size, drop_last)
-        
         super().__init__(
             dataset=dataset,
-            batch_sampler=batch_sampler,
+            batch_size=batch_size,
+            shuffle=shuffle,
             num_workers=num_workers,
             pin_memory=pin_memory,
+            drop_last=drop_last,
             **kwargs
         )
-        
-        # Rest of the initialization remains the same
+
+        # Setup repeating sampler - key to efficiency
         self._DataLoader__initialized = False
         self.batch_sampler = _RepeatSampler(self.batch_sampler)
         self._DataLoader__initialized = True
         self.iterator = super().__iter__()
-        
-        self.shuffle = shuffle
+
+        # State tracking - lightweight
         self.seed = seed
-        self._rng = np.random.RandomState(seed) 
-        self._prev_rng_state = None
+        self._rng = np.random.RandomState(seed) if seed is not None else None
         self.current_batch = 0
-        self._init_indices()
-            
-    def _init_indices(self) -> None:
-        """Initialize or reset the indices for iteration."""
-        self.indices = np.arange(len(self.dataset))
-        if self.shuffle:
-            self._prev_rng_state = self._rng.get_state()
-            self._rng.shuffle(self.indices)
+        self.shuffle = shuffle
 
-        # Cyclically shift indices by current_batch
-        batch_size = self.batch_sampler.sampler.batch_size
-        shift = self.current_batch * batch_size
-        self.indices = np.roll(self.indices, -shift)
-
-        # Update the sampler's indices
-        self.base_sampler.indices = self.indices.tolist()
-
-        # Reset iterator with new indices order
-        self.iterator = super().__iter__()
-            
     def get_state(self) -> Dict[str, Any]:
         """Return the current state of the dataloader."""
         return {
             'batch': self.current_batch,
-            'prev_rng_state': self._prev_rng_state
+            'rng_state': self._rng.get_state() if self._rng is not None else None
         }
-        
+
     def set_state(self, state: Dict[str, Any]) -> None:
         """Restore the dataloader state."""
-
         self.current_batch = state['batch']
-        self._rng.set_state(state['prev_rng_state'])
-        
+        if self._rng is not None and state['rng_state'] is not None:
+            self._rng.set_state(state['rng_state'])
 
-        self._init_indices()
+        # Skip to correct position in the iterator
+        # This is faster than recreating the iterator and is key to efficiency
+        for _ in range(self.current_batch % len(self)):
+            next(self.iterator)
 
     def __iter__(self):
-        
-        for _ in range(len(self) - self.current_batch):
+        for i in range(len(self)):
+            batch = next(self.iterator)
             self.current_batch += 1
-            yield next(self.iterator)
-        
-        # Reset batch counter when done
-        self.current_batch = 0
-        
-        self._init_indices()
+            yield batch
 
     def __len__(self):
         return len(self.batch_sampler.sampler)
 
+
+def cycle(iterable):
+    """Efficient cycling through an iterable."""
+    iterator = iter(iterable)
+    while True:
+        try:
+            yield next(iterator)
+        except StopIteration:
+            iterator = iter(iterable)
+
+
 class StatefulLongCycler:
     """
     Cycles through trainloaders until the loader with largest size is exhausted.
-    Maintains state for fault-tolerant training.
+    Maintains state for fault-tolerant training while keeping original efficiency.
     """
 
     def __init__(self, loaders, seed: Optional[int] = 0):
         self.loaders = loaders
-        self.loader_cyclers = {key: cycle(loader) for key, loader in self.loaders.items()}
         self.max_batches = max([len(loader) for loader in self.loaders.values()])
-        self._rng = np.random.RandomState(seed)
-        self.cycle_order = None
+        self.keys = list(self.loaders.keys())
 
-        # State tracking
+        # Lightweight state tracking
+        self._rng = np.random.RandomState(seed) if seed is not None else None
         self.current_cycle = 0
-        self.current_cycle_position = 0
-        self._prev_rng_state = None
+        self.current_position = 0
 
-        self._generate_cycle_order()
+        # Create efficient cyclers
+        self._setup_cyclers()
 
+    def _setup_cyclers(self):
+        """Setup the cycling iterators efficiently."""
+        self.loader_cyclers = {key: cycle(loader) for key, loader in self.loaders.items()}
 
-    def _generate_cycle_order(self):
-        """Generate the random order of loaders for current cycle."""
-        keys = sorted(list(self.loaders.keys()))
-        self._prev_rng_state = self._rng.get_state()
-        self._rng.shuffle(keys)
-        self.cycle_order = keys
-        
+        # Prepare shuffled keys if using RNG
+        if self._rng is not None:
+            self.keys = list(self.loaders.keys())
+            self._rng.shuffle(self.keys)
+
+        self.key_cycler = cycle(self.keys)
+
     def get_state(self) -> Dict[str, Any]:
         """Return the current state of the cycler and its dataloaders."""
         return {
             'current_cycle': self.current_cycle,
-            'current_cycle_position': self.current_cycle_position,
-            'prev_rng_state': self._prev_rng_state,
+            'current_position': self.current_position,
+            'rng_state': self._rng.get_state() if self._rng is not None else None,
             'dataloader_states': {
-                key: loader.get_state() 
+                key: loader.get_state() if hasattr(loader, 'get_state') else None
                 for key, loader in self.loaders.items()
             }
         }
-        
+
     def set_state(self, state: Dict[str, Any]) -> None:
         """Restore the cycler state and its dataloaders."""
         self.current_cycle = state['current_cycle']
-        self.current_cycle_position = state['current_cycle_position']
-        self._rng.set_state(state['prev_rng_state'])
-        
+        self.current_position = state['current_position']
+
+        if self._rng is not None and state['rng_state'] is not None:
+            self._rng.set_state(state['rng_state'])
+
+        # Restore dataloader states
         for key, loader_state in state['dataloader_states'].items():
-            self.loaders[key].set_state(loader_state)
+            if hasattr(self.loaders[key], 'set_state') and loader_state is not None:
+                self.loaders[key].set_state(loader_state)
 
-        self._generate_cycle_order()
-            
+        # Re-setup cyclers (retaining efficiency of original implementation)
+        self._setup_cyclers()
+
+        # Advance to the current position
+        position = (self.current_cycle * len(self.keys)) + self.current_position
+
+        # Skip efficiently to the right place in the iteration
+        for _ in range(position % (len(self.loaders) * self.max_batches)):
+            next(self.key_cycler)
+            next(self.loader_cyclers[next(self.key_cycler)])
+
     def __iter__(self):
+        # Track total batches processed across all loaders
+        total_processed = 0
+        max_total = len(self.loaders) * self.max_batches
 
-        while self.current_cycle < self.max_batches:
-            
-            # Continue from saved position in current cycle
-            while self.current_cycle_position < len(self.cycle_order):
-                key = self.cycle_order[self.current_cycle_position]
-                loader_cycler = self.loader_cyclers[key]
-                self.current_cycle_position += 1
-                yield key, next(loader_cycler)
-            
-            # Move to next cycle
-            self.current_cycle += 1
-            self.current_cycle_position = 0
+        # Using the highly efficient cyclers
+        while total_processed < max_total:
+            key = next(self.key_cycler)
+            batch = next(self.loader_cyclers[key])
 
-            print(f"Cycle {self.current_cycle} completed")
+            # Update state (minimal overhead)
+            total_processed += 1
+            self.current_position = (self.current_position + 1) % len(self.keys)
+            if self.current_position == 0:
+                self.current_cycle += 1
+                if self._rng is not None:
+                    # Regenerate key order efficiently at cycle boundaries
+                    self._rng.shuffle(self.keys)
+                    self.key_cycler = cycle(self.keys)
 
-            self._generate_cycle_order()
-            
+            yield key, batch
+
         # Reset state when done
         self.current_cycle = 0
-        self.current_cycle_position = 0
+        self.current_position = 0
 
     def __len__(self):
         return len(self.loaders) * self.max_batches

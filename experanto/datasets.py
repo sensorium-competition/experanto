@@ -427,7 +427,7 @@ class ChunkDataset(Dataset):
                 transform_list.insert(0, add_channel)
             else:
                 transform_list = [ToTensor()]
-            
+
             # Normalization.
             if self.modality_config[device_name].transforms.get("normalization", False):
                 transform_list.append(
@@ -548,7 +548,7 @@ class ChunkDataset(Dataset):
         sample_mask = np.zeros_like(self._screen_sample_times, dtype=bool)
         valid_indices = np.where(all_conditions)[0]
         
-        filter_valid_intervals = self.get_valid_intervals_from_filters(visualize=True) if filter_for_valid_intervals else None
+        filter_valid_intervals = self.get_valid_intervals_from_filters(visualize=False) if filter_for_valid_intervals else None
         # filter_valid_intervals = None
         
         if len(valid_indices) > 0:
