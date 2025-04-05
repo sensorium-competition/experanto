@@ -1,19 +1,25 @@
-from typing import List, Union, Dict
+from typing import Dict, Any, Optional, List, Iterator
+
+# inbuilt libraries
 import random
-import torch
-from itertools import cycle
-from omegaconf import DictConfig
-import numpy as np
-import torch
-from torch.utils.data import DataLoader
-from typing import Optional, Dict, Any, List
 import math
-from .intervals import TimeInterval
+import time
+import threading
+import multiprocessing
+import queue
+import warnings
+from itertools import cycle
+from functools import partial
+import numpy as np
+
+# third-party libraries
+from omegaconf import DictConfig
 import torch
 from torch.utils.data import DataLoader, Sampler
-import numpy as np
-from typing import Dict, Any, Optional, List, Iterator
-from itertools import cycle
+
+# local libraries
+from .intervals import TimeInterval
+
 
 
 def replace_nan_with_batch_mean(data: np.array) -> np.array:
@@ -205,7 +211,7 @@ class ShortCycler:
 
 
 class _RepeatSampler(object):
-    """Sampler that repeats forever."""
+    """Sampler that repeats forever with no overhead."""
 
     def __init__(self, sampler):
         self.sampler = sampler
@@ -215,15 +221,216 @@ class _RepeatSampler(object):
             yield from iter(self.sampler)
 
 
-class StatefulDataLoader(torch.utils.data.DataLoader):
+class WorkerPoolManager:
     """
-    A highly optimized DataLoader that maintains state for fault-tolerant training.
-    Based on MultiEpochsDataLoader but with state tracking capabilities.
+    Manages a shared pool of workers across multiple DataLoaders.
+    This class ensures we don't exceed a total worker count across all loaders.
+    """
+    _instance = None
+
+    @classmethod
+    def get_instance(cls, max_workers=None):
+        """Get the singleton instance of the worker pool manager."""
+        if cls._instance is None:
+            cls._instance = WorkerPoolManager(max_workers)
+        return cls._instance
+
+    def __init__(self, max_workers=None):
+        """
+        Initialize the worker pool manager.
+
+        Args:
+            max_workers: Maximum number of workers to create. If None, uses CPU count.
+        """
+        if max_workers is None:
+            # Use 75% of available CPU cores as the default
+            max_workers = max(1, int(mp.cpu_count() * 0.75))
+
+        self.max_workers = max_workers
+        self.available_workers = list(range(max_workers))
+        self.worker_assignments = {}  # Maps dataloader ID to worker IDs
+        self.lock = threading.Lock()  # Use threading.Lock() for better compatibility
+
+        print(f"Worker Pool initialized with {max_workers} total workers")
+
+    def allocate_workers(self, dataloader_id, requested_count):
+        """
+        Allocate worker IDs to a dataloader.
+
+        Args:
+            dataloader_id: Unique identifier for the dataloader
+            requested_count: Number of workers requested
+
+        Returns:
+            List of worker IDs allocated
+        """
+        with self.lock:
+            # If this dataloader already has workers, return them
+            if dataloader_id in self.worker_assignments:
+                return self.worker_assignments[dataloader_id]
+
+            # Calculate how many workers we can actually allocate
+            available_count = len(self.available_workers)
+            actual_count = min(requested_count, available_count)
+
+            if actual_count == 0:
+                # No workers available, use a round-robin assignment from existing workers
+                all_assigned = [w for workers in self.worker_assignments.values() for w in workers]
+                if not all_assigned:
+                    print(f"Warning: No workers available for dataloader {dataloader_id}")
+                    return []  # No workers at all, will fall back to synchronous
+
+                # Choose least loaded workers
+                worker_counts = {}
+                for w in range(self.max_workers):
+                    worker_counts[w] = all_assigned.count(w)
+
+                # Sort by usage count
+                sorted_workers = sorted(worker_counts.items(), key=lambda x: x[1])
+                actual_count = min(requested_count, len(sorted_workers))
+                allocated = [w for w, _ in sorted_workers[:actual_count]]
+                print(f"Dataloader {dataloader_id} reusing workers: {allocated}")
+            else:
+                # Allocate new workers from the available pool
+                allocated = self.available_workers[:actual_count]
+                self.available_workers = self.available_workers[actual_count:]
+                print(f"Dataloader {dataloader_id} allocated {actual_count} workers: {allocated}")
+
+            self.worker_assignments[dataloader_id] = allocated
+            return allocated
+
+    def release_workers(self, dataloader_id):
+        """
+        Release workers allocated to a dataloader.
+
+        Args:
+            dataloader_id: Unique identifier for the dataloader
+        """
+        with self.lock:
+            if dataloader_id in self.worker_assignments:
+                workers = self.worker_assignments.pop(dataloader_id)
+                self.available_workers.extend(workers)
+                print(f"Released workers for dataloader {dataloader_id}: {workers}")
+
+
+class PooledDataLoader(torch.utils.data.DataLoader):
+    """
+    DataLoader that uses a shared worker pool to reduce the total number of processes.
+    Based on your LightweightDataLoader with added pooling capabilities.
     """
 
+    _id_counter = 0
+    _pool_manager = None
+
+    @classmethod
+    def _get_next_id(cls):
+        """Get a unique ID for each dataloader instance."""
+        cls._id_counter += 1
+        return cls._id_counter
+
+    @classmethod
+    def configure_pool(cls, max_workers=None):
+        """
+        Configure the worker pool for all PooledDataLoader instances.
+
+        Args:
+            max_workers: Maximum number of workers in the pool.
+        """
+        if cls._pool_manager is None:
+            cls._pool_manager = WorkerPoolManager.get_instance(max_workers)
+        return cls._pool_manager
+
     def __init__(self, dataset, batch_size=1, shuffle=False, num_workers=0,
-                 pin_memory=False, drop_last=False, seed: Optional[int] = 0,
-                 **kwargs):
+                 pin_memory=False, drop_last=False, timeout=0,
+                 prefetch_factor=2, persistent_workers=True,
+                 worker_restart_threshold=60, seed=None, **kwargs):
+        """
+        Initialize a DataLoader with pooled workers.
+
+        Args:
+            dataset: Dataset to load data from
+            batch_size: Batch size
+            shuffle: Whether to shuffle the dataset
+            num_workers: Requested number of workers
+            pin_memory: Whether to pin memory
+            drop_last: Whether to drop the last incomplete batch
+            timeout: Timeout for worker processes
+            prefetch_factor: Number of samples to prefetch per worker
+            persistent_workers: Whether to keep worker processes alive between iterations
+            worker_restart_threshold: Time threshold for worker stall detection
+            seed: Random seed for reproducibility
+            **kwargs: Additional arguments to pass to DataLoader
+        """
+        # Initialize pool manager if not already done
+        if self.__class__._pool_manager is None:
+            self.__class__._pool_manager = WorkerPoolManager.get_instance()
+
+        # Get a unique ID for this dataloader
+        self.dataloader_id = self.__class__._get_next_id()
+
+        # Store parameters for state tracking and worker recreation
+        self.worker_restart_threshold = worker_restart_threshold
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.pin_memory = pin_memory
+        self.drop_last = drop_last
+        self.timeout = timeout
+        self.prefetch_factor = prefetch_factor
+        self.persistent_workers = persistent_workers
+        self.kwargs = kwargs
+        self.seed = seed
+
+        # Handle worker allocation
+        self.requested_workers = num_workers
+        allocated_workers = []
+        actual_workers = 0
+
+        if num_workers > 0:
+            # Request workers from the pool
+            allocated_workers = self.__class__._pool_manager.allocate_workers(
+                self.dataloader_id, num_workers)
+            actual_workers = len(allocated_workers)
+
+            # If we got less workers than requested, adjust expectations
+            if actual_workers < num_workers:
+                warnings.warn(f"Requested {num_workers} workers, but only {actual_workers} available.")
+                num_workers = actual_workers
+
+            # Force persistent workers
+            persistent_workers = True
+
+            # Lower prefetch factor to reduce memory pressure
+            prefetch_factor = max(2, min(prefetch_factor, 2))
+
+            # Enable timeout detection but make it generous
+            if timeout <= 0:
+                timeout = 120  # 2 minutes should be enough for most batches
+
+        # Store actual allocated worker count
+        self.num_workers = num_workers
+
+        # Define a worker_init_fn that sets the worker ID in a consistent way
+        original_init_fn = kwargs.get('worker_init_fn', None)
+
+        def pooled_worker_init_fn(worker_id):
+            # Map local worker_id to global worker_id from our allocation
+            global_worker_id = allocated_workers[worker_id] if allocated_workers else worker_id
+
+            # Set worker seed based on the global ID for reproducibility
+            if seed is not None:
+                torch.utils.data.get_worker_info().seed = seed + global_worker_id
+
+            # Set worker ID in environment for potential external tools
+            os.environ['WORKER_ID'] = str(global_worker_id)
+
+            # Call the user's worker_init_fn if provided
+            if original_init_fn is not None:
+                original_init_fn(worker_id)
+
+        # Initialize the actual DataLoader with pooled workers
+        kwargs['worker_init_fn'] = pooled_worker_init_fn if num_workers > 0 else None
+
         super().__init__(
             dataset=dataset,
             batch_size=batch_size,
@@ -231,63 +438,226 @@ class StatefulDataLoader(torch.utils.data.DataLoader):
             num_workers=num_workers,
             pin_memory=pin_memory,
             drop_last=drop_last,
+            timeout=timeout,
+            prefetch_factor=prefetch_factor,
+            persistent_workers=persistent_workers if num_workers > 0 else False,
             **kwargs
         )
 
-        # Setup repeating sampler - key to efficiency
+        # Setup repeating sampler with minimal overhead - just like your LightweightDataLoader
         self._DataLoader__initialized = False
         self.batch_sampler = _RepeatSampler(self.batch_sampler)
         self._DataLoader__initialized = True
+
+        # Create single iterator that persists throughout loader lifetime
         self.iterator = super().__iter__()
 
-        # State tracking - lightweight
+        # State tracking
+        self.current_batch = 0
+        self.total_length = len(self.batch_sampler.sampler)
+
+        # Track health of workers for debugging
+        self._last_batch_time = time.time()
+        self._stall_count = 0
+        self._worker_restarted = False
+
+    def __del__(self):
+        """Release workers when the dataloader is deleted."""
+        if hasattr(self, 'dataloader_id') and hasattr(self.__class__, '_pool_manager'):
+            if self.__class__._pool_manager is not None:
+                self.__class__._pool_manager.release_workers(self.dataloader_id)
+
+    def get_state(self):
+        """Simple state tracking for checkpointing."""
+        return {'batch': self.current_batch}
+
+    def set_state(self, state):
+        """Restore state by skipping ahead to the correct batch."""
+        target_batch = state['batch'] % self.total_length
+        current = self.current_batch % self.total_length
+
+        # Calculate how many batches to skip
+        skip_count = (target_batch - current) % self.total_length
+
+        # Skip batches efficiently
+        for _ in range(skip_count):
+            _ = next(self.iterator)
+            self.current_batch += 1
+
+    def _resuscitate_workers(self):
+        """
+        Attempt to restart workers by recreating the iterator.
+        This is similar to what happens when you press Ctrl+C - a signal gets
+        sent that can sometimes jolt workers back to life.
+        """
+        warnings.warn(f"Attempting to resuscitate workers for dataloader {self.dataloader_id}...")
+
+        try:
+            # Close the current iterator and its worker processes
+            # This is the equivalent of the "kick" from Ctrl+C
+            self._DataLoader__shutdown_workers()
+        except Exception as e:
+            warnings.warn(f"Error shutting down workers: {str(e)}")
+
+        # Release and re-acquire workers
+        if self.__class__._pool_manager is not None:
+            self.__class__._pool_manager.release_workers(self.dataloader_id)
+            allocated_workers = self.__class__._pool_manager.allocate_workers(
+                self.dataloader_id, self.requested_workers)
+            actual_workers = len(allocated_workers)
+
+            # Update worker count
+            self.num_workers = actual_workers
+
+            # Define a new worker_init_fn for the restarted workers
+            original_init_fn = self.kwargs.get('worker_init_fn', None)
+
+            def pooled_worker_init_fn(worker_id):
+                # Map local worker_id to global worker_id from our allocation
+                global_worker_id = allocated_workers[worker_id] if allocated_workers else worker_id
+
+                # Set worker seed based on the global ID for reproducibility
+                if self.seed is not None:
+                    torch.utils.data.get_worker_info().seed = self.seed + global_worker_id
+
+                # Set worker ID in environment for potential external tools
+                os.environ['WORKER_ID'] = str(global_worker_id)
+
+                # Call the user's worker_init_fn if provided
+                if original_init_fn is not None:
+                    original_init_fn(worker_id)
+
+            # Update worker_init_fn
+            self.kwargs['worker_init_fn'] = pooled_worker_init_fn if self.num_workers > 0 else None
+
+        # Create a fresh iterator
+        self._worker_restarted = True
+        self.iterator = super().__iter__()
+        self._last_batch_time = time.time()
+        self._stall_count = 0
+
+        return True
+
+    def check_worker_health(self):
+        """
+        Check if workers are stalled and attempt resuscitation if needed.
+        Returns True if workers are healthy or were successfully restarted.
+        """
+        current_time = time.time()
+        elapsed = current_time - self._last_batch_time
+
+        # If we've gone too long without a batch, attempt worker resuscitation
+        if elapsed > self.worker_restart_threshold and self.num_workers > 0:
+            return self._resuscitate_workers()
+
+        return elapsed < self.worker_restart_threshold
+
+    def __iter__(self):
+        """
+        Efficient iteration with worker stall detection and resuscitation.
+        """
+        for _ in range(self.total_length):
+            start_time = time.time()
+
+            # Check if workers are stalled before attempting to get next batch
+            elapsed_since_last = time.time() - self._last_batch_time
+            if elapsed_since_last > self.worker_restart_threshold and self.num_workers > 0:
+                self._resuscitate_workers()
+
+            try:
+                batch = next(self.iterator)
+                self.current_batch += 1
+
+                # Track batch timing for stall detection
+                elapsed = time.time() - start_time
+                if elapsed > 5.0:  # Consider a batch slow if >5 seconds
+                    self._stall_count += 1
+                    if self._stall_count >= 3:
+                        warnings.warn(f"DataLoader {self.dataloader_id} experiencing slow batches ({elapsed:.1f}s).")
+                else:
+                    self._stall_count = max(0, self._stall_count - 1)  # Decrease counter for normal batches
+
+                self._last_batch_time = time.time()
+                yield batch
+
+            except Exception as e:
+                # Check if this was just after a worker restart
+                if self._worker_restarted:
+                    self._worker_restarted = False
+                    warnings.warn(f"Error after worker restart: {str(e)}. Trying one more time...")
+
+                    # Try one more time with a fresh restart
+                    self._resuscitate_workers()
+                    try:
+                        batch = next(self.iterator)
+                        self.current_batch += 1
+                        self._last_batch_time = time.time()
+                        yield batch
+                        continue
+                    except Exception as e2:
+                        warnings.warn(f"Second worker restart failed: {str(e2)}")
+
+                # Provide helpful diagnostic info for worker failures
+                elapsed = time.time() - self._last_batch_time
+                warnings.warn(f"DataLoader {self.dataloader_id} worker error after {elapsed:.1f}s: {str(e)}")
+                raise
+
+    def __len__(self):
+        """Return the number of batches in an epoch."""
+        return self.total_length
+
+
+class PooledStatefulDataLoader(PooledDataLoader):
+    """
+    A drop-in replacement for StatefulDataLoader that uses a worker pool.
+    """
+
+    def __init__(self, dataset, batch_size=1, shuffle=False, num_workers=0,
+                 pin_memory=False, drop_last=False, seed=None, **kwargs):
+
+        super().__init__(
+            dataset=dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            drop_last=drop_last,
+            seed=seed,
+            **kwargs
+        )
+
+        # Additional state tracking for StatefulDataLoader compatibility
+        self._prev_rng_state = None
+        self.shuffle = shuffle
         self.seed = seed
         self._rng = np.random.RandomState(seed) if seed is not None else None
-        self.current_batch = 0
-        self.shuffle = shuffle
 
     def get_state(self) -> Dict[str, Any]:
         """Return the current state of the dataloader."""
         return {
             'batch': self.current_batch,
-            'rng_state': self._rng.get_state() if self._rng is not None else None
+            'prev_rng_state': self._prev_rng_state
         }
 
     def set_state(self, state: Dict[str, Any]) -> None:
         """Restore the dataloader state."""
         self.current_batch = state['batch']
-        if self._rng is not None and state['rng_state'] is not None:
-            self._rng.set_state(state['rng_state'])
+
+        if state['prev_rng_state'] is not None and self._rng is not None:
+            self._prev_rng_state = state['prev_rng_state']
+            self._rng.set_state(state['prev_rng_state'])
 
         # Skip to correct position in the iterator
-        # This is faster than recreating the iterator and is key to efficiency
-        for _ in range(self.current_batch % len(self)):
-            next(self.iterator)
-
-    def __iter__(self):
-        for i in range(len(self)):
-            batch = next(self.iterator)
-            self.current_batch += 1
-            yield batch
-
-    def __len__(self):
-        return len(self.batch_sampler.sampler)
-
-
-def cycle(iterable):
-    """Efficient cycling through an iterable."""
-    iterator = iter(iterable)
-    while True:
-        try:
-            yield next(iterator)
-        except StopIteration:
-            iterator = iter(iterable)
+        target_batch = self.current_batch % self.total_length
+        for _ in range(target_batch):
+            _ = next(self.iterator)
 
 
 class StatefulLongCycler:
     """
     Cycles through trainloaders until the loader with largest size is exhausted.
     Maintains state for fault-tolerant training while keeping original efficiency.
+    Works with pooled dataloaders.
     """
 
     def __init__(self, loaders, seed: Optional[int] = 0):
@@ -299,82 +669,103 @@ class StatefulLongCycler:
         self._rng = np.random.RandomState(seed) if seed is not None else None
         self.current_cycle = 0
         self.current_position = 0
+        self._prev_rng_state = None
 
         # Create efficient cyclers
         self._setup_cyclers()
 
     def _setup_cyclers(self):
         """Setup the cycling iterators efficiently."""
-        self.loader_cyclers = {key: cycle(loader) for key, loader in self.loaders.items()}
+        self.loader_cyclers = {key: iter(loader) for key, loader in self.loaders.items()}
 
         # Prepare shuffled keys if using RNG
         if self._rng is not None:
+            self._prev_rng_state = self._rng.get_state()
             self.keys = list(self.loaders.keys())
             self._rng.shuffle(self.keys)
 
-        self.key_cycler = cycle(self.keys)
+        self.key_cycler = iter(self.keys)
+        self.current_key_idx = 0
 
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self):
         """Return the current state of the cycler and its dataloaders."""
         return {
             'current_cycle': self.current_cycle,
             'current_position': self.current_position,
-            'rng_state': self._rng.get_state() if self._rng is not None else None,
+            'prev_rng_state': self._prev_rng_state,
             'dataloader_states': {
                 key: loader.get_state() if hasattr(loader, 'get_state') else None
                 for key, loader in self.loaders.items()
             }
         }
 
-    def set_state(self, state: Dict[str, Any]) -> None:
+    def set_state(self, state):
         """Restore the cycler state and its dataloaders."""
         self.current_cycle = state['current_cycle']
         self.current_position = state['current_position']
 
-        if self._rng is not None and state['rng_state'] is not None:
-            self._rng.set_state(state['rng_state'])
+        if self._rng is not None and state['prev_rng_state'] is not None:
+            self._prev_rng_state = state['prev_rng_state']
+            self._rng.set_state(state['prev_rng_state'])
 
         # Restore dataloader states
         for key, loader_state in state['dataloader_states'].items():
-            if hasattr(self.loaders[key], 'set_state') and loader_state is not None:
+            if key in self.loaders and hasattr(self.loaders[key], 'set_state') and loader_state is not None:
                 self.loaders[key].set_state(loader_state)
 
-        # Re-setup cyclers (retaining efficiency of original implementation)
+        # Re-setup cyclers preserving the current state
         self._setup_cyclers()
 
-        # Advance to the current position
-        position = (self.current_cycle * len(self.keys)) + self.current_position
-
-        # Skip efficiently to the right place in the iteration
-        for _ in range(position % (len(self.loaders) * self.max_batches)):
-            next(self.key_cycler)
-            next(self.loader_cyclers[next(self.key_cycler)])
+        # Advance to current position
+        for _ in range(self.current_position):
+            try:
+                next(self.key_cycler)
+                self.current_key_idx = (self.current_key_idx + 1) % len(self.keys)
+            except StopIteration:
+                self.key_cycler = iter(self.keys)
+                self.current_key_idx = 0
 
     def __iter__(self):
-        # Track total batches processed across all loaders
-        total_processed = 0
-        max_total = len(self.loaders) * self.max_batches
+        # Track progress
+        total_iterations = 0
+        total_expected = len(self.keys) * self.max_batches
 
-        # Using the highly efficient cyclers
-        while total_processed < max_total:
-            key = next(self.key_cycler)
-            batch = next(self.loader_cyclers[key])
-
-            # Update state (minimal overhead)
-            total_processed += 1
-            self.current_position = (self.current_position + 1) % len(self.keys)
-            if self.current_position == 0:
-                self.current_cycle += 1
+        while total_iterations < total_expected:
+            try:
+                key = next(self.key_cycler)
+                self.current_key_idx = (self.current_key_idx + 1) % len(self.keys)
+            except StopIteration:
+                # Regenerate key iterator when exhausted
                 if self._rng is not None:
-                    # Regenerate key order efficiently at cycle boundaries
+                    self._prev_rng_state = self._rng.get_state()
                     self._rng.shuffle(self.keys)
-                    self.key_cycler = cycle(self.keys)
+
+                self.key_cycler = iter(self.keys)
+                key = next(self.key_cycler)
+                self.current_key_idx = 0
+                self.current_cycle += 1
+                print(f"Cycle {self.current_cycle} completed")
+
+            # Get batch from this loader
+            try:
+                batch = next(self.loader_cyclers[key])
+            except StopIteration:
+                # Recreate this specific iterator only
+                self.loader_cyclers[key] = iter(self.loaders[key])
+                batch = next(self.loader_cyclers[key])
+
+            # Update position
+            self.current_position = self.current_key_idx
+            total_iterations += 1
 
             yield key, batch
 
         # Reset state when done
         self.current_cycle = 0
         self.current_position = 0
+
+        # Reset cyclers for next iteration
+        self._setup_cyclers()
 
     def __len__(self):
         return len(self.loaders) * self.max_batches
