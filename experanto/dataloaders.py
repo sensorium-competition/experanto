@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 
 from .datasets import ChunkDataset
 
-from .utils import MultiEpochsDataLoader, LongCycler, StatefulDataLoader, StatefulLongCycler
+from .utils import MultiEpochsDataLoader, LongCycler, StatefulLongCycler, PooledStatefulDataLoader
 
 
 
@@ -49,23 +49,13 @@ def get_multisession_dataloader(paths: List[str],
     return LongCycler(dataloaders)
 
 
-def get_stateful_multisession_dataloader(paths: List[str],
-                                         configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
-                                         seed: Optional[int] = 0,
-                                         **kwargs) -> StatefulLongCycler:
+def get_pooled_multisession_dataloader(paths: List[str],
+                                       configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
+                                       seed: Optional[int] = 0,
+                                       max_workers: int = 20,
+                                       **kwargs) -> StatefulLongCycler:
     """
-    Creates a multi-session dataloader using StatefulDataLoader and StatefulLongCycler
-    for fault-tolerant training.
-
-    Args:
-        paths: List of paths to dataset files for each session.
-        configs: A single config or a list of configs for each session.
-                 Each config should contain 'dataset' and 'dataloader' keys.
-        seed: Random seed for initializing dataloaders and cycler.
-        **kwargs: Additional keyword arguments.
-
-    Returns:
-        A StatefulLongCycler instance wrapping the session dataloaders.
+    Creates a multi-session dataloader with deterministic seeds for reproducibility.
     """
     if configs is None and "config" in kwargs:
         configs = kwargs.pop("config")
@@ -74,9 +64,16 @@ def get_stateful_multisession_dataloader(paths: List[str],
     if isinstance(configs, (DictConfig, dict)):
         configs = [configs] * len(paths)
 
+    # Initialize the worker pool
+    PooledStatefulDataLoader.configure_pool(max_workers=max_workers)
+
+    # Create a reproducible hash-based seed for each dataset based on its path
+    # This ensures consistent seeds even if dataset order changes
+    base_rng = np.random.RandomState(seed)
+
     dataloaders = {}
     for i, (path, cfg) in enumerate(zip(paths, configs)):
-        # TODO: Refine dataset name extraction logic if needed
+        # Extract dataset name in a consistent way
         if "dynamic" in path:
             dataset_name = path.split("dynamic")[1].split("-Video")[0]
         elif "_gaze" in path:
@@ -84,11 +81,30 @@ def get_stateful_multisession_dataloader(paths: List[str],
         else:
             dataset_name = f"session_{i}"
 
-        dataset = ChunkDataset(path, **cfg.dataset)
-        # Use StatefulDataLoader
-        dataloaders[dataset_name] = StatefulDataLoader(dataset,
-                                                       seed=seed + i, # Ensure different seeds per loader if desired
-                                                       **cfg.dataloader)
+        # Generate a deterministic seed based on the dataset path
+        # This ensures the same dataset always gets the same seed regardless of order
+        path_hash = hash(path) % 10000  # Convert path to a consistent number
+        dataset_seed = seed + path_hash  # Combine with base seed
 
-    # Use StatefulLongCycler
+        # Create dataset
+        dataset = globals()["ChunkDataset"](path, **cfg.dataset)
+
+        # Get dataloader config
+        dl_config = dict(cfg.dataloader)
+
+        # Calculate workers - make this deterministic too
+        if 'num_workers' in dl_config:
+            requested_workers = dl_config['num_workers']
+            # Base allocation on dataset name for consistency
+            workers_for_dataset = max(1, max_workers // len(paths))
+            dl_config['num_workers'] = min(requested_workers, workers_for_dataset)
+
+        # Use PooledStatefulDataLoader with deterministic seed
+        dataloaders[dataset_name] = PooledStatefulDataLoader(
+            dataset,
+            seed=dataset_seed,  # Use deterministic seed based on path
+            **dl_config
+        )
+
+    # Use StatefulLongCycler with the pooled dataloaders
     return StatefulLongCycler(dataloaders, seed=seed)
