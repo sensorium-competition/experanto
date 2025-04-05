@@ -769,3 +769,280 @@ class StatefulLongCycler:
 
     def __len__(self):
         return len(self.loaders) * self.max_batches
+
+
+class WorkerPoolMonitor:
+    """
+    Monitor for the worker pool to track and report on worker health and allocation.
+    """
+
+    def __init__(self, pool_manager=None):
+        """
+        Initialize the worker pool monitor.
+
+        Args:
+            pool_manager: The WorkerPoolManager instance to monitor
+        """
+        self.pool_manager = pool_manager
+        self.monitoring_thread = None
+        self.stop_event = threading.Event()
+        self.worker_stats = defaultdict(list)
+        self.last_check_time = time.time()
+        self.check_interval = 10  # seconds
+
+    def get_worker_pool_status(self):
+        """
+        Get the current status of the worker pool.
+
+        Returns:
+            dict: Status information about the worker pool
+        """
+        if self.pool_manager is None:
+            # Try to get pool manager from any PooledDataLoader class
+            import importlib
+            try:
+                # Get the pool manager from any existing PooledDataLoader class
+                for name, obj in globals().items():
+                    if hasattr(obj, '_pool_manager') and obj._pool_manager is not None:
+                        self.pool_manager = obj._pool_manager
+                        break
+            except:
+                return {"error": "No pool manager found"}
+
+        if self.pool_manager is None:
+            return {"error": "No pool manager found"}
+
+        with self.pool_manager.lock:
+            # Get basic pool stats
+            total_workers = self.pool_manager.max_workers
+            assigned_workers = sum(len(workers) for workers in self.pool_manager.worker_assignments.values())
+            free_workers = len(self.pool_manager.available_workers)
+
+            # Get dataloader allocations
+            loader_allocations = {
+                loader_id: {
+                    "workers": workers,
+                    "count": len(workers)
+                }
+                for loader_id, workers in self.pool_manager.worker_assignments.items()
+            }
+
+            # Get per-worker information
+            worker_info = {}
+            for loader_id, workers in self.pool_manager.worker_assignments.items():
+                for worker_id in workers:
+                    if worker_id not in worker_info:
+                        worker_info[worker_id] = {"loaders": []}
+                    worker_info[worker_id]["loaders"].append(loader_id)
+
+            return {
+                "total_workers": total_workers,
+                "assigned_workers": assigned_workers,
+                "free_workers": free_workers,
+                "loader_allocations": loader_allocations,
+                "worker_info": worker_info
+            }
+
+    def get_worker_processes(self):
+        """
+        Identify PyTorch DataLoader worker processes.
+
+        Returns:
+            dict: Information about worker processes
+        """
+        try:
+            # Get current process
+            current_proc = psutil.Process()
+
+            # Get all child processes
+            children = current_proc.children(recursive=True)
+
+            # Filter for likely worker processes
+            worker_procs = []
+            for proc in children:
+                try:
+                    # Check if process is likely a worker
+                    cmd = " ".join(proc.cmdline()).lower()
+                    if "python" in cmd and ("worker" in cmd or proc.name().startswith("python")):
+                        # Get process info
+                        worker_procs.append({
+                            "pid": proc.pid,
+                            "cpu_percent": proc.cpu_percent(),
+                            "memory_percent": proc.memory_percent(),
+                            "status": proc.status(),
+                            "create_time": proc.create_time(),
+                            "num_threads": proc.num_threads(),
+                            "nice": proc.nice(),
+                            "worker_id": os.environ.get('WORKER_ID', 'unknown') if hasattr(proc,
+                                                                                           'environ') else 'unknown'
+                        })
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+
+            return worker_procs
+        except Exception as e:
+            return {"error": str(e)}
+
+    def start_monitoring(self, interval=10):
+        """
+        Start monitoring the worker pool in a background thread.
+
+        Args:
+            interval: Monitoring interval in seconds
+        """
+        if self.monitoring_thread is not None and self.monitoring_thread.is_alive():
+            print("Monitoring already active")
+            return
+
+        self.check_interval = interval
+        self.stop_event.clear()
+
+        def monitor_func():
+            while not self.stop_event.is_set():
+                try:
+                    # Gather current stats
+                    status = self.get_worker_pool_status()
+                    if "error" not in status:
+                        self.worker_stats["timestamp"].append(time.time())
+                        self.worker_stats["assigned_workers"].append(status["assigned_workers"])
+                        self.worker_stats["free_workers"].append(status["free_workers"])
+
+                        # Get process stats
+                        procs = self.get_worker_processes()
+                        if isinstance(procs, list):
+                            avg_cpu = np.mean([p["cpu_percent"] for p in procs]) if procs else 0
+                            self.worker_stats["avg_cpu_percent"].append(avg_cpu)
+                            self.worker_stats["worker_count"].append(len(procs))
+
+                    self.last_check_time = time.time()
+                except Exception as e:
+                    print(f"Error in monitoring: {str(e)}")
+
+                # Wait for next check interval
+                self.stop_event.wait(self.check_interval)
+
+        self.monitoring_thread = threading.Thread(target=monitor_func, daemon=True)
+        self.monitoring_thread.start()
+        print(f"Worker pool monitoring started (interval: {interval}s)")
+
+    def stop_monitoring(self):
+        """Stop the monitoring thread."""
+        if self.monitoring_thread and self.monitoring_thread.is_alive():
+            self.stop_event.set()
+            self.monitoring_thread.join(timeout=1)
+            print("Worker pool monitoring stopped")
+
+    def get_monitoring_stats(self, as_dataframe=True):
+        """
+        Get collected monitoring statistics.
+
+        Args:
+            as_dataframe: If True, return as pandas DataFrame
+
+        Returns:
+            DataFrame or dict: Monitoring statistics
+        """
+        if as_dataframe:
+            try:
+                df = pd.DataFrame(self.worker_stats)
+                if not df.empty:
+                    df["time"] = pd.to_datetime(df["timestamp"], unit="s")
+                    df = df.set_index("time")
+                    df = df.drop("timestamp", axis=1)
+                return df
+            except ImportError:
+                print("Pandas not available, returning dict")
+                return self.worker_stats
+        return self.worker_stats
+
+    def print_pool_status(self):
+        """Print a formatted report of the current worker pool status."""
+        status = self.get_worker_pool_status()
+
+        if "error" in status:
+            print(f"Error: {status['error']}")
+            return
+
+        print("\n===== WORKER POOL STATUS =====")
+        print(f"Total workers: {status['total_workers']}")
+        print(f"Assigned workers: {status['assigned_workers']}")
+        print(f"Free workers: {status['free_workers']}")
+
+        print("\n----- LOADER ALLOCATIONS -----")
+        for loader_id, info in status['loader_allocations'].items():
+            print(f"Loader {loader_id}: {info['count']} workers {info['workers']}")
+
+        print("\n----- WORKER ASSIGNMENTS -----")
+        for worker_id, info in status['worker_info'].items():
+            print(f"Worker {worker_id}: assigned to loaders {info['loaders']}")
+
+        print("\n----- WORKER PROCESSES -----")
+        processes = self.get_worker_processes()
+        if isinstance(processes, list):
+            for i, proc in enumerate(processes[:10]):  # Show only the first 10
+                print(f"Process {i}: PID={proc['pid']}, CPU={proc['cpu_percent']:.1f}%, "
+                      f"Memory={proc['memory_percent']:.1f}%, Status={proc['status']}")
+
+            if len(processes) > 10:
+                print(f"... and {len(processes) - 10} more")
+        else:
+            print(f"Error getting processes: {processes.get('error', 'Unknown error')}")
+
+        print("\n==============================")
+
+
+def monitor_worker_pool(pool_manager=None, auto_start=True, interval=10):
+    """
+    Create and return a worker pool monitor.
+
+    Args:
+        pool_manager: The WorkerPoolManager instance to monitor
+        auto_start: Whether to automatically start monitoring
+        interval: Monitoring interval in seconds
+
+    Returns:
+        WorkerPoolMonitor: Monitor instance
+    """
+    monitor = WorkerPoolMonitor(pool_manager)
+
+    if auto_start:
+        monitor.start_monitoring(interval=interval)
+
+    return monitor
+
+
+# Helper function to add monitoring to PooledDataLoader
+def add_monitoring_to_pooled_loader(loader_class, check_interval=30):
+    """
+    Add monitoring capabilities to a PooledDataLoader class.
+
+    Args:
+        loader_class: The PooledDataLoader class to enhance
+        check_interval: How often to check worker health
+
+    Returns:
+        function: Function to get the monitor
+    """
+    # Create monitor if pool manager exists
+    if hasattr(loader_class, '_pool_manager') and loader_class._pool_manager is not None:
+        monitor = WorkerPoolMonitor(loader_class._pool_manager)
+
+        # Patch the loader class to include monitoring
+        if not hasattr(loader_class, 'get_pool_monitor'):
+            @classmethod
+            def get_pool_monitor(cls, start=True):
+                nonlocal monitor
+                if start and not monitor.monitoring_thread:
+                    monitor.start_monitoring(interval=check_interval)
+                return monitor
+
+            loader_class.get_pool_monitor = get_pool_monitor
+
+            print(f"Monitoring added to {loader_class.__name__}")
+            return monitor
+        else:
+            print(f"{loader_class.__name__} already has monitoring")
+            return loader_class.get_pool_monitor()
+    else:
+        print(f"No pool manager found for {loader_class.__name__}")
+        return None
