@@ -55,6 +55,7 @@ def get_multisession_concat_dataloader(paths: List[str],
                                        configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
                                        seed: Optional[int] = 0,
                                        num_workers = None,
+                                       prefetch_factor = None,
                                        **kwargs) -> SimpleStatefulDataLoader:
     """
     Creates a multi-session dataloader using SessionConcatDataset and SimpleStatefulDataLoader.
@@ -115,6 +116,8 @@ def get_multisession_concat_dataloader(paths: List[str],
     dl_config = dict(configs[0].dataloader)
     if num_workers is not None:
         dl_config["num_workers"] = num_workers
+    if prefetch_factor == 0:
+        dl_config["prefetch_factor"] = None
 
     # Create the stateful dataloader
     return SimpleStatefulDataLoader(
@@ -185,6 +188,10 @@ def maybe_get_validation_concat_loader(cfg, paths, max_sessions=None):
 
     # Get dataloader config
     dl_config = dict(config.dataloader)
+    if num_workers is not None:
+        dl_config["num_workers"] = num_workers
+    if prefetch_factor == 0:
+        dl_config["prefetch_factor"] = None
 
     # Create the stateful dataloader
     return SimpleStatefulDataLoader(
