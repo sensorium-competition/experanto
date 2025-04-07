@@ -649,7 +649,10 @@ class ChunkDataset(Dataset):
             # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
             if device_name == "screen":
                 if out[device_name].shape[-1] == 3:
-                    out[device_name] = out[device_name].permute(0, 3, 1, 2)
+                    out[device_name] = out[device_name].permute(0, 3, 1, 2).contiguous()
+                if out[device_name].shape[0] == chunk_size:
+                    out[device_name] = out[device_name].transpose(0, 1).contiguous()
+
 
             if device_name == 'responses':
                 if self._experiment.devices["responses"].use_phase_shifts:
