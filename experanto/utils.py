@@ -9,6 +9,7 @@ import threading
 import multiprocessing
 import queue
 import warnings
+import logging
 from itertools import cycle
 from functools import partial
 from copy import deepcopy
@@ -23,6 +24,7 @@ from torch.utils.data import ConcatDataset, Dataset, DataLoader, Sampler
 # local libraries
 from .intervals import TimeInterval
 
+log = logging.getLogger(__name__)
 
 def replace_nan_with_batch_mean(data: np.array) -> np.array:
     row, col = np.where(np.isnan(data))
@@ -286,7 +288,7 @@ class SessionConcatDataset(Dataset):
 
         # Print dataset sizes for debugging
         for i, (name, dataset) in enumerate(zip(session_names, datasets)):
-            print(f"Dataset {i}: {name}, length = {len(dataset)}")
+            log.info(f"Dataset {i}: {name}, length = {len(dataset)}")
 
         # Compute cumulative lengths - this is crucial for indexing
         self.cumulative_sizes = []
@@ -383,7 +385,7 @@ class RandomSessionBatchSampler(Sampler):
 
         # Get all session names
         self.session_names = list(dataset.session_indices.keys())
-        print(f"Sessions: {self.session_names}")
+        log.info(f"Sessions: {self.session_names}")
 
         # Calculate approximate number of batches per session
         self.batches_per_session = {}
@@ -402,8 +404,8 @@ class RandomSessionBatchSampler(Sampler):
             self.batches_per_session[session_name] = session_batches
             total_possible_batches += session_batches
 
-        print(f"Batches per session: {self.batches_per_session}")
-        print(f"Total possible batches: {total_possible_batches}")
+        log.info(f"Batches per session: {self.batches_per_session}")
+        log.info(f"Total possible batches: {total_possible_batches}")
 
         # Determine total number of batches to generate
         if num_batches is None:
@@ -413,7 +415,8 @@ class RandomSessionBatchSampler(Sampler):
 
         # Pre-generate batch information (session and indices)
         self.batches = self._generate_batches()
-        print(f"Generated {len(self.batches)} batches")
+        (log.info
+         (f"Generated {len(self.batches)} batches"))
 
     def _generate_batches(self):
         """Generate all batches with their session information."""
@@ -531,7 +534,7 @@ class SimpleStatefulDataLoader(DataLoader):
             shuffle=shuffle,
             seed=seed
         )
-        print(f"Batch sampler creation took {time.time() - start_time:.2f} seconds")
+        log.info(f"Batch sampler creation took {time.time() - start_time:.2f} seconds")
 
         # Initialize parent class with our custom batch sampler
         super().__init__(
@@ -553,7 +556,7 @@ class SimpleStatefulDataLoader(DataLoader):
         # State tracking
         self.current_batch = 0
         self.total_length = len(self.session_batch_sampler)
-        print(f"Created dataloader with {self.total_length} batches")
+        log.info(f"Created dataloader with {self.total_length} batches")
 
     def get_state(self) -> Dict[str, Any]:
         """Return the current state of the dataloader."""
