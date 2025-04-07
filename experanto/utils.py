@@ -418,8 +418,14 @@ class PooledDataLoader(torch.utils.data.DataLoader):
             global_worker_id = allocated_workers[worker_id] if allocated_workers else worker_id
 
             # Set worker seed based on the global ID for reproducibility
-            if seed is not None:
-                torch.utils.data.get_worker_info().seed = seed + global_worker_id
+            if self.seed is not None:
+                # Instead of modifying WorkerInfo directly, set the random seeds
+                # The global seed is already used by PyTorch to set the initial seed
+                # We just need to make it deterministic based on the worker_id
+                worker_seed = self.seed + global_worker_id
+                torch.manual_seed(worker_seed)
+                random.seed(worker_seed)
+                np.random.seed(worker_seed)
 
             # Set worker ID in environment for potential external tools
             os.environ['WORKER_ID'] = str(global_worker_id)
