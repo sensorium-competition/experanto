@@ -500,9 +500,19 @@ class PooledDataLoader(torch.utils.data.DataLoader):
         warnings.warn(f"Attempting to resuscitate workers for dataloader {self.dataloader_id}...")
 
         try:
-            # Close the current iterator and its worker processes
-            # This is the equivalent of the "kick" from Ctrl+C
-            self._DataLoader__shutdown_workers()
+            # Use the correct method name for PyTorch's worker shutdown
+            if hasattr(self, '_shutdown_workers'):
+                self._shutdown_workers()
+            elif hasattr(torch.utils.data.DataLoader, '_shutdown_workers'):
+                # Access the method directly from parent class
+                torch.utils.data.DataLoader._shutdown_workers(self)
+            else:
+                # Fallback for different PyTorch versions
+                try:
+                    self._DataLoader__shutdown_workers()
+                except:
+                    # Last resort - recreate iterator without explicit shutdown
+                    pass
         except Exception as e:
             warnings.warn(f"Error shutting down workers: {str(e)}")
 
@@ -751,7 +761,6 @@ class StatefulLongCycler:
                 key = next(self.key_cycler)
                 self.current_key_idx = 0
                 self.current_cycle += 1
-                print(f"Cycle {self.current_cycle} completed")
 
             # Get batch from this loader
             try:
@@ -1053,3 +1062,46 @@ def add_monitoring_to_pooled_loader(loader_class, check_interval=30):
     else:
         print(f"No pool manager found for {loader_class.__name__}")
         return None
+
+
+def add_health_check_to_pooled_loader(loader_class):
+    """
+    Add minimal health checking capabilities to pooled dataloaders.
+    This is extremely lightweight and suitable for distributed training.
+    """
+    orig_iter = loader_class.__iter__
+
+    def health_check_iter(self):
+        # Store original method for use inside new method
+        for idx, item in enumerate(orig_iter(self)):
+            # Check health only occasionally (every 100 batches)
+            if idx % 100 == 0 and hasattr(self, '_last_batch_time'):
+                current_time = time.time()
+                elapsed = current_time - self._last_batch_time
+
+                # Only try to resuscitate if badly stalled (over 5 minutes)
+                if elapsed > 300 and self.num_workers > 0:
+                    try:
+                        # Minimal resuscitation with no logging
+                        if hasattr(self.__class__, '_pool_manager') and self.__class__._pool_manager is not None:
+                            self.__class__._pool_manager.release_workers(self.dataloader_id)
+                            allocated_workers = self.__class__._pool_manager.allocate_workers(
+                                self.dataloader_id, self.requested_workers)
+                            self.num_workers = len(allocated_workers)
+
+                        # Create fresh iterator with minimal overhead
+                        self.iterator = super(type(self), self).__iter__()
+                        self._last_batch_time = time.time()
+                    except:
+                        # Silently continue on failure - no overhead
+                        pass
+
+            # Update timestamp on every item
+            if hasattr(self, '_last_batch_time'):
+                self._last_batch_time = time.time()
+
+            yield item
+
+    # Replace the iterator method with our health-checking version
+    loader_class.__iter__ = health_check_iter
+    return loader_class
