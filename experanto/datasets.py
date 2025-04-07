@@ -683,10 +683,6 @@ class ChunkDataset(Dataset):
         self._valid_screen_times = state['valid_screen_times']
 
 
-from experanto.utils import add_behavior_as_channels, replace_nan_with_batch_mean
-from typing import Optional, Union, List
-
-
 class TargetedChunkDataset(ChunkDataset):
     def __init__(
             self,
