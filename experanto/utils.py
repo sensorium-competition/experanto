@@ -24,43 +24,68 @@ from torch.utils.data import ConcatDataset, Dataset, DataLoader, Sampler
 from .intervals import TimeInterval
 
 
-
 def replace_nan_with_batch_mean(data: np.array) -> np.array:
     row, col = np.where(np.isnan(data))
     for i, j in zip(row, col):
         new_value = np.nanmean(data[:, j])
         data[i, j] = new_value if not np.isnan(new_value) else 0
-
     return data
 
 
 def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
     """
-    Adds the behavior as additional channels to the datapoint of the datasets __getitem__.
+    Adds behavioral data as additional channels to screen data.
+
+    Input:
     data = {
-        'screen': torch.Tensor: (n_timepoints, channels, height, width)
-        'eye_tracker': torch.Tensor: (n_timepoints, channels)
-        'treadmill': torch.Tensor: (n_timepoints, channels)
+        'screen': torch.Tensor: (c, t, h, w)
+        'eye_tracker': torch.Tensor: (t, c_eye) or (t, h, w)
+        'treadmill': torch.Tensor: (t, c_tread) or (t, h, w)
     }
-    The function apends the ey tracker and treadmill behavioral varialbes as entire channels to the screen data.
+
+    Output:
     data = {
-        'screen': torch.Tensor,  # shape: (n_timepoints, channels+behavior_channels ,...)
+        'screen': torch.Tensor: (c+behavior_channels, t, h, w) - contiguous
         ...
     }
     """
-    screen = data["screen"]
-    h, w = screen.shape[-2:]
+    screen = data["screen"]  # Already contiguous, shape (c, t, h, w)
+    c, t, h, w = screen.shape
     eye_tracker = data["eye_tracker"]
     treadmill = data["treadmill"]
 
-    # Add eye tracker and treadmill as channels
-    eye_tracker = eye_tracker[..., None, None].repeat(1, 1, h, w)
-    treadmill = treadmill[..., None, None,].repeat(1, 1, h, w)
-    screen = torch.cat([screen, eye_tracker, treadmill], dim=1)
+    # Process eye_tracker
+    if len(eye_tracker.shape) == 2:  # (t, c_eye)
+        c_eye = eye_tracker.shape[1]
+        # Reshape to (c_eye, t, h, w)
+        eye_tracker = eye_tracker.transpose(0, 1)  # (c_eye, t)
+        eye_tracker = eye_tracker.unsqueeze(-1).unsqueeze(-1)  # (c_eye, t, 1, 1)
+        eye_tracker = eye_tracker.expand(-1, -1, h, w).contiguous()  # (c_eye, t, h, w)
+    else:  # (t, h, w)
+        # Reshape to (1, t, h, w)
+        eye_tracker = eye_tracker.unsqueeze(0).contiguous()  # (1, t, h, w)
 
-    data["screen"] = screen
+    # Process treadmill
+    if len(treadmill.shape) == 2:  # (t, c_tread)
+        c_tread = treadmill.shape[1]
+        # Reshape to (c_tread, t, h, w)
+        treadmill = treadmill.transpose(0, 1)  # (c_tread, t)
+        treadmill = treadmill.unsqueeze(-1).unsqueeze(-1)  # (c_tread, t, 1, 1)
+        treadmill = treadmill.expand(-1, -1, h, w).contiguous()  # (c_tread, t, h, w)
+    else:  # (t, h, w)
+        # Reshape to (1, t, h, w)
+        treadmill = treadmill.unsqueeze(0).contiguous()  # (1, t, h, w)
+
+    # Concatenate along the channel dimension (dim=0) and ensure the result is contiguous
+    result = torch.cat([screen, eye_tracker, treadmill], dim=0)
+
+    # Ensure the result is contiguous
+    if not result.is_contiguous():
+        result = result.contiguous()
+
+    data["screen"] = result
+
     return data
-
 
 
 def linear_interpolate_1d_sequence(row, times_old, times_new, keep_nans=False):
