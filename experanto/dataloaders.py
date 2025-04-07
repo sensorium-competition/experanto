@@ -124,8 +124,27 @@ def get_multisession_concat_dataloader(paths: List[str],
 def maybe_get_validation_concat_loader(cfg, paths, max_sessions=None):
     """
     Creates validation dataloader using SessionConcatDataset approach.
+    Returns (session_key, batch) pairs during iteration, just like the previous implementation.
+
+    Args:
+        cfg: Configuration object
+        paths: List of paths to dataset files
+        max_sessions: Maximum number of sessions to load
+
+    Returns:
+        SimpleStatefulDataLoader instance or None if no validation loaders could be created
     """
-    # ...existing code...
+    config = deepcopy(cfg)
+    config.dataset.modality_config.screen.sample_stride = config.dataset.modality_config.screen.chunk_size
+    config.dataset.modality_config.screen.include_blanks = False
+    config.dataset.modality_config.screen.valid_condition = {"tier": "validation"}
+
+    # Set validation seed
+    val_seed = cfg.get("seed", 42) + 10000 if cfg.get("seed") is not None else None
+
+    # Limit the number of paths
+    if max_sessions is not None and len(paths) > max_sessions:
+        paths = paths[:max_sessions]
 
     valid_datasets = []
     valid_session_names = []
@@ -157,3 +176,17 @@ def maybe_get_validation_concat_loader(cfg, paths, max_sessions=None):
     if not valid_datasets:
         print("No valid validation datasets found with non-zero length")
         return None
+
+    # Create the concatenated dataset
+    concat_dataset = SessionConcatDataset(valid_datasets, valid_session_names)
+
+    # Get dataloader config
+    dl_config = dict(config.dataloader)
+
+    # Create the stateful dataloader
+    return SimpleStatefulDataLoader(
+        dataset=concat_dataset,
+        seed=val_seed,
+        **dl_config
+    )
+
