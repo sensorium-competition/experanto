@@ -5,7 +5,7 @@ import numpy as np
 
 from .datasets import ChunkDataset
 
-from .utils import MultiEpochsDataLoader, LongCycler, StatefulLongCycler, PooledStatefulDataLoader
+from .utils import MultiEpochsDataLoader, LongCycler, SessionConcatDataset, SimpleStatefulDataLoader
 
 
 
@@ -50,13 +50,23 @@ def get_multisession_dataloader(paths: List[str],
     return LongCycler(dataloaders)
 
 
-def get_pooled_multisession_dataloader(paths: List[str],
+def get_multisession_concat_dataloader(paths: List[str],
                                        configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
                                        seed: Optional[int] = 0,
-                                       max_workers: int = 20,
-                                       **kwargs) -> StatefulLongCycler:
+                                       **kwargs) -> SimpleStatefulDataLoader:
     """
-    Creates a multi-session dataloader with deterministic seeds for reproducibility.
+    Creates a multi-session dataloader using SessionConcatDataset and SimpleStatefulDataLoader.
+    Returns (session_key, batch) pairs during iteration, just like the LongCycler.
+
+    Args:
+        paths: List of paths to dataset files for each session.
+        configs: A single config or a list of configs for each session.
+                Each config should contain 'dataset' and 'dataloader' keys.
+        seed: Random seed for initializing dataloaders.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        A SimpleStatefulDataLoader with the concatenated datasets.
     """
     if configs is None and "config" in kwargs:
         configs = kwargs.pop("config")
@@ -65,47 +75,112 @@ def get_pooled_multisession_dataloader(paths: List[str],
     if isinstance(configs, (DictConfig, dict)):
         configs = [configs] * len(paths)
 
-    # Initialize the worker pool
-    PooledStatefulDataLoader.configure_pool(max_workers=max_workers)
+    # Create datasets
+    datasets = []
+    session_names = []
 
-    # Create a reproducible hash-based seed for each dataset based on its path
-    # This ensures consistent seeds even if dataset order changes
-    base_rng = np.random.RandomState(seed)
-
-    dataloaders = {}
     for i, (path, cfg) in enumerate(zip(paths, configs)):
-        # Extract dataset name in a consistent way
+        # Extract session name
         if "dynamic" in path:
-            dataset_name = path.split("dynamic")[1].split("-Video")[0]
+            session_name = path.split("dynamic")[1].split("-Video")[0]
         elif "_gaze" in path:
-            dataset_name = path.split("_gaze")[0].split("datasets/")[1]
+            session_name = path.split("_gaze")[0].split("datasets/")[1]
         else:
-            dataset_name = f"session_{i}"
+            session_name = f"session_{i}"
 
-        # Generate a deterministic seed based on the dataset path
-        # This ensures the same dataset always gets the same seed regardless of order
-        path_hash = hash(path) % 10000  # Convert path to a consistent number
-        dataset_seed = seed + path_hash  # Combine with base seed
+        # Create dataset with deterministic seed
+        path_hash = hash(path) % 10000
+        dataset_seed = seed + path_hash if seed is not None else None
 
-        # Create dataset
-        dataset = globals()["ChunkDataset"](path, **cfg.dataset)
+        # Set specific seed for this dataset if needed
+        if hasattr(cfg.dataset, 'seed') and dataset_seed is not None:
+            cfg.dataset.seed = dataset_seed
 
-        # Get dataloader config
-        dl_config = dict(cfg.dataloader)
+        # Create and append the dataset
+        try:
+            dataset = globals()["ChunkDataset"](path, **cfg.dataset)
+            datasets.append(dataset)
+            session_names.append(session_name)
+        except Exception as e:
+            warnings.warn(f"Error creating dataset for {path}: {str(e)}")
 
-        # Calculate workers - make this deterministic too
-        if 'num_workers' in dl_config:
-            requested_workers = dl_config['num_workers']
-            # Base allocation on dataset name for consistency
-            workers_for_dataset = max(1, max_workers // len(paths))
-            dl_config['num_workers'] = min(requested_workers, workers_for_dataset)
+    if not datasets:
+        return None
 
-        # Use PooledStatefulDataLoader with deterministic seed
-        dataloaders[dataset_name] = PooledStatefulDataLoader(
-            dataset,
-            seed=dataset_seed,  # Use deterministic seed based on path
-            **dl_config
-        )
+    # Create the concatenated dataset
+    concat_dataset = SessionConcatDataset(datasets, session_names)
 
-    # Use StatefulLongCycler with the pooled dataloaders
-    return StatefulLongCycler(dataloaders, seed=seed)
+    # Get dataloader config from the first config
+    dl_config = dict(configs[0].dataloader)
+
+    # Create the stateful dataloader
+    return SimpleStatefulDataLoader(
+        dataset=concat_dataset,
+        seed=seed,
+        **dl_config
+    )
+
+
+def maybe_get_validation_concat_loader(cfg, paths, max_sessions=None):
+    """
+    Creates validation dataloader using SessionConcatDataset approach.
+    Returns (session_key, batch) pairs during iteration, just like the previous implementation.
+
+    Args:
+        cfg: Configuration object
+        paths: List of paths to dataset files
+        max_sessions: Maximum number of sessions to load
+
+    Returns:
+        SimpleStatefulDataLoader instance or None if no validation loaders could be created
+    """
+    config = deepcopy(cfg)
+    config.dataset.modality_config.screen.sample_stride = config.dataset.modality_config.screen.chunk_size
+    config.dataset.modality_config.screen.include_blanks = False
+    config.dataset.modality_config.screen.valid_condition = {"tier": "validation"}
+
+    # Set validation seed
+    val_seed = cfg.get("seed", 42) + 10000 if cfg.get("seed") is not None else None
+
+    # Limit the number of paths
+    if max_sessions is not None and len(paths) > max_sessions:
+        paths = paths[:max_sessions]
+
+    valid_datasets = []
+    valid_session_names = []
+
+    for i, path in enumerate(paths):
+        try:
+            # Extract session name
+            if "dynamic" in path:
+                session_name = path.split("dynamic")[1].split("-Video")[0]
+            elif "_gaze" in path:
+                session_name = path.split("_gaze")[0].split("datasets/")[1]
+            else:
+                session_name = f"val_session_{i}"
+
+            # Create dataset
+            dataset = globals()["ChunkDataset"](path, **config.dataset)
+            valid_datasets.append(dataset)
+            valid_session_names.append(session_name)
+
+            print(f"Added validation dataset: {session_name}")
+
+        except Exception as e:
+            print(f"Error creating validation dataset for {path}: {str(e)}")
+
+    if not valid_datasets:
+        return None
+
+    # Create the concatenated dataset
+    concat_dataset = SessionConcatDataset(valid_datasets, valid_session_names)
+
+    # Get dataloader config
+    dl_config = dict(config.dataloader)
+
+    # Create the stateful dataloader
+    return SimpleStatefulDataLoader(
+        dataset=concat_dataset,
+        seed=val_seed,
+        **dl_config
+    )
