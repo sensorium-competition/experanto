@@ -151,7 +151,7 @@ class SequenceInterpolator(Interpolator):
                 )
                 / self.time_delta
             ).astype(int)
-            data = np.take_along_axis(self._data, idx, axis=0)
+            data = np.take_along_axis(self._data, idx, axis=0).astype(np.float32)
         else:
             idx = np.floor((valid_times - self.start_time) / self.time_delta).astype(
                 int
