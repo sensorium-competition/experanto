@@ -54,6 +54,7 @@ def get_multisession_dataloader(paths: List[str],
 def get_multisession_concat_dataloader(paths: List[str],
                                        configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
                                        seed: Optional[int] = 0,
+                                       num_workers = None,
                                        **kwargs) -> SimpleStatefulDataLoader:
     """
     Creates a multi-session dataloader using SessionConcatDataset and SimpleStatefulDataLoader.
@@ -112,6 +113,8 @@ def get_multisession_concat_dataloader(paths: List[str],
 
     # Get dataloader config from the first config
     dl_config = dict(configs[0].dataloader)
+    if num_workers is not None:
+        dl_config["num_workers"] = num_workers
 
     # Create the stateful dataloader
     return SimpleStatefulDataLoader(
