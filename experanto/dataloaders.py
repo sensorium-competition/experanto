@@ -103,6 +103,7 @@ def get_multisession_concat_dataloader(paths: List[str],
             dataset = globals()["ChunkDataset"](path, **cfg.dataset)
             datasets.append(dataset)
             session_names.append(session_name)
+            print(f"Created dataset {i}: {session_name} from {path}, length = {len(dataset)}")
         except Exception as e:
             warnings.warn(f"Error creating dataset for {path}: {str(e)}")
 

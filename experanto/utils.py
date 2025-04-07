@@ -224,10 +224,20 @@ class _RepeatSampler(object):
             yield from iter(self.sampler)
 
 
+class _RepeatSampler(object):
+    """Simple sampler that repeats indefinitely."""
+
+    def __init__(self, sampler):
+        self.sampler = sampler
+
+    def __iter__(self):
+        while True:
+            yield from iter(self.sampler)
+
+
 class SessionConcatDataset(Dataset):
     """
-    A custom concatenated dataset that keeps track of which session each sample belongs to
-    and returns data items in their original format.
+    A custom concatenated dataset that keeps track of which session each sample belongs to.
     """
 
     def __init__(self, datasets, session_names=None):
@@ -248,6 +258,10 @@ class SessionConcatDataset(Dataset):
         if session_names is None:
             session_names = [f"session_{i}" for i in range(len(datasets))]
         self.session_names = session_names
+
+        # Print dataset sizes for debugging
+        for i, (name, dataset) in enumerate(zip(session_names, datasets)):
+            print(f"Dataset {i}: {name}, length = {len(dataset)}")
 
         # Compute cumulative lengths - this is crucial for indexing
         self.cumulative_sizes = []
@@ -293,7 +307,7 @@ class SessionConcatDataset(Dataset):
         # Get the data from the dataset
         data = self.datasets[dataset_idx][sample_idx]
 
-        # Return the data as-is (no session key attached)
+        # Return the data as-is
         return data
 
     def get_session_for_idx(self, idx):
@@ -315,14 +329,15 @@ class SessionConcatDataset(Dataset):
         return {name: end - start for start, end, name in self.session_ranges}
 
 
-class FastSessionAwareBatchSampler(Sampler):
+class RandomSessionBatchSampler(Sampler):
     """
-    A more efficient batch sampler that ensures all samples in a batch come from the same session.
+    A batch sampler that randomly selects sessions and ensures all samples in a batch
+    come from the same session.
     """
 
-    def __init__(self, dataset, batch_size, drop_last=False, shuffle=False, seed=None):
+    def __init__(self, dataset, batch_size, drop_last=False, shuffle=False, seed=None, num_batches=None):
         """
-        Initialize a fast session-aware batch sampler.
+        Initialize a random session batch sampler.
 
         Args:
             dataset: SessionConcatDataset instance
@@ -330,9 +345,10 @@ class FastSessionAwareBatchSampler(Sampler):
             drop_last: Whether to drop the last incomplete batch
             shuffle: Whether to shuffle samples within each session
             seed: Random seed for shuffling
+            num_batches: Total number of batches to generate (if None, decides automatically)
         """
         if not isinstance(dataset, SessionConcatDataset):
-            raise ValueError("FastSessionAwareBatchSampler requires a SessionConcatDataset")
+            raise ValueError("RandomSessionBatchSampler requires a SessionConcatDataset")
 
         self.dataset = dataset
         self.batch_size = batch_size
@@ -340,77 +356,121 @@ class FastSessionAwareBatchSampler(Sampler):
         self.shuffle = shuffle
         self.rng = np.random.RandomState(seed) if seed is not None else None
 
-        # Generate initial session order
+        # Get all session names
         self.session_names = list(dataset.session_indices.keys())
-        if self.rng is not None and shuffle:
-            self.rng.shuffle(self.session_names)
+        print(f"Sessions: {self.session_names}")
 
-        # For faster initialization, store session indices and batches lazily
-        self._session_batches = {}
-        self._cached_batches = None
-        self._session_to_batch_indices = {}
+        # Calculate approximate number of batches per session
+        self.batches_per_session = {}
+        total_possible_batches = 0
 
-    def _get_session_batches(self, session_name):
-        """Get batches for a specific session (with caching)."""
-        if session_name in self._session_batches:
-            return self._session_batches[session_name]
+        for session_name in self.session_names:
+            start, end = dataset.session_indices[session_name]
+            session_size = end - start
 
-        # Get indices for this session
-        start, end = self.dataset.session_indices[session_name]
-        session_indices = list(range(start, end))
+            # Calculate batches for this session
+            if drop_last:
+                session_batches = session_size // batch_size
+            else:
+                session_batches = (session_size + batch_size - 1) // batch_size
 
-        # Shuffle indices if needed
-        if self.shuffle and self.rng is not None:
-            indices_copy = session_indices.copy()
-            self.rng.shuffle(indices_copy)
-            session_indices = indices_copy
+            self.batches_per_session[session_name] = session_batches
+            total_possible_batches += session_batches
 
-        # Create batches
-        batches = []
-        for i in range(0, len(session_indices), self.batch_size):
-            if i + self.batch_size <= len(session_indices) or not self.drop_last:
-                batch = session_indices[i:i + self.batch_size]
-                batches.append(batch)
+        print(f"Batches per session: {self.batches_per_session}")
+        print(f"Total possible batches: {total_possible_batches}")
 
-        # Cache the result
-        self._session_batches[session_name] = batches
-        return batches
+        # Determine total number of batches to generate
+        if num_batches is None:
+            self.num_batches = total_possible_batches
+        else:
+            self.num_batches = num_batches
 
-    def _get_all_batches(self):
-        """Get all batches lazily."""
-        if self._cached_batches is not None:
-            return self._cached_batches
+        # Pre-generate batch information (session and indices)
+        self.batches = self._generate_batches()
+        print(f"Generated {len(self.batches)} batches")
 
+    def _generate_batches(self):
+        """Generate all batches with their session information."""
         all_batches = []
-        for i, session_name in enumerate(self.session_names):
-            batches = self._get_session_batches(session_name)
 
-            # Store the mapping from session to batch indices
-            start_idx = len(all_batches)
-            end_idx = start_idx + len(batches)
-            self._session_to_batch_indices[session_name] = list(range(start_idx, end_idx))
+        # Create lists of indices for each session
+        session_indices = {}
+        for session_name in self.session_names:
+            indices = self.dataset.get_indices_for_session(session_name)
+            if self.shuffle and self.rng is not None:
+                indices_copy = indices.copy()
+                self.rng.shuffle(indices_copy)
+                session_indices[session_name] = indices_copy
+            else:
+                session_indices[session_name] = indices
 
-            # Add batches with session info
-            for batch in batches:
-                all_batches.append((session_name, batch))
+        # Possible sessions to choose from (weighted by number of batches)
+        session_weights = np.array([self.batches_per_session[name] for name in self.session_names])
+        session_weights = session_weights / session_weights.sum()  # Normalize
 
-        self._cached_batches = all_batches
+        # Track current position in each session
+        session_positions = {name: 0 for name in self.session_names}
+
+        # Generate batches
+        for _ in range(self.num_batches):
+            # Randomly select a session based on weights
+            session_idx = self.rng.choice(len(self.session_names), p=session_weights) if self.rng else 0
+            session_name = self.session_names[session_idx]
+
+            # Get indices for this session
+            indices = session_indices[session_name]
+            position = session_positions[session_name]
+
+            # Check if we've used all indices for this session
+            if position >= len(indices):
+                # Regenerate indices for this session
+                if self.shuffle and self.rng is not None:
+                    indices_copy = self.dataset.get_indices_for_session(session_name).copy()
+                    self.rng.shuffle(indices_copy)
+                    session_indices[session_name] = indices_copy
+                else:
+                    session_indices[session_name] = self.dataset.get_indices_for_session(session_name)
+
+                # Reset position
+                position = 0
+                session_positions[session_name] = 0
+                indices = session_indices[session_name]
+
+            # Create batch
+            end_pos = min(position + self.batch_size, len(indices))
+            batch_indices = indices[position:end_pos]
+
+            # Only add if not dropping last batch or if it's complete
+            if not self.drop_last or len(batch_indices) == self.batch_size:
+                all_batches.append((session_name, batch_indices))
+
+            # Update position
+            session_positions[session_name] = end_pos
+
+            # Check if we've reached the end of this session's indices
+            if end_pos >= len(indices):
+                session_positions[session_name] = 0
+
+        # Shuffle the final order of batches if needed
+        if self.shuffle and self.rng is not None:
+            self.rng.shuffle(all_batches)
+
         return all_batches
 
     def __iter__(self):
-        # Return only the batch indices, not the session names
-        all_batches = self._get_all_batches()
-        for _, batch in all_batches:
-            yield batch
+        """Yield batch indices."""
+        for _, batch_indices in self.batches:
+            yield batch_indices
 
     def __len__(self):
-        return len(self._get_all_batches())
+        """Return the number of batches."""
+        return len(self.batches)
 
-    def get_session_for_batch(self, batch_idx):
+    def get_session_for_batch_idx(self, batch_idx):
         """Get the session name for a given batch index."""
-        all_batches = self._get_all_batches()
-        if 0 <= batch_idx < len(all_batches):
-            return all_batches[batch_idx][0]
+        if 0 <= batch_idx < len(self.batches):
+            return self.batches[batch_idx][0]
         return None
 
 
@@ -437,9 +497,9 @@ class SimpleStatefulDataLoader(DataLoader):
         self._rng = np.random.RandomState(seed) if seed is not None else None
         self._prev_rng_state = None
 
-        # Create a faster session-aware batch sampler
+        # Create a random session batch sampler
         start_time = time.time()
-        self.session_batch_sampler = FastSessionAwareBatchSampler(
+        self.session_batch_sampler = RandomSessionBatchSampler(
             dataset=dataset,
             batch_size=batch_size,
             drop_last=drop_last,
@@ -500,12 +560,12 @@ class SimpleStatefulDataLoader(DataLoader):
         batch_idx = 0
         for _ in range(self.total_length):
             try:
-                # Get data batch without session keys
+                # Get data batch
                 batch_data = next(self.iterator)
                 self.current_batch += 1
 
                 # Get session key for this batch
-                session_key = self.session_batch_sampler.get_session_for_batch(batch_idx % self.total_length)
+                session_key = self.session_batch_sampler.get_session_for_batch_idx(batch_idx % self.total_length)
                 batch_idx += 1
 
                 if session_key is None:
