@@ -156,7 +156,7 @@ class SequenceInterpolator(Interpolator):
             idx = np.floor((valid_times - self.start_time) / self.time_delta).astype(
                 int
             )
-            data = self._data[idx]
+            data = self._data[idx].astype(np.float32)
         if self.interpolation_mode == "nearest_neighbor":
             return data, valid
         else:
@@ -294,7 +294,7 @@ class ScreenInterpolator(Interpolator):
 
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
-        out = np.zeros([len(valid_times)] + list(self._image_size))
+        out = np.zeros([len(valid_times)] + list(self._image_size), dtype=np.float32)
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
             # TODO: establish convention of dimensons for time/channels. Then we can remove this
@@ -314,8 +314,6 @@ class ScreenInterpolator(Interpolator):
                 out[idx_for_this_file] = data[
                     idx[idx_for_this_file] - self._first_frame_idx[u_idx]
                 ]
-        if self.normalize:
-            out = self.normalize_data(out)
         return out, valid
 
     def rescale_frame(self, frame: np.array) -> np.array:
@@ -410,4 +408,4 @@ class BlankTrial(ScreenTrial):
 
     def get_data_(self) -> np.array:
         """Override base implementation to generate blank data"""
-        return np.full((1,) + self.image_size, self.interleave_value)
+        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
