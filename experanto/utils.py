@@ -227,7 +227,7 @@ class _RepeatSampler(object):
 class SessionConcatDataset(Dataset):
     """
     A custom concatenated dataset that keeps track of which session each sample belongs to
-    and returns both the data and session key for each item.
+    and returns data items in their original format.
     """
 
     def __init__(self, datasets, session_names=None):
@@ -256,22 +256,22 @@ class SessionConcatDataset(Dataset):
             current_size += len(dataset)
             self.cumulative_sizes.append(current_size)
 
-        # Create mapping from index to session
-        self.index_to_session = {}
-        self.session_indices = {}
+        # Create mapping from index to session - using a more efficient approach
+        # Instead of storing a dictionary for every index, we'll compute it on demand
+        self.session_ranges = []
+        start_idx = 0
+        for i, dataset in enumerate(datasets):
+            session_size = len(dataset)
+            self.session_ranges.append((start_idx, start_idx + session_size, session_names[i]))
+            start_idx += session_size
 
-        # Build index mappings
+        # Create session indices dictionary (for faster lookup)
+        self.session_indices = {}
         start_idx = 0
         for i, dataset in enumerate(datasets):
             session_name = session_names[i]
             session_size = len(dataset)
-
-            # Add indices to mapping
-            for j in range(session_size):
-                self.index_to_session[start_idx + j] = session_name
-
-            # Store indices for this session
-            self.session_indices[session_name] = list(range(start_idx, start_idx + session_size))
+            self.session_indices[session_name] = (start_idx, start_idx + session_size)
             start_idx += session_size
 
     def __len__(self):
@@ -279,7 +279,7 @@ class SessionConcatDataset(Dataset):
         return self.cumulative_sizes[-1] if self.cumulative_sizes else 0
 
     def __getitem__(self, idx):
-        """Get item and also return the session key."""
+        """Get item from the appropriate dataset."""
         if idx < 0 or idx >= len(self):
             raise IndexError(f"Index {idx} out of range for dataset of size {len(self)}")
 
@@ -293,34 +293,36 @@ class SessionConcatDataset(Dataset):
         # Get the data from the dataset
         data = self.datasets[dataset_idx][sample_idx]
 
-        # Get the session name for this idx
-        session_name = self.session_names[dataset_idx]
-
-        # Return both the data and session name
-        return (data, session_name)
+        # Return the data as-is (no session key attached)
+        return data
 
     def get_session_for_idx(self, idx):
         """Get the session name for a given index."""
-        return self.index_to_session.get(idx, None)
+        for start, end, name in self.session_ranges:
+            if start <= idx < end:
+                return name
+        return None
 
     def get_indices_for_session(self, session_name):
         """Get all indices belonging to a given session."""
-        return self.session_indices.get(session_name, [])
+        if session_name in self.session_indices:
+            start, end = self.session_indices[session_name]
+            return list(range(start, end))
+        return []
 
     def get_sessions_count(self):
         """Get number of sessions and sample counts per session."""
-        return {name: len(indices) for name, indices in self.session_indices.items()}
+        return {name: end - start for start, end, name in self.session_ranges}
 
 
-class SessionAwareBatchSampler(Sampler):
+class FastSessionAwareBatchSampler(Sampler):
     """
-    A batch sampler that ensures all samples in a batch come from the same session.
-    This maintains consistent behavior with the previous LongCycler implementation.
+    A more efficient batch sampler that ensures all samples in a batch come from the same session.
     """
 
     def __init__(self, dataset, batch_size, drop_last=False, shuffle=False, seed=None):
         """
-        Initialize a session-aware batch sampler.
+        Initialize a fast session-aware batch sampler.
 
         Args:
             dataset: SessionConcatDataset instance
@@ -330,7 +332,7 @@ class SessionAwareBatchSampler(Sampler):
             seed: Random seed for shuffling
         """
         if not isinstance(dataset, SessionConcatDataset):
-            raise ValueError("SessionAwareBatchSampler requires a SessionConcatDataset")
+            raise ValueError("FastSessionAwareBatchSampler requires a SessionConcatDataset")
 
         self.dataset = dataset
         self.batch_size = batch_size
@@ -343,48 +345,78 @@ class SessionAwareBatchSampler(Sampler):
         if self.rng is not None and shuffle:
             self.rng.shuffle(self.session_names)
 
-        # Generate initial batches
-        self.batches = self._generate_batches()
+        # For faster initialization, store session indices and batches lazily
+        self._session_batches = {}
+        self._cached_batches = None
+        self._session_to_batch_indices = {}
 
-    def _generate_batches(self):
-        """Generate batches for all sessions."""
+    def _get_session_batches(self, session_name):
+        """Get batches for a specific session (with caching)."""
+        if session_name in self._session_batches:
+            return self._session_batches[session_name]
+
+        # Get indices for this session
+        start, end = self.dataset.session_indices[session_name]
+        session_indices = list(range(start, end))
+
+        # Shuffle indices if needed
+        if self.shuffle and self.rng is not None:
+            indices_copy = session_indices.copy()
+            self.rng.shuffle(indices_copy)
+            session_indices = indices_copy
+
+        # Create batches
+        batches = []
+        for i in range(0, len(session_indices), self.batch_size):
+            if i + self.batch_size <= len(session_indices) or not self.drop_last:
+                batch = session_indices[i:i + self.batch_size]
+                batches.append(batch)
+
+        # Cache the result
+        self._session_batches[session_name] = batches
+        return batches
+
+    def _get_all_batches(self):
+        """Get all batches lazily."""
+        if self._cached_batches is not None:
+            return self._cached_batches
+
         all_batches = []
+        for i, session_name in enumerate(self.session_names):
+            batches = self._get_session_batches(session_name)
 
-        for session_name in self.session_names:
-            # Get indices for this session
-            session_indices = self.dataset.get_indices_for_session(session_name)
+            # Store the mapping from session to batch indices
+            start_idx = len(all_batches)
+            end_idx = start_idx + len(batches)
+            self._session_to_batch_indices[session_name] = list(range(start_idx, end_idx))
 
-            # Shuffle indices if needed
-            if self.shuffle and self.rng is not None:
-                session_indices = session_indices.copy()  # Don't modify original
-                self.rng.shuffle(session_indices)
+            # Add batches with session info
+            for batch in batches:
+                all_batches.append((session_name, batch))
 
-            # Create batches
-            for i in range(0, len(session_indices), self.batch_size):
-                if i + self.batch_size <= len(session_indices) or not self.drop_last:
-                    batch = session_indices[i:i + self.batch_size]
-                    all_batches.append((session_name, batch))
-
+        self._cached_batches = all_batches
         return all_batches
 
     def __iter__(self):
-        # Return batches with their session key
-        for session_name, batch in self.batches:
+        # Return only the batch indices, not the session names
+        all_batches = self._get_all_batches()
+        for _, batch in all_batches:
             yield batch
 
     def __len__(self):
-        return len(self.batches)
+        return len(self._get_all_batches())
 
     def get_session_for_batch(self, batch_idx):
         """Get the session name for a given batch index."""
-        if 0 <= batch_idx < len(self.batches):
-            return self.batches[batch_idx][0]
+        all_batches = self._get_all_batches()
+        if 0 <= batch_idx < len(all_batches):
+            return all_batches[batch_idx][0]
         return None
 
 
 class SimpleStatefulDataLoader(DataLoader):
     """
-    Minimal stateful dataloader that provides both data and session keys.
+    Fast stateful dataloader that provides both data and session keys.
     """
 
     def __init__(self, dataset, batch_size=1, shuffle=False, num_workers=0,
@@ -405,14 +437,16 @@ class SimpleStatefulDataLoader(DataLoader):
         self._rng = np.random.RandomState(seed) if seed is not None else None
         self._prev_rng_state = None
 
-        # Create a session-aware batch sampler
-        self.session_batch_sampler = SessionAwareBatchSampler(
+        # Create a faster session-aware batch sampler
+        start_time = time.time()
+        self.session_batch_sampler = FastSessionAwareBatchSampler(
             dataset=dataset,
             batch_size=batch_size,
             drop_last=drop_last,
             shuffle=shuffle,
             seed=seed
         )
+        print(f"Batch sampler creation took {time.time() - start_time:.2f} seconds")
 
         # Initialize parent class with our custom batch sampler
         super().__init__(
@@ -434,6 +468,7 @@ class SimpleStatefulDataLoader(DataLoader):
         # State tracking
         self.current_batch = 0
         self.total_length = len(self.session_batch_sampler)
+        print(f"Created dataloader with {self.total_length} batches")
 
     def get_state(self) -> Dict[str, Any]:
         """Return the current state of the dataloader."""
@@ -465,7 +500,7 @@ class SimpleStatefulDataLoader(DataLoader):
         batch_idx = 0
         for _ in range(self.total_length):
             try:
-                # Get batch of (data, session_key) tuples
+                # Get data batch without session keys
                 batch_data = next(self.iterator)
                 self.current_batch += 1
 
@@ -476,15 +511,8 @@ class SimpleStatefulDataLoader(DataLoader):
                 if session_key is None:
                     session_key = "unknown"
 
-                # Separate data from keys (we actually don't need the individual keys anymore)
-                processed_batch = []
-                for item in batch_data:
-                    # Each item is a tuple of (data, key)
-                    data, _ = item
-                    processed_batch.append(data)
-
-                # Return the session key and processed batch
-                yield session_key, processed_batch
+                # Return the session key and batch data directly
+                yield session_key, batch_data
 
             except Exception as e:
                 # Provide more detailed error information

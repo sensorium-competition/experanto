@@ -2,6 +2,7 @@ from typing import Any, List, Optional, Tuple, Union, Dict
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 import numpy as np
+import time
 
 from .datasets import ChunkDataset
 
@@ -79,6 +80,7 @@ def get_multisession_concat_dataloader(paths: List[str],
     datasets = []
     session_names = []
 
+    start_time = time.time()
     for i, (path, cfg) in enumerate(zip(paths, configs)):
         # Extract session name
         if "dynamic" in path:
@@ -106,6 +108,8 @@ def get_multisession_concat_dataloader(paths: List[str],
 
     if not datasets:
         return None
+
+    print(f"Dataset creation took {time.time() - start_time:.2f} seconds")
 
     # Create the concatenated dataset
     concat_dataset = SessionConcatDataset(datasets, session_names)
