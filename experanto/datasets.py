@@ -332,6 +332,8 @@ class ChunkDataset(Dataset):
             self.chunk_sizes[device_name] = global_chunk_size or cfg.chunk_size
             self.sampling_rates[device_name] = global_sampling_rate or cfg.sampling_rate
 
+        self.add_behavior_as_channels = add_behavior_as_channels
+        self.replace_nans_with_means = replace_nans_with_means
         self.sample_stride = self.modality_config.screen.sample_stride
         self._experiment = Experiment(
             root_folder,
@@ -389,10 +391,18 @@ class ChunkDataset(Dataset):
                 if not isinstance(mode, str):
                     means = np.array(mode.get("means", means))
                     stds = np.array(mode.get("stds", stds))
-
                 if mode == 'standardize':
                     # If modality should only be standarized, set means to 0.
                     means = np.zeros_like(means)
+                elif mode == 'recompute_responses':
+                     means = np.zeros_like(means)
+                     stds = np.nanstd(self._experiment.devices["responses"]._data, 0)[None, ...]
+                elif mode == 'recompute_behavior':
+                     means = np.nanmean(self._experiment.devices[device_name]._data, 0)[None, ...]
+                     stds = np.nanstd(self._experiment.devices[device_name]._data, 0)[None, ...]
+                elif mode == 'screen_default':
+                     means = np.array((80))
+                     stds = np.array((60))
 
                 self._statistics[device_name]["mean"] = means.reshape(1, -1)  # (n, 1) -> (1, n) for broadcasting in __get_item__
                 self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
