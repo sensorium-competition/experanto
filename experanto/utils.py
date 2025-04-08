@@ -246,6 +246,10 @@ class _RepeatSampler(object):
     def __init__(self, sampler):
         self.sampler = sampler
 
+    def __len__(self):
+        """Return the length of the original sampler."""
+        return len(self.sampler)
+
     def __iter__(self):
         while True:
             yield from iter(self.sampler)
