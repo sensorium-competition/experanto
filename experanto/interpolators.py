@@ -300,6 +300,7 @@ class ScreenInterpolator(Interpolator):
             # TODO: establish convention of dimensons for time/channels. Then we can remove this
             # TODO: revisit this for on the fly decoding
             if ((len(data.shape) == 2) or (data.shape[-1] == 3)) and (len(data.shape) < 4):
+
                 data = np.expand_dims(data, axis=0)
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
             if self.rescale:

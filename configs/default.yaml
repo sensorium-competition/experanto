@@ -16,17 +16,20 @@ dataset:
       sample_stride: 1
       include_blanks: True
       transforms:
-        normalization: "screen_default"
+        normalization: "normalize"
+        Resize:
+          _target_: "torchvision.transforms.v2.Resize"
+          size: [144, 256]
       interpolation:
         rescale: True
-        rescale_size: [36, 64]
+        rescale_size: [144, 256]
     responses:
       keep_nans : False
       sampling_rate: 8
       chunk_size: 16
       offset: 0.0 # in seconds
       transforms:
-        normalization: "recompute_responses"
+        normalization: "standardize"
       interpolation:
         interpolation_mode: "nearest_neighbor"
       filters:
@@ -34,17 +37,13 @@ dataset:
           __target__: experanto.filters.common_filters.nan_filter
           __partial__: True
           vicinity: 0.05
-        # artifact_filter:
-        #   __target__: experanto.filters.responses_filters.artifact_filter
-        #   __partial__: True
-        #   vicinity: 0.05
     eye_tracker:
       keep_nans : False
       sampling_rate: 30
       chunk_size: 60
       offset: 0
       transforms:
-        normalization: "recompute_behavior"
+        normalization: "normalize"
       interpolation:
         interpolation_mode: "nearest_neighbor"
       filters:
@@ -58,7 +57,7 @@ dataset:
       chunk_size: 60
       offset: 0
       transforms:
-        normalization: "recompute_behavior"
+        normalization: "normalize"
       interpolation:
         interpolation_mode: "nearest_neighbor"
       filters:
@@ -74,4 +73,3 @@ dataloader:
   pin_memory: True
   drop_last: True
   prefetch_factor: 2
-  shuffle_each_epoch: False

@@ -16,6 +16,7 @@ from hydra.utils import instantiate
 import functools
 import importlib
 
+from .configs import DEFAULT_MODALITY_CONFIG
 from .experiment import Experiment
 from .interpolators import ImageTrial, VideoTrial
 from .utils import add_behavior_as_channels, replace_nan_with_batch_mean
@@ -330,8 +331,7 @@ class ChunkDataset(Dataset):
             cfg = self.modality_config[device_name]
             self.chunk_sizes[device_name] = global_chunk_size or cfg.chunk_size
             self.sampling_rates[device_name] = global_sampling_rate or cfg.sampling_rate
-        self.add_behavior_as_channels = add_behavior_as_channels
-        self.replace_nans_with_means = replace_nans_with_means
+
         self.sample_stride = self.modality_config.screen.sample_stride
         self._experiment = Experiment(
             root_folder,
@@ -382,7 +382,6 @@ class ChunkDataset(Dataset):
             # If modality should be normalized, load respective statistics from file.
             if self.modality_config[device_name].transforms.get("normalization", False):
                 mode = self.modality_config[device_name].transforms.normalization
-
                 means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
                 stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
 
@@ -394,15 +393,6 @@ class ChunkDataset(Dataset):
                 if mode == 'standardize':
                     # If modality should only be standarized, set means to 0.
                     means = np.zeros_like(means)
-                elif mode == 'recompute_responses':
-                    means = np.zeros_like(means)
-                    stds = np.nanstd(self._experiment.devices["responses"]._data, 0)[None, ...]
-                elif mode == 'recompute_behavior':
-                    means = np.nanmean(self._experiment.devices[device_name]._data, 0)[None, ...]
-                    stds = np.nanstd(self._experiment.devices[device_name]._data, 0)[None, ...]
-                elif mode == 'screen_default':
-                    means = np.array((80))
-                    stds = np.array((60))
 
                 self._statistics[device_name]["mean"] = means.reshape(1, -1)  # (n, 1) -> (1, n) for broadcasting in __get_item__
                 self._statistics[device_name]["std"] = stds.reshape(1, -1)  # same as above
@@ -578,14 +568,11 @@ class ChunkDataset(Dataset):
 
     def get_full_valid_sample_times(self, filter_for_valid_intervals: bool = True) -> Iterable:
         """
-        Returns all valid sample times that can be used as starting points for chunks.
-        A sample time is valid if:
-        1. The chunk starting at this time does not extend beyond the end time
-        2. All samples in the chunk satisfy the meta conditions specified in the config
-           (e.g., all frames belong to the correct tier and stimulus type)
-
-        Returns:
-            Iterable: Array of valid sample times that can be used as chunk starting points
+        iterates through all sample times and checks if they could be used as
+        start times, eg if the next `self.chunk_sizes["screen"]` points are still valid
+        based on the previous meta condition filtering
+        :returns:
+            valid_times: np.array of valid starting points
         """
 
         # Calculate all possible end indices
@@ -608,7 +595,6 @@ class ChunkDataset(Dataset):
         final_mask = duration_mask & sample_mask_from_meta_conditions
 
         return self._screen_sample_times[possible_indices[final_mask]]
-     
 
     def shuffle_valid_screen_times(self) -> None:
         """
@@ -640,11 +626,6 @@ class ChunkDataset(Dataset):
             times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
             times = times + self.modality_config[device_name].offset
             data, _ = self._experiment.interpolate(times, device=device_name)
-
-            if self.replace_nans_with_means:
-                if np.any(np.isnan(data)):
-                    data = replace_nan_with_batch_mean(data)
-
             out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
             # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
             if device_name == "screen":
