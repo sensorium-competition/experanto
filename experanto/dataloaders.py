@@ -6,7 +6,7 @@ import time
 
 from .datasets import ChunkDataset
 
-from .utils import MultiEpochsDataLoader, LongCycler, SessionConcatDataset, SimpleStatefulDataLoader
+from .utils import MultiEpochsDataLoader, LongCycler, OptimizedSessionConcatDataset, SimpleStatefulDataLoader
 
 
 
@@ -110,7 +110,7 @@ def get_multisession_concat_dataloader(paths: List[str],
     print(f"Dataset creation took {time.time() - start_time:.2f} seconds")
 
     # Create the concatenated dataset
-    concat_dataset = SessionConcatDataset(datasets, session_names)
+    concat_dataset = OptimizedSessionConcatDataset(datasets, session_names)
 
     # Get dataloader config from the first config
     dl_config = dict(configs[0].dataloader)
@@ -184,7 +184,7 @@ def maybe_get_validation_concat_loader(cfg, paths, max_sessions=None):
         return None
 
     # Create the concatenated dataset
-    concat_dataset = SessionConcatDataset(valid_datasets, valid_session_names)
+    concat_dataset = OptimizedSessionConcatDataset(valid_datasets, valid_session_names)
 
     # Get dataloader config
     dl_config = dict(config.dataloader)
