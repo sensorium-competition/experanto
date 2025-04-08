@@ -510,27 +510,19 @@ class ChunkDataset(Dataset):
             np.ndarray: Boolean mask indicating which trials satisfy at least one set of conditions.
         """
         all_conditions = None
-
         for valid_conditions_product in valid_conditions_sum_of_product:
-
             conditions_of_product = None
-
             for k, valid_condition in valid_conditions_product.items():
-
                 trial_conditions = self.meta_conditions[k]
-
                 condition_mask = np.array([condition == valid_condition for condition in trial_conditions])
-
                 if conditions_of_product is None:
                     conditions_of_product = condition_mask
                 else:
                     conditions_of_product &= condition_mask
-
             if all_conditions is None:
                 all_conditions = conditions_of_product
             else:
                 all_conditions |= conditions_of_product
-
         return all_conditions
     
     def get_screen_sample_mask_from_meta_conditions(self, satisfy_for_next: int, valid_conditions_sum_of_product: List[dict], filter_for_valid_intervals: bool = True) -> np.ndarray:
@@ -644,7 +636,6 @@ class ChunkDataset(Dataset):
                 if out[device_name].shape[0] == chunk_size:
                     out[device_name] = out[device_name].transpose(0, 1).contiguous()
 
-
             if device_name == 'responses':
                 if self._experiment.devices["responses"].use_phase_shifts:
                     phase_shifts = self._experiment.devices["responses"]._phase_shifts
@@ -655,9 +646,9 @@ class ChunkDataset(Dataset):
         if self.add_behavior_as_channels:
             out = add_behavior_as_channels(out)
 
-        # remove any keys that are not in the out_keys
+        # return only the keys that were explicitly requested
+        # (necessary when pin_memory=True in dataloader)
         out = {k: out[k] for k in self.out_keys if k in out}
-
         return out
 
     def get_state(self) -> Dict[str, Any]:
