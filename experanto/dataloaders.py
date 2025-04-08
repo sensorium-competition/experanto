@@ -3,10 +3,11 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 import numpy as np
 import time
+import warnings
 
 from .datasets import ChunkDataset
 
-from .utils import MultiEpochsDataLoader, LongCycler, OptimizedSessionConcatDataset, SimpleStatefulDataLoader
+from .utils import MultiEpochsDataLoader, LongCycler, SessionConcatDataset, FastSessionDataLoader
 
 
 
@@ -52,20 +53,29 @@ def get_multisession_dataloader(paths: List[str],
 
 
 def get_multisession_concat_dataloader(paths: List[str],
-                                       configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
+                                       configs: Union[Dict, List[Dict]] = None,
                                        seed: Optional[int] = 0,
-                                       num_workers = None,
-                                       prefetch_factor = None,
-                                       **kwargs) -> SimpleStatefulDataLoader:
+                                       **kwargs) -> 'FastSessionDataLoader':
     """
-    Creates a multi-session dataloader using SessionConcatDataset and SimpleStatefulDataLoader.
-    Returns (session_key, batch) pairs during iteration, just like the LongCycler.
+    Creates a multi-session dataloader using SessionConcatDataset and SessionDataLoader.
+    Returns (session_key, batch) pairs during iteration.
+
+    Args:
+        paths: List of paths to dataset files
+        configs: Configuration for datasets (single config or list of configs)
+        seed: Random seed for reproducibility
+        num_workers: Number of worker processes for data loading
+        prefetch_factor: Prefetch factor for data loading
+        **kwargs: Additional arguments
+
+    Returns:
+        SessionDataLoader instance or None if no valid datasets found
     """
     if configs is None and "config" in kwargs:
         configs = kwargs.pop("config")
 
     # Convert single config to list for uniform handling
-    if isinstance(configs, (DictConfig, dict)):
+    if not isinstance(configs, list):
         configs = [configs] * len(paths)
 
     # Create datasets
@@ -87,65 +97,63 @@ def get_multisession_concat_dataloader(paths: List[str],
         dataset_seed = seed + path_hash if seed is not None else None
 
         # Set specific seed for this dataset if needed
-        if hasattr(cfg.dataset, 'seed') and dataset_seed is not None:
-            cfg.dataset.seed = dataset_seed
+        if hasattr(cfg.get('dataset', {}), 'seed') and dataset_seed is not None:
+            cfg['dataset']['seed'] = dataset_seed
 
         # Create and append the dataset
         try:
-            dataset = globals()["ChunkDataset"](path, **cfg.dataset)
+            # Assuming ChunkDataset is defined elsewhere
+            dataset = globals()["ChunkDataset"](path, **cfg['dataset'])
+
             # Only add datasets with non-zero length
             if len(dataset) > 0:
                 datasets.append(dataset)
                 session_names.append(session_name)
-                print(f"Created dataset {i}: {session_name} from {path}, length = {len(dataset)}")
-            else:
-                print(f"Skipping empty dataset {i}: {session_name} from {path}")
         except Exception as e:
             warnings.warn(f"Error creating dataset for {path}: {str(e)}")
 
     if not datasets:
-        print("No valid datasets found with non-zero length")
         return None
 
-    print(f"Dataset creation took {time.time() - start_time:.2f} seconds")
 
     # Create the concatenated dataset
-    concat_dataset = OptimizedSessionConcatDataset(datasets, session_names)
+    concat_dataset = SessionConcatDataset(datasets, session_names)
 
     # Get dataloader config from the first config
-    dl_config = dict(configs[0].dataloader)
-    if num_workers is not None:
-        dl_config["num_workers"] = num_workers
-    if prefetch_factor == 0:
-        dl_config["prefetch_factor"] = None
+    dl_config = dict(configs[0].get('dataloader', {}))
 
-    # Create the stateful dataloader
-    return SimpleStatefulDataLoader(
+    # Create the dataloader with our simplified implementation
+    return FastSessionDataLoader(
         dataset=concat_dataset,
         seed=seed,
         **dl_config
     )
 
 
-def maybe_get_validation_concat_loader(cfg, paths, max_sessions=None):
+def get_validation_concat_loader(cfg, paths, max_sessions=None):
     """
     Creates validation dataloader using SessionConcatDataset approach.
-    Returns (session_key, batch) pairs during iteration, just like the previous implementation.
+    Returns (session_key, batch) pairs during iteration.
 
     Args:
         cfg: Configuration object
         paths: List of paths to dataset files
         max_sessions: Maximum number of sessions to load
+        num_workers: Number of worker processes
+        prefetch_factor: Prefetch factor for data loading
 
     Returns:
-        SimpleStatefulDataLoader instance or None if no validation loaders could be created
+        SessionDataLoader instance or None if no validation loaders could be created
     """
     config = deepcopy(cfg)
-    config.dataset.modality_config.screen.sample_stride = config.dataset.modality_config.screen.chunk_size
-    config.dataset.modality_config.screen.include_blanks = False
-    config.dataset.modality_config.screen.valid_condition = {"tier": "validation"}
 
-    # Set validation seed
+    # Adjust configuration for validation
+    if hasattr(config, 'dataset') and hasattr(config.dataset, 'modality_config'):
+        config.dataset.modality_config.screen.sample_stride = config.dataset.modality_config.screen.chunk_size
+        config.dataset.modality_config.screen.include_blanks = False
+        config.dataset.modality_config.screen.valid_condition = {"tier": "validation"}
+
+    # Set validation seed (add offset to avoid overlap with training seed)
     val_seed = cfg.get("seed", 42) + 10000 if cfg.get("seed") is not None else None
 
     # Limit the number of paths
@@ -172,9 +180,6 @@ def maybe_get_validation_concat_loader(cfg, paths, max_sessions=None):
             if len(dataset) > 0:
                 valid_datasets.append(dataset)
                 valid_session_names.append(session_name)
-                print(f"Added validation dataset: {session_name} (length = {len(dataset)})")
-            else:
-                print(f"Skipping empty validation dataset: {session_name}")
 
         except Exception as e:
             print(f"Error creating validation dataset for {path}: {str(e)}")
@@ -184,19 +189,14 @@ def maybe_get_validation_concat_loader(cfg, paths, max_sessions=None):
         return None
 
     # Create the concatenated dataset
-    concat_dataset = OptimizedSessionConcatDataset(valid_datasets, valid_session_names)
+    concat_dataset = SessionConcatDataset(valid_datasets, valid_session_names)
 
     # Get dataloader config
     dl_config = dict(config.dataloader)
-    if num_workers is not None:
-        dl_config["num_workers"] = num_workers
-    if prefetch_factor == 0:
-        dl_config["prefetch_factor"] = None
 
-    # Create the stateful dataloader
-    return SimpleStatefulDataLoader(
+    # Create the dataloader
+    return DirectSessionDataLoader(
         dataset=concat_dataset,
         seed=val_seed,
         **dl_config
     )
-
