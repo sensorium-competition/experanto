@@ -1,9 +1,12 @@
 from typing import Any, List, Optional, Tuple, Union, Dict
+import os
+import time
+import warnings
+from pathlib import Path
+
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 import numpy as np
-import time
-import warnings
 
 from .datasets import ChunkDataset
 
@@ -85,13 +88,6 @@ def get_multisession_concat_dataloader(paths: List[str],
 
     start_time = time.time()
     for i, (path, cfg) in enumerate(zip(paths, configs)):
-        # Extract session name
-        if "dynamic" in path:
-            session_name = path.split("dynamic")[1].split("-Video")[0]
-        elif "_gaze" in path:
-            session_name = path.split("_gaze")[0].split("datasets/")[1]
-        else:
-            session_name = f"session_{i}"
 
         # Create dataset with deterministic seed
         path_hash = hash(path) % 10000
@@ -104,7 +100,8 @@ def get_multisession_concat_dataloader(paths: List[str],
         # Create and append the dataset
         try:
             # Assuming ChunkDataset is defined elsewhere
-            dataset = globals()["ChunkDataset"](path, **cfg['dataset'])
+            dataset = ChunkDataset(path, **cfg['dataset'])
+            session_name = dataset.data_key
 
             # Only add datasets with non-zero length
             if len(dataset) > 0:

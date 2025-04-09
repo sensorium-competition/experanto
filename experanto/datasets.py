@@ -4,7 +4,9 @@ from collections import namedtuple
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Optional, Union, List, Dict, Any
+import os
 
+import json
 import numpy as np
 import torch
 import torchvision
@@ -325,6 +327,8 @@ class ChunkDataset(Dataset):
             interpolation_mode: nearest_neighbor
         """
         self.root_folder = Path(root_folder)
+        self.data_key = self.get_data_key_from_root_folder(root_folder)
+
         self.modality_config = instantiate(modality_config)
         self.chunk_sizes, self.sampling_rates, self.chunk_s = {}, {}, {}
         for device_name in self.modality_config.keys():
@@ -612,6 +616,55 @@ class ChunkDataset(Dataset):
             self._valid_screen_times = np.sort(
                 np.random.choice(times, size=len(times) // self.sample_stride, replace=False)
             )
+
+    def get_data_key_from_root_folder(cls, root_folder):
+        """
+        Extract a data key from the root folder path by checking for a meta.json file.
+
+        Args:
+            root_folder (str or Path): Path to the root folder containing dataset
+
+        Returns:
+            str: The extracted data key or folder name if meta.json doesn't exist or lacks data_key
+        """
+        # Convert Path object to string if necessary
+        root_folder = str(root_folder)
+
+        # Construct the path to meta.json
+        meta_file_path = os.path.join(root_folder, "meta.json")
+
+        # Initialize meta as an empty dict
+        meta = {}
+
+        # Check if the file exists before trying to open it
+        if os.path.isfile(meta_file_path):
+            try:
+                with open(meta_file_path, "r") as file:
+                    meta = json.load(file)
+
+                # Get data_key from meta if it exists
+                if "data_key" in meta:
+                    return meta["data_key"]
+                elif "scan_key" in meta:
+                    key = meta["scan_key"]
+                    data_key = f"{key['animal_id']}-{key['session']}-{key['scan_idx']}"
+                    return data_key
+                if "dynamic" in root_folder:
+                    dataset_name = path.split("dynamic")[1].split("-Video")[0]
+                    return dataset_name
+                elif "_gaze" in path:
+                    dataset_name = path.split("_gaze")[0].split("datasets/")[1]
+                    return dataset_name
+                else:
+                    print(f"No 'data_key' found in {meta_file_path}, using folder name instead")
+            except json.JSONDecodeError:
+                print(f"Error: {meta_file_path} is not a valid JSON file")
+            except Exception as e:
+                print(f"Error loading {meta_file_path}: {str(e)}")
+        else:
+            print(f"No metadata file found at {meta_file_path}")
+        return os.path.basename(root_folder)
+
 
     def __len__(self):
         return len(self._valid_screen_times)

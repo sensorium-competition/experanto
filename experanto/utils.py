@@ -146,7 +146,7 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
     and
     https://github.com/huggingface/pytorch-image-models/blob/d72ac0db259275233877be8c1d4872163954dfbb/timm/data/loader.py#L209-L238
     """
-    def __init__(self, *args, shuffle_each_epoch=True, **kwargs, ):
+    def __init__(self, *args, shuffle_each_epoch=False, **kwargs, ):
         super().__init__(*args, **kwargs)
         self._DataLoader__initialized = False
         self.batch_sampler = _RepeatSampler(self.batch_sampler)
