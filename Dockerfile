@@ -19,9 +19,6 @@ RUN python3 -m pip install --upgrade pip
 RUN python3 -m pip install jupyterlab
 RUN pip3 install torch torchvision torchaudio
 
-
 EXPOSE 8888
 WORKDIR /notebooks
-COPY . /notebooks/mousehiera
-RUN pip3 install -e /notebooks/mousehiera
 ENTRYPOINT ["jupyter", "lab", "--allow-root", "--ip=0.0.0.0", "--no-browser", "--port=8888", "--NotebookApp.token='1234'", "--notebook-dir='/notebooks'"]
