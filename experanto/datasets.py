@@ -685,9 +685,9 @@ class ChunkDataset(Dataset):
             # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
             if device_name == "screen":
                 if out[device_name].shape[-1] == 3:
-                    out[device_name] = out[device_name].permute(0, 3, 1, 2).contiguous()
+                    out[device_name] = out[device_name].permute(0, 3, 1, 2)
                 if out[device_name].shape[0] == chunk_size:
-                    out[device_name] = out[device_name].transpose(0, 1).contiguous()
+                    out[device_name] = out[device_name].transpose(0, 1)
 
             if device_name == 'responses':
                 if self._experiment.devices["responses"].use_phase_shifts:
@@ -699,10 +699,13 @@ class ChunkDataset(Dataset):
         if self.add_behavior_as_channels:
             out = add_behavior_as_channels(out)
 
-        # return only the keys that were explicitly requested
-        # (necessary when pin_memory=True in dataloader)
-        out = {k: out[k] for k in self.out_keys if k in out}
-        return out
+        final_out = {}
+        for key in out:
+            if key in self.out_keys:
+                if not out[key].is_contiguous():
+                    final_out[key] = out[key].contiguous()
+
+        return final_out
 
     def get_state(self) -> Dict[str, Any]:
         """Return the current state of the dataset's RNG."""
