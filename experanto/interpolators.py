@@ -351,7 +351,7 @@ class ScreenTrial:
     @staticmethod
     def create(data_file_name: str, meta_data: dict, cache_data: bool = False) -> "ScreenTrial":
         modality = meta_data.get("modality")
-        class_name = modality.capitalize() + "Trial"
+        class_name = modality.lower().capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"
         return globals()[class_name](data_file_name, meta_data, cache_data=cache_data)
 
@@ -394,6 +394,25 @@ class VideoTrial(ScreenTrial):
 
 
 class BlankTrial(ScreenTrial):
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+
+        self.interleave_value = meta_data.get("interleave_value")
+
+        super().__init__(
+            data_file_name,
+            meta_data,
+            tuple(meta_data.get("image_size")),
+            meta_data.get("first_frame_idx"),
+            1,
+            cache_data=cache_data,
+        )
+
+    def get_data_(self) -> np.array:
+        """Override base implementation to generate blank data"""
+        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
+
+
+class InvalidTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
 
         self.interleave_value = meta_data.get("interleave_value")
