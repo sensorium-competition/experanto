@@ -346,7 +346,7 @@ class ChunkDataset(Dataset):
             cache_data=cache_data,
         )
         self.device_names = self._experiment.device_names
-        self.out_keys = out_keys or self.device_names
+        self.out_keys = out_keys or (list(self.device_names) + ["timestamps"])
         self.normalize_timestamps = normalize_timestamps
 
         self.start_time, self.end_time = self._experiment.get_valid_range("screen")
