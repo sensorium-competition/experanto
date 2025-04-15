@@ -695,12 +695,12 @@ class ChunkDataset(Dataset):
             if device_name == 'responses':
                 if self._experiment.devices["responses"].use_phase_shifts:
                     phase_shifts = self._experiment.devices["responses"]._phase_shifts
-                    times = (times - times.min())[:, None] + phase_shifts[None, :]
+                    times = times[:, None] + phase_shifts[None, :]
 
             times = torch.from_numpy(times)
             if self.normalize_timestamps:
-                times = times - dat._experiment.devices["responses"].start_time
-                times = times.to(torch.float32).congiguous()
+                times = times - self._experiment.devices["responses"].start_time
+                times = times.to(torch.float32).contiguous()
             timestamps[device_name] =  times
 
         out["timestamps"] = timestamps
@@ -712,7 +712,9 @@ class ChunkDataset(Dataset):
         final_out = {}
         for key in out:
             if key in self.out_keys:
-                if not out[key].is_contiguous():
+                if key == "timestamps":
+                    final_out[key] = out[key]
+                elif not out[key].is_contiguous():
                     final_out[key] = out[key].contiguous()
                 else:
                     final_out[key] = out[key]
