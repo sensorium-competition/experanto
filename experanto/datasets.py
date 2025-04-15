@@ -704,6 +704,8 @@ class ChunkDataset(Dataset):
             if key in self.out_keys:
                 if not out[key].is_contiguous():
                     final_out[key] = out[key].contiguous()
+                else:
+                    final_out[key] = out[key]
 
         return final_out
 
