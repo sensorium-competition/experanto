@@ -269,6 +269,7 @@ class ChunkDataset(Dataset):
         replace_nans_with_means: bool = False,
         cache_data: bool = False,
         out_keys: Optional[Iterable] = None,
+        normalize_timestamps: bool = True,
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
         seed: Optional[int] = None,
     ) -> None:
@@ -346,6 +347,8 @@ class ChunkDataset(Dataset):
         )
         self.device_names = self._experiment.device_names
         self.out_keys = out_keys or self.device_names
+        self.normalize_timestamps = normalize_timestamps
+
         self.start_time, self.end_time = self._experiment.get_valid_range("screen")
         self._read_trials()
         self.initialize_statistics()
@@ -694,8 +697,15 @@ class ChunkDataset(Dataset):
                     phase_shifts = self._experiment.devices["responses"]._phase_shifts
                     times = (times - times.min())[:, None] + phase_shifts[None, :]
 
-            timestamps[device_name] = torch.from_numpy(times)
+            times = torch.from_numpy(times)
+            if self.normalize_timestamps:
+                times = times - dat._experiment.devices["responses"].start_time
+                times = times.to(torch.float32).congiguous()
+            timestamps[device_name] =  times
+
         out["timestamps"] = timestamps
+
+        #deprecated
         if self.add_behavior_as_channels:
             out = add_behavior_as_channels(out)
 
