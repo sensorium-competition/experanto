@@ -3,7 +3,7 @@ import os
 import time
 import warnings
 from pathlib import Path
-
+import logging
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 import numpy as np
@@ -13,6 +13,7 @@ from .datasets import ChunkDataset
 from .utils import MultiEpochsDataLoader, LongCycler, SessionConcatDataset, FastSessionDataLoader
 
 
+logger = logging.getLogger(__name__)
 
 
 def get_multisession_dataloader(paths: List[str],
