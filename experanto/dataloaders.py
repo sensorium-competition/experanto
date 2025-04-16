@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Tuple, Union, Dict
+from typing import Any, Dict, List, Optional, Union, Type
 import os
 import time
 import warnings
@@ -9,7 +9,6 @@ from torch.utils.data import DataLoader
 import numpy as np
 
 from .datasets import ChunkDataset
-
 from .utils import MultiEpochsDataLoader, LongCycler, SessionConcatDataset, FastSessionDataLoader
 
 
@@ -60,6 +59,7 @@ def get_multisession_dataloader(paths: List[str],
 def get_multisession_concat_dataloader(paths: List[str],
                                        configs: Union[Dict, List[Dict]] = None,
                                        seed: Optional[int] = 0,
+                                       dataloader_config: Optional[Dict] = None,
                                        **kwargs) -> 'FastSessionDataLoader':
     """
     Creates a multi-session dataloader using SessionConcatDataset and SessionDataLoader.
@@ -97,11 +97,11 @@ def get_multisession_concat_dataloader(paths: List[str],
         # Set specific seed for this dataset if needed
         if hasattr(cfg.get('dataset', {}), 'seed') and dataset_seed is not None:
             cfg['dataset']['seed'] = dataset_seed
-
-        # Create and append the dataset
+        if "dataset" in cfg:
+            cfg = cfg['dataset']
         try:
             # Assuming ChunkDataset is defined elsewhere
-            dataset = ChunkDataset(path, **cfg['dataset'])
+            dataset = ChunkDataset(path, **cfg)
             session_name = dataset.data_key
 
             # Only add datasets with non-zero length
@@ -119,11 +119,12 @@ def get_multisession_concat_dataloader(paths: List[str],
     concat_dataset = SessionConcatDataset(datasets, session_names)
 
     # Get dataloader config from the first config
-    dl_config = dict(configs[0].get('dataloader', {}))
+    if dataloader_config is None:
+        dataloader_config = dict(configs[0].get('dataloader', {}))
 
     # Create the dataloader with our simplified implementation
     return FastSessionDataLoader(
         dataset=concat_dataset,
         seed=seed,
-        **dl_config
+        **dataloader_config
     )
