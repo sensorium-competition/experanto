@@ -8,10 +8,10 @@ with open("requirements.txt") as f:
 
 setup(
     name="experanto",
-    version="0.0",
+    version="0.1",
     description="Python package to interpolate recordings and stimuli of neuroscience experiments",
     url="https://github.com/sensorium-competition/experanto",
-    packages=find_packages() + ['configs'],
+    packages=find_packages(include=['experanto', 'experanto.*', 'configs']),
     package_data={
         'configs': ['*.yaml']  # includes all yaml files in config_folder
     },
