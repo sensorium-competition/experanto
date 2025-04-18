@@ -11,7 +11,7 @@ setup(
     version="0.1",
     description="Python package to interpolate recordings and stimuli of neuroscience experiments",
     url="https://github.com/sensorium-competition/experanto",
-    packages=find_packages(include=['experanto', 'experanto.*', 'configs']),
+    packages=find_packages() + ['configs'],
     package_data={
         'configs': ['*.yaml']  # includes all yaml files in config_folder
     },
