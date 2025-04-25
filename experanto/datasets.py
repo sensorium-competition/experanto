@@ -13,7 +13,7 @@ import torchvision
 from torch.utils.data import Dataset
 from torchvision.transforms import v2
 from torchvision.transforms.v2 import ToTensor, Compose, Lambda
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import OmegaConf, DictConfig, ListConfig
 from hydra.utils import instantiate
 import functools
 import importlib
@@ -376,7 +376,7 @@ class ChunkDataset(Dataset):
         self._start_times = screen.timestamps[start_idx]
         self._end_times = np.append(screen.timestamps[start_idx[1:]], np.inf)
         self.meta_conditions = {}
-        for k in ["modality", "valid_trial"] + list(self.modality_config.screen.valid_condition.keys()):
+        for k in ["modality", "valid_trial", "tier"]:
             self.meta_conditions[k] = [t.get_meta(k) if t.get_meta(k) is not None else "blank" for t in self._trials]
 
     def initialize_statistics(self) -> None:
@@ -593,7 +593,9 @@ class ChunkDataset(Dataset):
         duration_mask = self._screen_sample_times[possible_indices + chunk_size - 1] < self.end_time
 
         # this assumes that the valid_condition is a single condition
-        valid_conditions = [self.modality_config["screen"]["valid_condition"]]
+        valid_conditions = self.modality_config["screen"]["valid_condition"]
+        if not isinstance(valid_conditions, (list, tuple, ListConfig)):
+            valid_conditions = [valid_conditions]
 
         if self.modality_config["screen"]["include_blanks"]:
             additional_valid_conditions = {"tier": "blank"}  
