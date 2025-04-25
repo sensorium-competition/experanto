@@ -272,6 +272,7 @@ class ChunkDataset(Dataset):
         normalize_timestamps: bool = True,
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
         seed: Optional[int] = None,
+        safe_interval_threshold: float = 0.5,
     ) -> None:
         """
         The full modality config is a nested dictionary.
@@ -349,7 +350,26 @@ class ChunkDataset(Dataset):
         self.out_keys = out_keys or (list(self.device_names) + ["timestamps"])
         self.normalize_timestamps = normalize_timestamps
 
-        self.start_time, self.end_time = self._experiment.get_valid_range("screen")
+        # Determine the intersection of valid time ranges across all devices
+        max_start_time = -np.inf
+        min_end_time = np.inf
+        for device_name in self.device_names:
+            start, end = self._experiment.get_valid_range(device_name)
+            max_start_time = max(max_start_time, start)
+            min_end_time = min(min_end_time, end)
+
+        # Apply the safety margin
+        self.start_time = max_start_time + safe_interval_threshold
+        self.end_time = min_end_time - safe_interval_threshold
+        
+        if self.start_time >= self.end_time:
+            raise ValueError(
+                f"No valid overlapping time interval found across all devices after applying safety threshold. "
+                f"Original range: ({max_start_time:.4f}, {min_end_time:.4f}), "
+                f"Threshold: {safe_interval_threshold:.4f}, "
+                f"Adjusted range: ({self.start_time:.4f}, {self.end_time:.4f})"
+            )
+
         self._read_trials()
         self.initialize_statistics()
         self._screen_sample_times = np.arange(
@@ -685,6 +705,9 @@ class ChunkDataset(Dataset):
 
             times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
             times = times + self.modality_config[device_name].offset
+            np.set_printoptions(precision=12, suppress=False)
+
+            print("for device : ", device_name, "times = ", times)
             data, _ = self._experiment.interpolate(times, device=device_name)
             out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
             # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
