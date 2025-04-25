@@ -712,9 +712,7 @@ class ChunkDataset(Dataset):
 
             times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
             times = times + self.modality_config[device_name].offset
-            np.set_printoptions(precision=12, suppress=False)
 
-            print("for device : ", device_name, "times = ", times)
             data, _ = self._experiment.interpolate(times, device=device_name)
             out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
             # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
