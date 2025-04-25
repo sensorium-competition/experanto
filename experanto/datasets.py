@@ -353,10 +353,17 @@ class ChunkDataset(Dataset):
         # Determine the intersection of valid time ranges across all devices
         max_start_time = -np.inf
         min_end_time = np.inf
+        if not self.device_names:
+             raise ValueError("No devices found in the experiment to determine valid time range.")
+             
         for device_name in self.device_names:
             start, end = self._experiment.get_valid_range(device_name)
             max_start_time = max(max_start_time, start)
             min_end_time = min(min_end_time, end)
+
+        # Check if we found any valid finite range after iteration
+        if max_start_time == -np.inf or min_end_time == np.inf:
+             raise ValueError(f"Could not determine a finite valid time range from any device. Calculated range: ({max_start_time}, {min_end_time})")
 
         # Apply the safety margin
         self.start_time = max_start_time + safe_interval_threshold
