@@ -1,12 +1,11 @@
-version: '3'
+version: '12.5.1'
+
 services:
-  jupyter:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - 8888:8888
+  jupyter_developmnt:
+    build: .
     volumes:
-      - ./notebooks:/home/jovyan/
-      - ~/data:/home/jovyan/data/
-      - .:/src/experanto
+      - .:/notebooks
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    runtime: nvidia
+    shm_size: 256g

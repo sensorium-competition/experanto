@@ -1,15 +1,20 @@
 dataset:
   global_sampling_rate: null
   global_chunk_size: null
+  add_behavior_as_channels: False
+  replace_nans_with_means: False
+  cache_data: False
+  out_keys: ["screen", "responses", "eye_tracker", "treadmill", "timestamps"]
+  normalize_timestamps: True
   modality_config:
     screen:
       keep_nans : False
-      sampling_rate: null
-      chunk_size: null
+      sampling_rate: 30
+      chunk_size: 60
       valid_condition:
         tier: "train"
       offset: 0
-      sample_stride: 4
+      sample_stride: 1
       include_blanks: True
       transforms:
         normalization: "normalize"
@@ -21,40 +26,51 @@ dataset:
         rescale_size: [144, 256]
     responses:
       keep_nans : False
-      sampling_rate: null
-      chunk_size: null
-      offset: 0.1 # in seconds
+      sampling_rate: 8
+      chunk_size: 16
+      offset: 0.0 # in seconds
       transforms:
         normalization: "standardize"
       interpolation:
         interpolation_mode: "nearest_neighbor"
+      filters:
+        nan_filter:
+          __target__: experanto.filters.common_filters.nan_filter
+          __partial__: True
+          vicinity: 0.05
     eye_tracker:
       keep_nans : False
-      sampling_rate: null
-      chunk_size: null
+      sampling_rate: 30
+      chunk_size: 60
       offset: 0
       transforms:
         normalization: "normalize"
       interpolation:
         interpolation_mode: "nearest_neighbor"
+      filters:
+        nan_filter:
+          __target__: experanto.filters.common_filters.nan_filter
+          __partial__: True
+          vicinity: 0.05
     treadmill:
       keep_nans : False
-      sampling_rate: null
-      chunk_size: null
+      sampling_rate: 30
+      chunk_size: 60
       offset: 0
       transforms:
         normalization: "normalize"
       interpolation:
         interpolation_mode: "nearest_neighbor"
+      filters:
+        nan_filter:
+          __target__: experanto.filters.common_filters.nan_filter
+          __partial__: True
+          vicinity: 0.05
 
 dataloader:
-  batch_size: 32
+  batch_size: 16
   shuffle: true
-  num_workers: 1
+  num_workers: 2
   pin_memory: True
   drop_last: True
-  prefetch_factor: 1
-  shuffle_each_epoch: True
-
-
-
+  prefetch_factor: 2
