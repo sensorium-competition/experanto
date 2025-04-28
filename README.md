@@ -1,12 +1,5 @@
 # Experanto
-
 Experanto is a Python package designed for interpolating recordings and stimuli in neuroscience experiments. It enables users to load single or multiple experiments and create efficient dataloaders for machine learning applications.
-
-## Features
-- **Flexible Data Loading**: Load and process multiple experiments with ease.
-- **Neuroscience-Focused**: Designed for handling recordings and stimuli in neuroscience research.
-- **Seamless Machine Learning Integration**: Create dataloaders for ML models effortlessly.
-- **Examples**: The `examples` folder provides a variety of use cases to help you get started quickly.
 
 ## Installation
 To install Experanto, clone locally and run:
