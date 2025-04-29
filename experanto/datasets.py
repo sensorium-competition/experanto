@@ -457,9 +457,11 @@ class ChunkDataset(Dataset):
             times = times + self.modality_config[device_name].offset
             data, _ = self._experiment.interpolate(times, device=device_name)
             out[device_name] = self.transforms[device_name](data).squeeze(0) # remove dim0 for response/eye_tracker/treadmill
-
-        phase_shifts = self._experiment.devices["responses"]._phase_shifts
-        times_with_phase_shifts = (times - times.min())[:, None] + phase_shifts[None, :]
-        out["timestamps"] = torch.from_numpy(times_with_phase_shifts)
+            if device_name == 'responses':
+                phase_shifts = self._experiment.devices["responses"]._phase_shifts
+                times_with_phase_shifts = (times - times.min())[:, None] + phase_shifts[None, :]
+                out[f"{device_name}_timestamps"] = torch.from_numpy(times_with_phase_shifts)
+            else:
+                out[f"{device_name}_timestamps"] = torch.from_numpy(times)
         return out
 
