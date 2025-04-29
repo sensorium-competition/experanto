@@ -1,17 +1,10 @@
-Dataset and Dataloader Configuration
+Dataset and dataloader configuration
 ====================================
 
 This section describes the dataset configuration used to load experiments into the Experanto dataloaders. It includes global settings, modality-specific configurations, and dataloader parameters.
 
-Default YAML Configuration
+Default YAML configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-  from omegaconf import OmegaConf, open_dict
-  from experanto.configs import DEFAULT_CONFIG as cfg
-
-  print(OmegaConf.to_yaml(cfg))
 
 .. code-block:: yaml
 
@@ -99,7 +92,19 @@ Default YAML Configuration
       drop_last: true
       prefetch_factor: 2
 
-Modifying the Configuration
+
+Viewing the configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+  from omegaconf import OmegaConf, open_dict
+  from experanto.configs import DEFAULT_CONFIG as cfg
+
+  print(OmegaConf.to_yaml(cfg))
+
+
+Modifying the configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 You can change parameters programmatically:

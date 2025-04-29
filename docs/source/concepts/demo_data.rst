@@ -1,18 +1,18 @@
 .. _generating_sample_data:
 
-Generating Sample Data
+Experanto data format
 ======================
 
 The **Experanto** data format is designed to handle individual experiments, each of which can include multiple modalities.
 Currently, supported modalities include:
 
 - **Screen** (e.g., visual stimuli presentation)
-- **Responses** (e.g., recorded subject responses)
+- **Responses** (e.g., recorded subject neural responses)
 - **Behaviors** (e.g., treadmill movement, eye tracking data)
 
 Each modality has its own dedicated folder containing the relevant data and metadata.
 
-File Structure
+File structure
 --------------
 A typical experiment follows this structured hierarchy:
 
@@ -23,11 +23,13 @@ A typical experiment follows this structured hierarchy:
       │   ├── data/
       │   │   ├── 00000.npy
       │   │   ├── 00001.mp4
+      │   │   ├── ...
       │   │   ├── means.npy
       │   │   ├── std.npy
       │   ├── meta/
+      │   │   ├── 00000.yml
       │   │   ├── 00001.yml
-      │   │   ├── 00002.yml
+      │   │   ├── ...      
       │   ├── meta.yml
       │   ├── timestamps.npy
       ├── responses/
@@ -38,7 +40,7 @@ A typical experiment follows this structured hierarchy:
       │   │   ├── std.npy
       ├── behaviors/ (similar structure to responses)
 
-Generating Sample Data
+Generating sample data
 ----------------------
 A sample dataset for testing can be generated using the **allen_exporter** library, which provides neurological experiment data on mice in the **Experanto** format.
 

@@ -1,9 +1,9 @@
 Installation
 ============
 
-**experanto** is available for Python 3.9
+**Experanto** is available for Python 3.9+
 
-The package works ontop of jupyter/datascience-notebooks but minimum requirements are:
+The package works on top of `jupyter/datascience-notebooks`, but the minimum requirements are:
 
 - ``numpy``
 - ``pandas``

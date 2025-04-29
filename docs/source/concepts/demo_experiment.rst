@@ -1,11 +1,11 @@
 .. _loading_single_experiment:
 
-Loading a Single Experiment
+Loading a single experiment
 ===========================
 
 To load an experiment, we use the **Experiment** class. This is particularly useful for testing whether the formatting and interpolation behave as expected before loading multiple experiments into dataset objects.
 
-Loading an Experiment
+Loading an experiment
 ---------------------
 A single experiment can be loaded using the following approach:
 
@@ -20,7 +20,7 @@ A single experiment can be loaded using the following approach:
     # Initialize the Experiment object
     e = Experiment(root_folder)
 
-Checking Available Modalities
+Checking available modalities
 -----------------------------
 All compatible modalities for the loaded experiment can be checked using:
 
@@ -32,7 +32,7 @@ All compatible modalities for the loaded experiment can be checked using:
 
     Available experiment devices: ['eye_tracker', 'screen', 'treadmill', 'responses']
 
-Interpolating Data
+Interpolating data
 ------------------
 Once the modalities are identified, we can interpolate their data. 
 The following example interpolates a 20-second window with 2 frames per second, resulting in 40 images:

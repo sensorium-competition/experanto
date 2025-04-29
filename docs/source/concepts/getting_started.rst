@@ -1,10 +1,10 @@
-Use cases for experanto
+Use cases for Experanto
 =======================
 
-**experanto** help aligning temporal data from neuralscience experiments. It can handle visual stimuli, behaviours and reponses from neurons.
+**Experanto** helps align temporal data from neuroscience experiments. It can handle visual stimuli, behavior, and neural responses.
 
 It fixes usual issues such as:
 
-- Different sampling rates for different measurements
-- Differing formats for datatypes such as videos and images in the same measurements
+- Different sampling rates for different devices
+- Different formats for data types such as videos and images in the same experiments
 

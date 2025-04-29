@@ -27,32 +27,3 @@ sys.path.append('/path_to/sensorium_2023/')
 (Repository: [sensorium_2023](https://github.com/ecker-lab/sensorium_2023))
 
 Ensure you replace `/path_to/` with the actual path to the cloned repositories.
-
-## Project structure
-
-```
-experanto/
-├── experanto/
-│   ├── __init__.py
-│   ├── configs.py
-│   ├── dataloaders.py
-│   ├── datasets.py
-│   ├── experiment.py
-│   ├── interpolators.py
-│   ├── utils.py
-├── configs/
-│   ├── __init__.py
-│   ├── default.yaml
-├── tests/
-│   ├── __init__.py
-│   ├── create_mock_data.py
-│   ├── test_sequence_interpolators.py
-├── examples/                        
-├── logs/                             
-├── Dockerfile
-├── docker-compose.yml
-├── setup.py                    
-├── requirements.txt                  
-├── pytest.ini                  
-└── README.md    
-```
