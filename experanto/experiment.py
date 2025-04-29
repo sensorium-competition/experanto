@@ -35,8 +35,8 @@ class Experiment:
     def _load_devices(self) -> None:
         # Populate devices by going through subfolders
         # Assumption: blocks are sorted by start time
+        
         device_folders = [d for d in self.root_folder.iterdir() if (d.is_dir())]
-
         for d in device_folders:
             if d.name not in self.modality_config:
                 log.info(f"Skipping {d.name} data... ")

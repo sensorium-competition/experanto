@@ -11,10 +11,15 @@ from torch.utils.data import Dataset
 from torchvision.transforms.v2 import ToTensor, Compose, Lambda
 from omegaconf import OmegaConf
 from hydra.utils import instantiate
+import yaml
+from torch.utils.data import Subset
+import numpy as np
+import matplotlib.pyplot as plt
 
 from .configs import DEFAULT_MODALITY_CONFIG
 from .experiment import Experiment
 from .interpolators import ImageTrial, VideoTrial
+from .utils import GazeBasedCrop, replace_nans_with_neighbors, get_validation_split
 
 
 class SimpleChunkedDataset(Dataset):
@@ -380,7 +385,11 @@ class ChunkDataset(Dataset):
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
-                add_channel = Lambda(lambda x: torch.from_numpy(x[:, None, ...]) if len(x.shape) == 3 else torch.from_numpy(x))
+                #add_channel = Lambda(lambda x: torch.from_numpy(x[:, None, ...]) if len(x.shape) == 3 else torch.from_numpy(x))
+                # Handle adding a channel dimension for both tensor and array inputs
+                add_channel = Lambda(lambda x: x[:, None, ...] if isinstance(x, torch.Tensor) and len(x.shape) == 3
+                                 else torch.from_numpy(x[:, None, ...]) if isinstance(x, np.ndarray) and len(x.shape) == 3
+                                 else x)
                 transform_list = [v for v in self.modality_config.screen.transforms.values() if isinstance(v, torch.nn.Module)]
                 transform_list.insert(0, add_channel)
             else:
@@ -462,4 +471,240 @@ class ChunkDataset(Dataset):
         times_with_phase_shifts = (times - times.min())[:, None] + phase_shifts[None, :]
         out["timestamps"] = torch.from_numpy(times_with_phase_shifts)
         return out
+    
 
+class MonkeyFixation(Dataset):
+    def __init__(
+        self,
+        root_folder: str,
+        global_sampling_rate: None,
+        global_chunk_size: None,
+        modality_config: dict = DEFAULT_MODALITY_CONFIG,
+    ) -> None:
+        self.root_folder = Path(root_folder)
+        self.modality_config = instantiate(modality_config)
+        self.chunk_sizes, self.sampling_rates, self.chunk_s = {}, {}, {}
+        for device_name in self.modality_config.keys():
+            cfg = self.modality_config[device_name]
+            self.chunk_sizes[device_name] = global_chunk_size or cfg.chunk_size
+            self.sampling_rates[device_name] = global_sampling_rate or cfg.sampling_rate
+
+        self.sample_stride = self.modality_config.screen.sample_stride
+        self._experiment = Experiment(
+            root_folder,
+            modality_config,
+        )
+        self.device_names = self._experiment.device_names
+        self.start_time, self.end_time = self._experiment.get_valid_range("screen")
+        self._read_trials()
+
+        self.initialize_statistics()
+
+        self._screen_sample_times = np.arange(
+            self.start_time, self.end_time, 1.0 / self.sampling_rates["screen"]
+        )
+
+        self.transforms = self.initialize_transforms()
+
+        # Dynamically filter swap times based on meta_conditions
+        self._swap_times_valid_trial = self.get_swap_time_valid_conditions()
+        #self.DataPoint = namedtuple("DataPoint", self.device_names)
+
+    def _read_trials(self) -> None:
+        screen = self._experiment.devices["screen"]
+        self._trials = [t for t in screen.trials]
+        start_idx = np.array([t.first_frame_idx for t in self._trials])
+        self._start_times = screen.timestamps[start_idx]
+        self._end_times = np.append(screen.timestamps[start_idx[1:]], np.inf)
+        self.meta_conditions = {}
+        for k in self.modality_config.screen.valid_condition.keys():
+            self.meta_conditions[k] = [t.get_meta(k) if t.get_meta(k) is not None else "blank" for t in self._trials]
+
+    def initialize_statistics(self) -> None:
+        self._statistics = {}
+        for device_name in self.device_names:
+            self._statistics[device_name] = {}
+            if self.modality_config[device_name].transforms.get("normalization", False):
+                mode = self.modality_config[device_name].transforms.normalization
+                assert mode in ['standardize', 'normalize']
+                means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
+                stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
+                if mode == 'standardize':
+                    means = np.zeros_like(means)
+
+                self._statistics[device_name]["mean"] = means.reshape(1, -1)
+                self._statistics[device_name]["std"] = stds.reshape(1, -1)
+
+    """def initialize_transforms(self):
+        transforms = {}
+        for device_name in self.device_names:
+            if device_name == "screen":
+                add_channel = Lambda(lambda x: x[:, None, ...] if isinstance(x, torch.Tensor) and len(x.shape) == 3
+                                 else torch.from_numpy(x[:, None, ...]) if isinstance(x, np.ndarray) and len(x.shape) == 3
+                                 else x)
+                transform_list = [v for v in self.modality_config.screen.transforms.values() if isinstance(v, torch.nn.Module)]
+                transform_list.insert(0, add_channel)
+                transforms[device_name] = Compose(transform_list)
+            else:
+                transform_list = [ToTensor()]
+            if self.modality_config[device_name].transforms.get("normalization", False):
+                transform_list.append(
+                    torchvision.transforms.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])
+                )
+            transforms[device_name] = Compose(transform_list)
+        return transforms"""
+    def add_channel_fn(self, x):  # Regular method, can access self
+        if isinstance(x, torch.Tensor) and len(x.shape) == 3:
+            return x[:, None, ...]
+        elif isinstance(x, np.ndarray) and len(x.shape) == 3:
+            return torch.from_numpy(x[:, None, ...])
+        return x
+
+    def initialize_transforms(self):
+        transforms = {}
+
+        for device_name in self.device_names:
+            if device_name == "screen":
+                transform_list = [Lambda(self.add_channel_fn)]  # Use instance method
+                transform_list.extend(
+                    v for v in self.modality_config.screen.transforms.values() if isinstance(v, torch.nn.Module)
+                )
+                transforms[device_name] = Compose(transform_list)
+            else:
+                transform_list = [ToTensor()]
+
+            if self.modality_config[device_name].transforms.get("normalization", False):
+                transform_list.append(
+                    torchvision.transforms.Normalize(self._statistics[device_name]["mean"], self._statistics[device_name]["std"])
+                )
+
+            transforms[device_name] = Compose(transform_list)
+
+        return transforms
+
+    def get_swap_time_valid_conditions(self) -> np.ndarray:
+        """
+        Determines valid swap times based on the meta conditions in the modality configuration.
+        """
+        valid_conditions = self.modality_config["screen"]["valid_condition"]
+        include_blanks = self.modality_config["screen"]["include_blanks"]
+
+        valid_indices = np.ones(len(self.meta_conditions["valid_trial"]), dtype=bool)
+
+        for condition_key, condition_value in valid_conditions.items():
+            condition_array = np.array(self.meta_conditions[condition_key])
+            valid_indices &= (condition_array == condition_value) | (
+                (condition_array == "blank") & include_blanks
+            )
+        self._valid_indices = valid_indices
+        # Return the swap times that satisfy all conditions
+        return self._experiment.devices['screen'].timestamps[valid_indices]
+
+
+    def shuffle_valid_screen_times(self) -> None:
+        self._swap_times_valid_trial = np.random.permutation(self._swap_times_valid_trial)
+    
+    @staticmethod
+    def get_batch_aligned_split(n_images, train_frac, batch_size, seed):
+        if seed is not None:
+            np.random.seed(seed)
+
+        indices = np.arange(n_images)
+        np.random.shuffle(indices)
+
+        # Compute training size and align up to the next batch
+        train_size = int(n_images * train_frac)
+        train_size = ((train_size + batch_size - 1) // batch_size) * batch_size  # Align up
+        train_size = min(train_size, n_images)  # Ensure it doesn't exceed total images
+
+        train_indices = indices[:train_size]
+        val_indices = indices[train_size:]
+        return train_indices, val_indices
+
+    def split(self, train_frac=0.8, seed=None):
+        """
+        Split the dataset into train and validation subsets using the same logic as the static loader.
+        """
+        # Get train and validation indices using the static loader's logic
+        train_indices, val_indices = get_validation_split(len(self), train_frac, seed)
+
+        # Create train and validation subsets
+        train_dataset = Subset(self, train_indices)
+        val_dataset = Subset(self, val_indices)
+        return train_dataset, val_dataset
+
+    def __len__(self):
+        return len(self._swap_times_valid_trial)
+
+    def __getitem__(self, idx) -> dict:
+        out = {}
+        s = self._swap_times_valid_trial[idx]  # Select the swap time for this index
+        for device_name in self.device_names:
+            sampling_rate = self.sampling_rates[device_name]
+            chunk_size = self.chunk_sizes[device_name]
+            chunk_s = chunk_size / sampling_rate
+            times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
+            times = times + self.modality_config[device_name].offset
+            if device_name == "screen":
+                (data,meta), _ = self._experiment.interpolate(times, device=device_name)
+                out['image_id'] = meta
+            else:
+                data, _ = self._experiment.interpolate(times, device=device_name)
+            out[device_name] = self.transforms[device_name](data).squeeze(0)
+            
+        out["timestamps"] = torch.from_numpy(times)
+        datapoint = {'screen':out['screen'], 'responses':out['responses']}
+        return out
+        #return self.DataPoint(**datapoint)
+
+
+class MonkeyFixationGazeCrop(MonkeyFixation):
+    def __init__(
+        self,
+        root_folder: str,
+        global_sampling_rate: None,
+        global_chunk_size: None,
+        modality_config: dict = DEFAULT_MODALITY_CONFIG,
+    ) -> None:
+        
+        super().__init__(root_folder, global_sampling_rate, global_chunk_size, modality_config)
+        gaze_params = ['destRect','bgColor','fixSpotColor','fixSpotLocation','monitorCenter','stimulusLocation']
+        self.gaze_params = {each: self._experiment.devices['screen'].load_meta()[each] for each in gaze_params}
+        self.gaze_cropper = GazeBasedCrop(
+            crop_size=modality_config['screen']['transforms']['CustomCrop']['size'],
+            pixel_per_degree= 62.86,
+            monitor_center=[1920/2,1080/2],
+            dest_rect=[0,0,1920,1080],
+            stimulus_location=[960,540]
+        )
+        #self.DataPoint = namedtuple("DataPoint", ['screen','responses'])
+
+    def __getitem__(self, idx) -> dict:
+        out = {}
+        s = self._swap_times_valid_trial[idx]  # Select the swap time for this index
+        for device_name in self.device_names:
+            sampling_rate = self.sampling_rates[device_name]
+            chunk_size = self.chunk_sizes[device_name]
+            chunk_s = chunk_size / sampling_rate
+            times = np.linspace(s, s + chunk_s, chunk_size, endpoint=False)
+            times = times + self.modality_config[device_name].offset
+            if device_name == "screen":
+                (data,meta), _ = self._experiment.interpolate(times, device=device_name)
+                out['image_id'] = meta
+            else:
+                data, _ = self._experiment.interpolate(times, device=device_name)
+            out[device_name] = self.transforms[device_name](data).squeeze(0)
+        
+        # Apply Gaze-Based Cropping for each image in the sequence
+        screen_images = out["screen"]  # Shape (T, C, H, W) if multiple images
+        if screen_images.dim() == 4:  # Multiple images (T, C, H, W)
+            cropped_screens = torch.stack([
+                self.gaze_cropper(img, out['eye_tracker'], self.gaze_params['fixSpotLocation'], self.gaze_params['StimulusLocation'], dynamic=True) for img in screen_images
+            ])
+        else:  # Single image case
+            cropped_screens = self.gaze_cropper(screen_images, out['eye_tracker'], self.gaze_params['fixSpotLocation'], self.gaze_params['stimulusLocation'], dynamic=False)
+
+        out["screen"] = cropped_screens
+        datapoint = {'inputs':out['screen'], 'targets':out['responses']}
+        #plt.imshow(out['screen'][0], cmap='gray')
+        return datapoint
