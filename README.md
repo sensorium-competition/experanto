@@ -19,10 +19,8 @@ pip install -e /path_to/neuralpredictors
 ```
 (Repository: [neuralpredictors](https://github.com/sinzlab/neuralpredictors))
 
-Additionally, clone the `sensorium_2023` repository and add the directory to the Python path using:
-```python
-import sys
-sys.path.append('/path_to/sensorium_2023/')
+```bash
+pip install -e /path_to/sensorium_2023
 ```
 (Repository: [sensorium_2023](https://github.com/ecker-lab/sensorium_2023))
 
