@@ -12,7 +12,7 @@ import numpy as np
 import numpy.lib.format as fmt
 import yaml
 
-from .utils import linear_interpolate_1d_sequence, linear_interpolate_sequences
+from .utils import linear_handle_nan_values
 
 
 class TimeInterval(typing.NamedTuple):
@@ -148,13 +148,14 @@ class SequenceInterpolator(Interpolator):
             data = data - self.mean
         data = data * self._precision
         return data
+            
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        # valid is an array of boolean, right
+        
         valid = self.valid_times(times)
         valid_times = times[valid]
         if self.use_phase_shifts:
-            idx = np.floor(
+            idx_lower = np.floor(
                 (
                     valid_times[:, np.newaxis]
                     - self._phase_shifts[np.newaxis, :]
@@ -162,80 +163,55 @@ class SequenceInterpolator(Interpolator):
                 )
                 / self.time_delta
             ).astype(int)
-            data = np.take_along_axis(self._data, idx, axis=0)
         else:
-            idx = np.floor((valid_times - self.start_time) / self.time_delta).astype(
+            idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
                 int
             )
-            data = self._data[idx]
+
+        test_linear = True
         if self.interpolation_mode == "nearest_neighbor":
-            return data, valid
-        elif self.interpolation_mode == "linear":
-            # we are interested to take the data a bit before and after to have better interpolation
-            # if the target time sequence starts / ends with nan
-            if len(idx.shape) == 1:
-                start_idx = int(max(0, idx[0] - self.interp_window))
-                end_idx = int(
-                    min(
-                        idx[-1] + self.interp_window,
-                        np.floor(
-                            (self.valid_interval.end - self.valid_interval.start)
-                            / self.time_delta
-                        ),
-                    )
-                )
-
-                # time is always first dim
-                array = self._data[start_idx:end_idx]
-                orig_times = (
-                    np.arange(start_idx, end_idx) * self.time_delta
-                    + self.valid_interval.start
-                )
-                assert (
-                    array.shape[0] == orig_times.shape[0]
-                ), "times and data should be same length before interpolation"
-                data = linear_interpolate_sequences(
-                    array, orig_times, valid_times, self.keep_nans
-                )
-
+            if self.use_phase_shifts:
+                data = np.take_along_axis(self._data, idx_lower, axis=0)
             else:
-                # this probably should be changed to be more efficient
-                start_idx = np.where(
-                    idx[0, :] - self.interp_window > 0,
-                    idx[0, :] - self.interp_window,
-                    0,
-                ).astype(int)
-                max_idx = np.floor(
-                    (self.valid_interval.end - self.valid_interval.start)
-                    / self.time_delta
-                ).astype(int)
-                end_idx = np.where(
-                    idx[-1, :] + self.interp_window < max_idx,
-                    idx[-1, :] + self.interp_window,
-                    max_idx,
-                ).astype(int)
-                data = np.full((len(valid_times), self._data.shape[-1]), np.nan)
-                for n_idx, st_idx in enumerate(start_idx):
-                    local_data = self._data[st_idx : end_idx[n_idx], n_idx]
-                    local_time = (
-                        np.arange(st_idx, end_idx[n_idx]) * self.time_delta
-                        + self.valid_interval.start
-                    )
-                    assert (
-                        local_data.shape[0] == local_time.shape[0]
-                    ), "times and data should be same length before interpolation"
-
-                    data[:, n_idx] = linear_interpolate_1d_sequence(
-                        local_data, local_time, valid_times, self.keep_nans
-                    )
-            if self.normalize:
-                data = self.normalize_data(data)
+                data = self._data[idx_lower]
             return data, valid
+
+        
+        elif self.interpolation_mode == "linear":
+            idx_upper = idx_lower + 1
+        
+            # mask to prevent idx overflow when interpolating last data point
+            mask = idx_upper >= self._data.shape[0]
+            idx_upper[mask] = idx_lower[mask]
+            
+            times_lower = idx_lower * self.time_delta
+            times_upper = idx_upper * self.time_delta
+            
+            denom = times_upper - times_lower
+            denom[denom == 0] = 1e-8  # small value to avoid NaNs when times are equal
+            
+            # ratios for signals
+            lower_signal_ratio = ((times_upper - times) / denom)[:, None]
+            upper_signal_ratio = ((times - times_lower) / denom)[:, None]
+            
+            data_lower = self._data[idx_lower]
+            data_upper = self._data[idx_upper]
+            
+            # Handle NaN values
+            interpolated, valid_indices = linear_handle_nan_values(
+                data_lower, data_upper, lower_signal_ratio, upper_signal_ratio, self.keep_nans
+            )
+            
+            if self.keep_nans:
+                return interpolated, valid
+            else:
+                return interpolated[valid_indices], valid_indices
+
         else:
             raise NotImplementedError(
                 f"interpolation_mode should be linear or nearest_neighbor"
             )
-
+            
 
 class ScreenInterpolator(Interpolator):
     def __init__(

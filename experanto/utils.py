@@ -1,54 +1,40 @@
 import numpy as np
 import torch
 
-def linear_interpolate_1d_sequence(row, times_old, times_new, keep_nans=False):
-    """
-    Interpolates columns in a NumPy array and replaces NaNs with interpolated values
+def linear_handle_nan_values(data_lower, data_upper, lower_signal_ratio, upper_signal_ratio, keep_nans=False):
 
-    Args:
-        array: The input NumPy array [Neurons, times]
-        times: old time points [Neurons, times] or [times]
-        times_new:  new time points [times2]
-        keep_nans:  if we want to keep and return nans after interpolation
-
-    Returns:
-        The interpolated array with NaNs replaced (inplace).
-    """
-    if keep_nans:
-        interpolated_array = np.interp(times_new, times_old, row)
-    else:
-        # Find indices of non-NaN values
-        valid_indices = np.where(~np.isnan(row))[0]
-        valid_times = times_old[valid_indices]
-        # Interpolate the column using linear interpolation
-        interpolated_array = np.interp(times_new, valid_times, row[valid_indices])
-    return interpolated_array
-
-
-def linear_interpolate_sequences(array, times, times_new, keep_nans=False):
-    """
-    Interpolates columns in a NumPy array and replaces NaNs with interpolated values
-
-    Args:
-        array: The input NumPy array [times, ch]
-        times: old time points  [times]
-        times_new:  new time points [times2]
-        keep_nans:  if we want to keep and return nans after interpolation
-
-    Returns:
-        The interpolated array with NaNs replaced.
-    """
-    array = array.T
-    if array.shape[0] == 1:
-        return linear_interpolate_1d_sequence(
-            array.T.flatten(), times, times_new, keep_nans=keep_nans
+        nan_lower = np.isnan(data_lower)
+        nan_upper = np.isnan(data_upper)
+        
+        interpolated = np.zeros_like(data_lower)
+        
+        # Normal interpolation where neither value is NaN
+        valid_mask = ~nan_lower & ~nan_upper
+        interpolated[valid_mask] = (
+            lower_signal_ratio[valid_mask] * data_lower[valid_mask] + 
+            upper_signal_ratio[valid_mask] * data_upper[valid_mask]
         )
-    interpolated_array = np.full((array.shape[0], len(times_new)), np.nan)
-    for row_idx, row in enumerate(array):
-        interpolated_array[row_idx] = linear_interpolate_1d_sequence(
-            row, times, times_new, keep_nans=keep_nans
-        )
-    return interpolated_array.T
+        
+        # When only upper is NaN, use lower value
+        upper_nan_mask = ~nan_lower & nan_upper
+        interpolated[upper_nan_mask] = data_lower[upper_nan_mask]
+        
+        # When only lower is NaN, use upper value
+        lower_nan_mask = nan_lower & ~nan_upper
+        interpolated[lower_nan_mask] = data_upper[lower_nan_mask]
+        
+        # When both are NaN
+        both_nan_mask = nan_lower & nan_upper
+        
+        if keep_nans:
+            # Keep NaN values when both lower and upper are NaN
+            interpolated[both_nan_mask] = np.nan
+            valid_indices = np.arange(len(data_lower))
+        else:
+            # Return only valid indices (where at least one value is not NaN)
+            valid_indices = np.where(~both_nan_mask)[0]
+        
+        return interpolated, valid_indices
 
 
 class MultiEpochsDataLoader(torch.utils.data.DataLoader):
