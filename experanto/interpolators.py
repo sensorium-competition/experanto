@@ -168,7 +168,6 @@ class SequenceInterpolator(Interpolator):
                 int
             )
 
-        test_linear = True
         if self.interpolation_mode == "nearest_neighbor":
             if self.use_phase_shifts:
                 data = np.take_along_axis(self._data, idx_lower, axis=0)
@@ -198,14 +197,11 @@ class SequenceInterpolator(Interpolator):
             data_upper = self._data[idx_upper]
             
             # Handle NaN values
-            interpolated, valid_indices = linear_handle_nan_values(
+            interpolated = linear_handle_nan_values(valid_times,
                 data_lower, data_upper, lower_signal_ratio, upper_signal_ratio, self.keep_nans
             )
             
-            if self.keep_nans:
-                return interpolated, valid
-            else:
-                return interpolated[valid_indices], valid_indices
+            return interpolated, valid
 
         else:
             raise NotImplementedError(
