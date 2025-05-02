@@ -188,7 +188,6 @@ class SequenceInterpolator(Interpolator):
                 for dim in range (idx_upper.shape[1]):
 
                     dim_mask = compute_mask[:,dim]
-                    false_indices = np.where(dim_mask == False)[0]
 
                     idx_lower_single_dim = idx_lower[:,dim][dim_mask]
                     idx_upper_single_dim = idx_upper[:,dim][dim_mask]
