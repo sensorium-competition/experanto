@@ -151,12 +151,9 @@ class SequenceInterpolator(Interpolator):
         
         valid = self.valid_times(times)
         valid_times = times[valid]
-
-        self._phase_shifts = np.array([0.05, 0.1])
-        self.use_phase_shifts = False
         
         if self.use_phase_shifts: ### this results in us having one time/idx column for each of the neurons. Hence one column of idx per neuron
-            idx_lower = np.floor(
+            idx_lower = np.floor( ### This assumes that the measurement time is always at the end of the measurements of all neurons not at the beginning
                 (
                     valid_times[:, np.newaxis]
                     - self._phase_shifts[np.newaxis, :]
@@ -178,53 +175,74 @@ class SequenceInterpolator(Interpolator):
 
         
         elif self.interpolation_mode == "linear":
-            
+
             idx_upper = idx_lower + 1
-            overflow_mask = idx_upper >= self._data.shape[0]
-            compute_mask = ~overflow_mask    
+            overflow_mask = (idx_upper >= self._data.shape[0]) | (idx_lower < 0)
+            compute_mask = ~overflow_mask
             
-            idx_upper = idx_upper[compute_mask]
-            idx_lower = idx_lower[compute_mask]
-
-            print(idx_lower.shape)
-        
-            times_lower = idx_lower * self.time_delta
-            times_upper = idx_upper * self.time_delta
-            denom = times_upper - times_lower
-        
             if self.use_phase_shifts:
-                times_expanded = np.repeat(times[:, None], 2, axis=1)
-                times_expanded = times_expanded[compute_mask]
 
-                print(times_upper.shape, times_expanded.shape, denom.shape)
-        
-                lower_signal_ratio = ((times_upper - times_expanded) / denom)[:, None]
-                upper_signal_ratio = ((times_expanded - times_lower) / denom)[:, None]
-        
-                data_lower = np.take(self._data, idx_lower, axis=0)
-                data_upper = np.take(self._data, idx_upper, axis=0)
+                valid_times = valid_times[:, None]
+                interpolated = np.full((valid_times.shape[0], idx_lower.shape[1], 1), np.nan)
+
+                for dim in range (idx_upper.shape[1]):
+
+                    dim_mask = compute_mask[:,dim]
+                    false_indices = np.where(dim_mask == False)[0]
+
+                    idx_lower_single_dim = idx_lower[:,dim][dim_mask]
+                    idx_upper_single_dim = idx_upper[:,dim][dim_mask]
+
+                    times_lower = (idx_lower_single_dim * self.time_delta)[:, None]
+                    times_upper = (idx_upper_single_dim * self.time_delta)[:, None]
+                    denom = times_upper - times_lower
+
+                    time_dim = valid_times[dim_mask] - self._phase_shifts[dim]
+
+                    lower_numerator = times_upper - time_dim
+                    upper_numerator = time_dim - times_lower
+                    
+                    lower_signal_ratio = (lower_numerator / denom)
+                    upper_signal_ratio = (upper_numerator / denom)
+    
+                    data_lower = self._data[:, dim][idx_lower_single_dim][:, None]
+                    data_upper = self._data[:, dim][idx_upper_single_dim][:, None]
+
+                    interpolated[:, dim][dim_mask] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+
+                valid_indices = np.flatnonzero(valid)
+                for mask in overflow_mask.T:
+                    valid[valid_indices[mask]] = False
+
+                interpolated = np.squeeze(interpolated)
+                    
             else:
-                times_valid = times[compute_mask]
+                
+                idx_upper = idx_upper[compute_mask]
+                idx_lower = idx_lower[compute_mask]
+            
+                times_lower = idx_lower * self.time_delta
+                times_upper = idx_upper * self.time_delta
+                denom = times_upper - times_lower
+                
+                times_valid = valid_times[compute_mask]
+                
                 lower_signal_ratio = ((times_upper - times_valid) / denom)[:, None]
                 upper_signal_ratio = ((times_valid - times_lower) / denom)[:, None]
         
                 data_lower = self._data[idx_lower]
                 data_upper = self._data[idx_upper]
 
-            interpolated = np.full((valid_times.shape[0], data_lower.shape[1]), np.nan)
-            print(interpolated.shape, compute_mask.shape, lower_signal_ratio.shape, data_lower.shape)
-            result = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
-            print(result.shape)
-            interpolated[compute_mask] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+                interpolated = np.full((valid_times.shape[0], data_lower.shape[1]), np.nan)
+                interpolated[compute_mask] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
 
-            self.keep_nans = False
+                valid_indices = np.flatnonzero(valid)
+                valid[valid_indices[overflow_mask]] = False
+
             if not self.keep_nans:
                 neuron_means = np.nanmean(interpolated, axis=0)
                 for i in range(interpolated.shape[1]):
                     interpolated[np.isnan(interpolated[:, i]), i] = neuron_means[i]
-
-            valid_indices = np.flatnonzero(valid)
-            valid[valid_indices[overflow_mask]] = False
                 
             return interpolated, valid
 
