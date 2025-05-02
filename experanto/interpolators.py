@@ -12,9 +12,6 @@ import numpy as np
 import numpy.lib.format as fmt
 import yaml
 
-from .utils import linear_handle_nan_values
-
-
 class TimeInterval(typing.NamedTuple):
     start: float
     end: float
@@ -154,7 +151,11 @@ class SequenceInterpolator(Interpolator):
         
         valid = self.valid_times(times)
         valid_times = times[valid]
-        if self.use_phase_shifts:
+
+        self._phase_shifts = np.array([0.05, 0.1])
+        self.use_phase_shifts = False
+        
+        if self.use_phase_shifts: ### this results in us having one time/idx column for each of the neurons. Hence one column of idx per neuron
             idx_lower = np.floor(
                 (
                     valid_times[:, np.newaxis]
@@ -177,30 +178,54 @@ class SequenceInterpolator(Interpolator):
 
         
         elif self.interpolation_mode == "linear":
-            idx_upper = idx_lower + 1
-        
-            # mask to prevent idx overflow when interpolating last data point
-            mask = idx_upper >= self._data.shape[0]
-            idx_upper[mask] = idx_lower[mask]
             
+            idx_upper = idx_lower + 1
+            overflow_mask = idx_upper >= self._data.shape[0]
+            compute_mask = ~overflow_mask    
+            
+            idx_upper = idx_upper[compute_mask]
+            idx_lower = idx_lower[compute_mask]
+
+            print(idx_lower.shape)
+        
             times_lower = idx_lower * self.time_delta
             times_upper = idx_upper * self.time_delta
-            
             denom = times_upper - times_lower
-            denom[denom == 0] = 1e-8  # small value to avoid NaNs when times are equal
-            
-            # ratios for signals
-            lower_signal_ratio = ((times_upper - times) / denom)[:, None]
-            upper_signal_ratio = ((times - times_lower) / denom)[:, None]
-            
-            data_lower = self._data[idx_lower]
-            data_upper = self._data[idx_upper]
-            
-            # Handle NaN values
-            interpolated = linear_handle_nan_values(valid_times,
-                data_lower, data_upper, lower_signal_ratio, upper_signal_ratio, self.keep_nans
-            )
-            
+        
+            if self.use_phase_shifts:
+                times_expanded = np.repeat(times[:, None], 2, axis=1)
+                times_expanded = times_expanded[compute_mask]
+
+                print(times_upper.shape, times_expanded.shape, denom.shape)
+        
+                lower_signal_ratio = ((times_upper - times_expanded) / denom)[:, None]
+                upper_signal_ratio = ((times_expanded - times_lower) / denom)[:, None]
+        
+                data_lower = np.take(self._data, idx_lower, axis=0)
+                data_upper = np.take(self._data, idx_upper, axis=0)
+            else:
+                times_valid = times[compute_mask]
+                lower_signal_ratio = ((times_upper - times_valid) / denom)[:, None]
+                upper_signal_ratio = ((times_valid - times_lower) / denom)[:, None]
+        
+                data_lower = self._data[idx_lower]
+                data_upper = self._data[idx_upper]
+
+            interpolated = np.full((valid_times.shape[0], data_lower.shape[1]), np.nan)
+            print(interpolated.shape, compute_mask.shape, lower_signal_ratio.shape, data_lower.shape)
+            result = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+            print(result.shape)
+            interpolated[compute_mask] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+
+            self.keep_nans = False
+            if not self.keep_nans:
+                neuron_means = np.nanmean(interpolated, axis=0)
+                for i in range(interpolated.shape[1]):
+                    interpolated[np.isnan(interpolated[:, i]), i] = neuron_means[i]
+
+            valid_indices = np.flatnonzero(valid)
+            valid[valid_indices[overflow_mask]] = False
+                
             return interpolated, valid
 
         else:

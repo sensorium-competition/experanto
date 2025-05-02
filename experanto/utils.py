@@ -1,50 +1,6 @@
 import numpy as np
 import torch
-
-def linear_handle_nan_values(times, data_lower, data_upper, lower_signal_ratio, upper_signal_ratio, keep_nans=False):
-
-    # interpolation for all values, includes nans
-    interpolated = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
-        
-    if keep_nans:
-        return interpolated
-
-    # interpolate values for adjacent nans based on the next closest non nan values
-    # we do this to keep the output shape consistent.
-    else:
-        for dim in range(interpolated.shape[1]):
-            # Get indices of remaining NaNs in this dimension
-            nan_mask = np.isnan(interpolated[:, dim])
-            if not np.any(nan_mask):
-                continue
-            
-            # Get valid values and their times
-            valid_mask = ~nan_mask
-            valid_times = times[valid_mask]
-            valid_values = interpolated[valid_mask, dim]
-            
-            if len(valid_values) < 2:
-                # Not enough valid points to interpolate
-                continue
-            
-            # For each NaN point, interpolate from surrounding valid points
-            nan_indices = np.where(nan_mask)[0]
-            nan_times = times[nan_indices]
-            
-            # Use numpy's interp function for vectorized interpolation
-            filled_values = np.interp(
-                nan_times, 
-                valid_times, 
-                valid_values,
-                left=valid_values[0],    # Extrapolate at the beginning if needed
-                right=valid_values[-1]   # Extrapolate at the end if needed
-            )
-            
-            # Insert filled values back into the interpolated array
-            interpolated[nan_indices, dim] = filled_values
-        
-    return interpolated
-
+    
 class MultiEpochsDataLoader(torch.utils.data.DataLoader):
     """ solves bug to keep all workers initialized across epochs.
     From https://discuss.pytorch.org/t/enumerate-dataloader-slow/87778
