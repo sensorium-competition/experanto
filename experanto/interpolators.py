@@ -152,8 +152,8 @@ class SequenceInterpolator(Interpolator):
         valid = self.valid_times(times)
         valid_times = times[valid]
         
-        if self.use_phase_shifts: ### this results in us having one time/idx column for each of the neurons. Hence one column of idx per neuron
-            idx_lower = np.floor( ### This assumes that the measurement time is always at the end of the measurements of all neurons not at the beginning
+        if self.use_phase_shifts:
+            idx_lower = np.floor(
                 (
                     valid_times[:, np.newaxis]
                     - self._phase_shifts[np.newaxis, :]
@@ -189,8 +189,8 @@ class SequenceInterpolator(Interpolator):
 
                     dim_mask = compute_mask[:,dim]
 
-                    idx_lower_single_dim = idx_lower[:,dim][dim_mask]
-                    idx_upper_single_dim = idx_upper[:,dim][dim_mask]
+                    idx_lower_single_dim = idx_lower[dim_mask, dim]
+                    idx_upper_single_dim = idx_upper[dim_mask, dim]
 
                     times_lower = (idx_lower_single_dim * self.time_delta)[:, None]
                     times_upper = (idx_upper_single_dim * self.time_delta)[:, None]
@@ -204,10 +204,11 @@ class SequenceInterpolator(Interpolator):
                     lower_signal_ratio = (lower_numerator / denom)
                     upper_signal_ratio = (upper_numerator / denom)
     
-                    data_lower = self._data[:, dim][idx_lower_single_dim][:, None]
-                    data_upper = self._data[:, dim][idx_upper_single_dim][:, None]
+                    data_lower = self._data[idx_lower_single_dim, dim][:, None]
+                    data_upper = self._data[idx_upper_single_dim, dim][:, None]
 
-                    interpolated[:, dim][dim_mask] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+
+                    interpolated[dim_mask, dim] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
 
                 valid_indices = np.flatnonzero(valid)
                 for mask in overflow_mask.T:
@@ -238,11 +239,12 @@ class SequenceInterpolator(Interpolator):
                 valid_indices = np.flatnonzero(valid)
                 valid[valid_indices[overflow_mask]] = False
 
+                
             if not self.keep_nans:
                 neuron_means = np.nanmean(interpolated, axis=0)
-                for i in range(interpolated.shape[1]):
-                    interpolated[np.isnan(interpolated[:, i]), i] = neuron_means[i]
-                
+                # Replace NaNs with the column means directly
+                np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
+
             return interpolated, valid
 
         else:

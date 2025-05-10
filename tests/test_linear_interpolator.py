@@ -24,8 +24,6 @@ def test_linear_sequence_interpolation(shifts_per_signal, sampling_rate, use_mem
         idx = slice(1, 11)
         times = timestamps[idx] + 0.5 * delta_t
 
-        signal_idx = 0 
-
         if not shifts_per_signal:
 
             expected = np.zeros((len(times), data.shape[1]))
