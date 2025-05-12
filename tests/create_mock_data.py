@@ -1,8 +1,9 @@
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 import shutil
 import yaml
 from pathlib import Path
 import numpy as np
+from experanto.interpolators import Interpolator
 
 SEQUENCE_ROOT = Path("tests/sequence_data")
 
@@ -16,7 +17,7 @@ def create_sequence_data(n_signals = 10, shifts_per_signal = False, use_mem_mapp
         meta = {
             "start_time": 0,
             "end_time": t_end,
-            "modality": "sequence",
+            "modality": "phase_shifted_sequence" if shifts_per_signal else "sequence",
             "sampling_rate": sampling_rate,
             "phase_shift_per_signal": shifts_per_signal,
             "is_mem_mapped": use_mem_mapped,
@@ -38,6 +39,7 @@ def create_sequence_data(n_signals = 10, shifts_per_signal = False, use_mem_mapp
             fp = np.memmap(filename, dtype=data.dtype, mode='w+', shape=data.shape)
             fp[:] = data[:]
             fp.flush()  # Ensure data is written to disk
+            del fp
         meta["dtype"] = str(data.dtype)
         
         if shifts_per_signal:
@@ -52,3 +54,8 @@ def create_sequence_data(n_signals = 10, shifts_per_signal = False, use_mem_mapp
     finally:
         shutil.rmtree(SEQUENCE_ROOT)
     
+@contextmanager
+def sequence_data_and_interpolator(**kwargs):
+    with create_sequence_data(**kwargs) as (timestamps, data, shifts):
+        with closing(Interpolator.create("tests/sequence_data")) as seq_interp:
+            yield timestamps, data, shifts, seq_interp
