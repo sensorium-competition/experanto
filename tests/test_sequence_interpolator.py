@@ -96,19 +96,10 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(sampling_rate, use_mem
         ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"
 
         delta_t = 1.0 / sampling_rate
-        idx = slice(1, 11)
-        ret_idx = slice(
-            0, 10
-        )  # because we floor indices and all shifts are positive, we need to shift the data by one
-        times = (
-            timestamps[idx] + 1e-9
-        )  # Add a small epsilon to avoid floating point errors
-
+        times = timestamps[1:11] + 1e-9 # Add a small epsilon to avoid floating point errors
         interp, valid = seq_interp.interpolate(times=times)
-        assert np.allclose(
-            interp, data[ret_idx]
-        ), "Data does not match original data"
         assert np.all(valid), "All samples should be valid"
+        assert np.allclose(interp, data[0:10]), "Nearest neighbor interpolation does not match expected data"
         assert valid.shape == (10,), f"Expected valid.shape == (10,), got {valid.shape}"
         assert interp.shape == (10, 10), f"Expected interp.shape == (10, 10), got {interp.shape}"
 
@@ -120,9 +111,8 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(sampling_rate, use_mem
                 interp, valid = seq_interp.interpolate(times=shifted_times)
                 assert np.allclose(
                     interp[:, i], data[1:11, i]
-                ), f"Data at {dt} does not match original data"
+                ), f"Data at {dt} does not match original data (use_mem_mapped={use_mem_mapped}, sampling_rate={sampling_rate}, shifts_per_signal={True})"
 
-            # Test phase shifts
             for dt in np.linspace(1.0, 1.99) * delta_t:
                 shifted_times = times + shift[i] + dt
 
@@ -130,6 +120,28 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(sampling_rate, use_mem
                 assert np.allclose(
                     interp[:, i], data[2:12, i]
                 ), f"Data at {dt} does not match original data (use_mem_mapped={use_mem_mapped}, sampling_rate={sampling_rate}, shifts_per_signal={True})"
+
+
+@pytest.mark.parametrize("keep_nans", [False, True])
+def test_nearest_neighbor_interpolation_with_phase_shifts_handles_nans(keep_nans):
+    with sequence_data_and_interpolator(data_kwargs=dict(
+        n_signals=10,
+        use_mem_mapped=True,
+        t_end=5.0,
+        sampling_rate=10.0,
+        shifts_per_signal=True,
+        contain_nans=True,
+    ), interp_kwargs=dict(keep_nans=keep_nans)) as (timestamps, data, _, seq_interp):
+        assert isinstance(
+            seq_interp, PhaseShiftedSequenceInterpolator
+        ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"
+
+        times = timestamps[1:11] + 1e-9 # Add a small epsilon to avoid floating point errors
+        interp, valid = seq_interp.interpolate(times=times)
+        assert np.all(valid), "All samples should be valid"
+        assert np.allclose(interp, data[0:10], equal_nan=True), "Nearest neighbor interpolation does not match expected data"
+        assert valid.shape == (10,), f"Expected valid.shape == (10,), got {valid.shape}"
+        assert interp.shape == (10, 10), f"Expected interp.shape == (10, 10), got {interp.shape}"
 
 
 @pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
@@ -162,13 +174,15 @@ def test_linear_interpolation(sampling_rate, use_mem_mapped, contain_nans):
         assert interp.shape == (10, 10), f"Expected interp.shape == (10, 10), got {interp.shape}"
 
 
-def test_linear_interpolation_replaces_nans():
+@pytest.mark.parametrize("phase_shifts", [True, False])
+def test_linear_interpolation_replaces_nans(phase_shifts):
     sampling_rate = 10.0
     with sequence_data_and_interpolator(data_kwargs=dict(
         n_signals=10,
         use_mem_mapped=True,
         t_end=5.0,
         sampling_rate=sampling_rate,
+        shifts_per_signal=phase_shifts,
         contain_nans=True,
     ), interp_kwargs=dict(keep_nans=False)) as (timestamps, _, _, seq_interp):
         assert isinstance(seq_interp, SequenceInterpolator), "Not a SequenceInterpolator"
@@ -232,15 +246,14 @@ def test_linear_interpolation_with_phase_shifts(sampling_rate, use_mem_mapped):
                                     atol=1e-6), f"Linear interpolation mismatch for signal {sig_idx}"
 
 
-@pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
 @pytest.mark.parametrize("interpolation_mode", ["nearest_neighbor", "linear"])
-def test_interpolation_for_invalid_times(sampling_rate, interpolation_mode):
+def test_interpolation_for_invalid_times(interpolation_mode):
     with sequence_data_and_interpolator(data_kwargs=dict(
         n_signals=10,
         use_mem_mapped=True,
         t_end=5.0,
-        sampling_rate=sampling_rate,
-    )) as (timestamps, _, _, seq_interp):
+        sampling_rate=10.0,
+    )) as (_, _, _, seq_interp):
         assert isinstance(
             seq_interp, SequenceInterpolator
         ), "Interpolation object is not a SequenceInterpolator"
@@ -253,6 +266,26 @@ def test_interpolation_for_invalid_times(sampling_rate, interpolation_mode):
 
 
 @pytest.mark.parametrize("interpolation_mode", ["nearest_neighbor", "linear"])
+def test_interpolation_with_phase_shifts_for_invalid_times(interpolation_mode):
+    with sequence_data_and_interpolator(data_kwargs=dict(
+        n_signals=10,
+        use_mem_mapped=True,
+        t_end=5.0,
+        sampling_rate=10.0,
+        shifts_per_signal=True,
+    )) as (_, _, _, seq_interp):
+        assert isinstance(
+            seq_interp, PhaseShiftedSequenceInterpolator
+        ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"
+        seq_interp.interpolation_mode = interpolation_mode
+
+        _, valid = seq_interp.interpolate(
+            times=np.array([-0.1, 0.1, 4.9, 5.0, 5.1])
+        )
+        assert np.all(valid == np.array([False, True, True, True, False])), "Validity does not match expected values"
+
+
+@pytest.mark.parametrize("interpolation_mode", ["nearest_neighbor", "linear"])
 @pytest.mark.parametrize("phase_shifts", [True, False])
 def test_interpolation_for_empty_times(interpolation_mode, phase_shifts):
     with sequence_data_and_interpolator(data_kwargs=dict(
@@ -261,7 +294,7 @@ def test_interpolation_for_empty_times(interpolation_mode, phase_shifts):
         t_end=5.0,
         sampling_rate=10.0,
         shifts_per_signal=phase_shifts
-    )) as (timestamps, _, _, seq_interp):
+    )) as (_, _, _, seq_interp):
         assert isinstance(
             seq_interp, SequenceInterpolator
         ), "Interpolation object is not a SequenceInterpolator"

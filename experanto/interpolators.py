@@ -32,7 +32,6 @@ class TimeInterval(typing.NamedTuple):
 class Interpolator:
     def __init__(self, root_folder: str) -> None:
         self.root_folder = Path(root_folder)
-        meta = self.load_meta()
         self.start_time = None
         self.end_time = None
         # Valid interval can be different to start time and end time.
@@ -153,7 +152,6 @@ class SequenceInterpolator(Interpolator):
             
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        
         valid = self.valid_times(times)
         valid_times = times[valid]        
         idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
