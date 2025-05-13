@@ -26,6 +26,70 @@ def test_nearest_neighbor_interpolation(sampling_rate, use_mem_mapped):
 
 
 @pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
+def test_nearest_neighbor_interpolation_with_inbetween_times(sampling_rate):
+    t_end = 5.0
+    with sequence_data_and_interpolator(
+        n_signals=10,
+        use_mem_mapped=True,
+        t_end=t_end,
+        sampling_rate=sampling_rate,
+    ) as (timestamps, data, _, seq_interp):
+        assert isinstance(
+            seq_interp, SequenceInterpolator
+        ), "Interpolation object is not a SequenceInterpolator"
+
+        # timestamps multiplied by 0.8 should be floored to the same timestamp
+        interp, valid = seq_interp.interpolate(
+            times=timestamps[:10] + 0.8/sampling_rate
+        )
+        assert np.all(valid), "All samples should be valid"
+        assert np.allclose(interp, data[:10]), "Nearest neighbor interpolation does not match expected data"
+
+        # timestamps multiplied by 1.2 should be floored to the next timestamp
+        interp, valid = seq_interp.interpolate(
+            times=timestamps[:10] + 1.2/sampling_rate
+        )
+        assert np.all(valid), "All samples should be valid"
+        assert np.allclose(interp, data[1:11]), "Nearest neighbor interpolation does not match expected data"
+
+
+@pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
+def test_nearest_neighbor_interpolation_for_invalid_times(sampling_rate):
+    with sequence_data_and_interpolator(
+        n_signals=10,
+        use_mem_mapped=True,
+        t_end=5.0,
+        sampling_rate=sampling_rate,
+    ) as (timestamps, data, _, seq_interp):
+        assert isinstance(
+            seq_interp, SequenceInterpolator
+        ), "Interpolation object is not a SequenceInterpolator"
+
+        _, valid = seq_interp.interpolate(
+            times=np.array([-0.1, 0.1, 4.9, 5.0, 5.1])
+        )
+        assert np.all(valid == np.array([False, True, True, False, False])), "Validity does not match expected values"
+
+        
+def test_nearest_neighbor_interpolation_for_empty_times():
+    with sequence_data_and_interpolator(
+        n_signals=10,
+        use_mem_mapped=True,
+        t_end=5.0,
+        sampling_rate=10.0,
+    ) as (timestamps, data, _, seq_interp):
+        assert isinstance(
+            seq_interp, SequenceInterpolator
+        ), "Interpolation object is not a SequenceInterpolator"
+
+        interp, valid = seq_interp.interpolate(
+            times=np.array([])
+        )
+        assert interp.shape[0] == 0, 'No data expected'
+        assert valid.shape[0] == 0, 'No data expected'
+
+
+@pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
 @pytest.mark.parametrize("use_mem_mapped", [False, True])
 def test_nearest_neighbor_interpolation_with_phase_shifts(sampling_rate, use_mem_mapped):
     with sequence_data_and_interpolator(
@@ -87,21 +151,12 @@ def test_linear_interpolation(sampling_rate, use_mem_mapped):
         seq_interp.interpolation_mode = 'linear'
 
         delta_t = 1.0 / sampling_rate
-        idx = slice(1, 11)
+        idx = [i for i in range(1, 11)]
         times = timestamps[idx] + 0.5 * delta_t
 
-        expected = np.zeros((len(times), data.shape[1]))
-        for i in range(len(times)):
-            t = times[i]
-
-            left_idx = i  
-            right_idx = i + 1 
-            
-            t1, t2 = timestamps[left_idx + 1], timestamps[right_idx + 1] 
-            
-            for sig_idx in range(data.shape[1]):
-                y1, y2 = data[left_idx + 1, sig_idx], data[right_idx + 1, sig_idx]
-                expected[i, sig_idx] = y1 + ((t - t1) / (t2 - t1)) * (y2 - y1)
+        t1, t2 = timestamps[idx], timestamps[[id+1 for id in idx]]
+        y1, y2 = data[idx], data[[id+1 for id in idx]]
+        expected = y1 + ((times - t1) / (t2 - t1)) * (y2 - y1)
 
         interp, valid = seq_interp.interpolate(times=times)
 
@@ -153,10 +208,15 @@ def test_linear_interpolation_with_phase_shifts(sampling_rate, use_mem_mapped):
                     assert np.allclose(interp[valid_indices, sig_idx], 
                                     expected[valid_indices], 
                                     atol=1e-6), f"Linear interpolation mismatch for signal {sig_idx}"
+                    
+
+def test_interpolation_mode_not_implemented():
+    with sequence_data_and_interpolator() as (_, _, _, seq_interp):
+        seq_interp.interpolation_mode = "unsupported_mode"
+        with pytest.raises(NotImplementedError):
+            seq_interp.interpolate(np.array([0.0, 1.0, 2.0]))
 
 
 if __name__ == "__main__":
     print("Running tests")
-    test_nearest_neighbor_interpolation(11.0, True)
-    test_linear_interpolation(11.0, True)
-
+    pytest.main([__file__])
