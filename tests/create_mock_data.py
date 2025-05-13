@@ -9,7 +9,7 @@ SEQUENCE_ROOT = Path("tests/sequence_data")
 
 
 @contextmanager
-def create_sequence_data(n_signals = 10, shifts_per_signal = False, use_mem_mapped = False, t_end = 10.0, sampling_rate = 10.0):
+def create_sequence_data(n_signals = 10, shifts_per_signal = False, use_mem_mapped = False, t_end = 10.0, sampling_rate = 10.0, contain_nans=False):
     try: 
         SEQUENCE_ROOT.mkdir(parents=True, exist_ok=True)
         (SEQUENCE_ROOT / "meta").mkdir(parents=True, exist_ok=True)
@@ -31,6 +31,11 @@ def create_sequence_data(n_signals = 10, shifts_per_signal = False, use_mem_mapp
         
 
         data = np.random.rand(len(timestamps), n_signals)
+
+        if contain_nans:
+            nan_indices = np.random.choice(data.size, size=int(0.1 * data.size), replace=False)
+            data.flat[nan_indices] = np.nan
+
         if not use_mem_mapped:
             np.save(SEQUENCE_ROOT / "data.npy", data)
         else:
@@ -55,7 +60,9 @@ def create_sequence_data(n_signals = 10, shifts_per_signal = False, use_mem_mapp
         shutil.rmtree(SEQUENCE_ROOT)
     
 @contextmanager
-def sequence_data_and_interpolator(**kwargs):
-    with create_sequence_data(**kwargs) as (timestamps, data, shifts):
-        with closing(Interpolator.create("tests/sequence_data")) as seq_interp:
+def sequence_data_and_interpolator(data_kwargs=None, interp_kwargs=None):
+    data_kwargs = data_kwargs or {}
+    interp_kwargs = interp_kwargs or {}
+    with create_sequence_data(**data_kwargs) as (timestamps, data, shifts):
+        with closing(Interpolator.create("tests/sequence_data", **interp_kwargs)) as seq_interp:
             yield timestamps, data, shifts, seq_interp
