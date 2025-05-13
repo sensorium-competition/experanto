@@ -17,6 +17,9 @@ def test_nearest_neighbor_interpolation(sampling_rate, use_mem_mapped):
         assert isinstance(
             seq_interp, SequenceInterpolator
         ), "Interpolation object is not a SequenceInterpolator"
+        assert not isinstance(
+            seq_interp, PhaseShiftedSequenceInterpolator
+        ), "Interpolation object is a PhaseShiftedSequenceInterpolator"
 
         interp, valid = seq_interp.interpolate(
             times=timestamps[:10] + 1e-9
@@ -51,42 +54,6 @@ def test_nearest_neighbor_interpolation_with_inbetween_times(sampling_rate):
         )
         assert np.all(valid), "All samples should be valid"
         assert np.allclose(interp, data[1:11]), "Nearest neighbor interpolation does not match expected data"
-
-
-@pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
-def test_nearest_neighbor_interpolation_for_invalid_times(sampling_rate):
-    with sequence_data_and_interpolator(
-        n_signals=10,
-        use_mem_mapped=True,
-        t_end=5.0,
-        sampling_rate=sampling_rate,
-    ) as (timestamps, data, _, seq_interp):
-        assert isinstance(
-            seq_interp, SequenceInterpolator
-        ), "Interpolation object is not a SequenceInterpolator"
-
-        _, valid = seq_interp.interpolate(
-            times=np.array([-0.1, 0.1, 4.9, 5.0, 5.1])
-        )
-        assert np.all(valid == np.array([False, True, True, False, False])), "Validity does not match expected values"
-
-        
-def test_nearest_neighbor_interpolation_for_empty_times():
-    with sequence_data_and_interpolator(
-        n_signals=10,
-        use_mem_mapped=True,
-        t_end=5.0,
-        sampling_rate=10.0,
-    ) as (timestamps, data, _, seq_interp):
-        assert isinstance(
-            seq_interp, SequenceInterpolator
-        ), "Interpolation object is not a SequenceInterpolator"
-
-        interp, valid = seq_interp.interpolate(
-            times=np.array([])
-        )
-        assert interp.shape[0] == 0, 'No data expected'
-        assert valid.shape[0] == 0, 'No data expected'
 
 
 @pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
@@ -208,6 +175,46 @@ def test_linear_interpolation_with_phase_shifts(sampling_rate, use_mem_mapped):
                     assert np.allclose(interp[valid_indices, sig_idx], 
                                     expected[valid_indices], 
                                     atol=1e-6), f"Linear interpolation mismatch for signal {sig_idx}"
+
+
+@pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
+def test_interpolation_for_invalid_times(sampling_rate):
+    with sequence_data_and_interpolator(
+        n_signals=10,
+        use_mem_mapped=True,
+        t_end=5.0,
+        sampling_rate=sampling_rate,
+    ) as (timestamps, _, _, seq_interp):
+        assert isinstance(
+            seq_interp, SequenceInterpolator
+        ), "Interpolation object is not a SequenceInterpolator"
+
+        _, valid = seq_interp.interpolate(
+            times=np.array([-0.1, 0.1, 4.9, 5.0, 5.1])
+        )
+        assert np.all(valid == np.array([False, True, True, False, False])), "Validity does not match expected values"
+
+
+@pytest.mark.parametrize("interpolation_mode", ["nearest_neighbor", "linear"])
+@pytest.mark.parametrize("phase_shifts", [True, False])
+def test_interpolation_for_empty_times(interpolation_mode, phase_shifts):
+    with sequence_data_and_interpolator(
+        n_signals=10,
+        use_mem_mapped=True,
+        t_end=5.0,
+        sampling_rate=10.0,
+        shifts_per_signal=phase_shifts
+    ) as (timestamps, _, _, seq_interp):
+        assert isinstance(
+            seq_interp, SequenceInterpolator
+        ), "Interpolation object is not a SequenceInterpolator"
+        seq_interp.interpolation_mode = interpolation_mode
+
+        interp, valid = seq_interp.interpolate(
+            times=np.array([])
+        )
+        assert interp.shape[0] == 0, 'No data expected'
+        assert valid.shape[0] == 0, 'No data expected'
                     
 
 def test_interpolation_mode_not_implemented():
