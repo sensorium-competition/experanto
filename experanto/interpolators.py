@@ -235,8 +235,8 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
         
         self._phase_shifts = np.load(self.root_folder / "meta/phase_shifts.npy")
         self.valid_interval = TimeInterval(
-            self.start_time + np.max(self._phase_shifts),
-            self.end_time + np.min(self._phase_shifts),
+            self.start_time + (np.max(self._phase_shifts) if len(self._phase_shifts) > 0 else 0),
+            self.end_time + (np.min(self._phase_shifts) if len(self._phase_shifts) > 0 else 0),
         )
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -263,41 +263,28 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
             idx_upper = idx_lower + 1
             overflow_mask = (idx_upper >= self._data.shape[0]) | (idx_lower < 0)
-            compute_mask = ~overflow_mask
 
-            valid_times = valid_times[:, None]
-            interpolated = np.full((valid_times.shape[0], idx_lower.shape[1], 1), np.nan)
+            times_lower = (idx_lower * self.time_delta)
+            times_upper = (idx_upper * self.time_delta)
+            denom = times_upper - times_lower
 
-            for dim in range (idx_upper.shape[1]):
+            time_dim = valid_times[:, np.newaxis] - self._phase_shifts[np.newaxis, :]
 
-                dim_mask = compute_mask[:,dim]
+            lower_numerator = times_upper - time_dim
+            upper_numerator = time_dim - times_lower
+            
+            lower_signal_ratio = (lower_numerator / denom)
+            upper_signal_ratio = (upper_numerator / denom)
 
-                idx_lower_single_dim = idx_lower[dim_mask, dim]
-                idx_upper_single_dim = idx_upper[dim_mask, dim]
+            _, cols = np.indices(idx_lower.shape)
+            data_lower = self._data[idx_lower, cols]
+            data_upper = self._data[idx_upper, cols]
 
-                times_lower = (idx_lower_single_dim * self.time_delta)[:, None]
-                times_upper = (idx_upper_single_dim * self.time_delta)[:, None]
-                denom = times_upper - times_lower
-
-                time_dim = valid_times[dim_mask] - self._phase_shifts[dim]
-
-                lower_numerator = times_upper - time_dim
-                upper_numerator = time_dim - times_lower
-                
-                lower_signal_ratio = (lower_numerator / denom)
-                upper_signal_ratio = (upper_numerator / denom)
-
-                data_lower = self._data[idx_lower_single_dim, dim][:, None]
-                data_upper = self._data[idx_upper_single_dim, dim][:, None]
-
-
-                interpolated[dim_mask, dim] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+            interpolated = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
 
             valid_indices = np.flatnonzero(valid)
             for mask in overflow_mask.T:
                 valid[valid_indices[mask]] = False
-
-            interpolated = np.squeeze(interpolated)
                 
             if not self.keep_nans:
                 neuron_means = np.nanmean(interpolated, axis=0)
