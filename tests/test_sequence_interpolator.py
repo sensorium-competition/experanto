@@ -5,11 +5,12 @@ from create_mock_data import sequence_data_and_interpolator
 from experanto.interpolators import SequenceInterpolator, PhaseShiftedSequenceInterpolator
 
 
+@pytest.mark.parametrize("n_signals", [0, 1, 10, 50])
 @pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
 @pytest.mark.parametrize("use_mem_mapped", [False, True])
-def test_nearest_neighbor_interpolation(sampling_rate, use_mem_mapped):
+def test_nearest_neighbor_interpolation(n_signals, sampling_rate, use_mem_mapped):
     with sequence_data_and_interpolator(data_kwargs=dict(
-        n_signals=10,
+        n_signals=n_signals,
         use_mem_mapped=use_mem_mapped,
         t_end=5.0,
         sampling_rate=sampling_rate,
@@ -27,13 +28,14 @@ def test_nearest_neighbor_interpolation(sampling_rate, use_mem_mapped):
         assert np.all(valid), "All samples should be valid"
         assert np.allclose(interp, data[:10]), "Nearest neighbor interpolation does not match expected data"
         assert valid.shape == (10,), f"Expected valid.shape == (10,), got {valid.shape}"
-        assert interp.shape == (10, 10), f"Expected interp.shape == (10, 10), got {interp.shape}"
+        assert interp.shape == (10, n_signals), f"Expected interp.shape == (10, {n_signals}), got {interp.shape}"
 
 
+@pytest.mark.parametrize("n_signals", [0, 1, 10, 50])
 @pytest.mark.parametrize("keep_nans", [False, True])
-def test_nearest_neighbor_interpolation_handles_nans(keep_nans):
+def test_nearest_neighbor_interpolation_handles_nans(n_signals, keep_nans):
     with sequence_data_and_interpolator(data_kwargs=dict(
-        n_signals=10,
+        n_signals=n_signals,
         use_mem_mapped=True,
         t_end=5.0,
         sampling_rate=10.0,
@@ -49,13 +51,14 @@ def test_nearest_neighbor_interpolation_handles_nans(keep_nans):
         assert np.all(valid), "All samples should be valid"
         assert np.allclose(interp, data[:10], equal_nan=True), "Nearest neighbor interpolation does not match expected data"
         assert valid.shape == (10,), f"Expected valid.shape == (10,), got {valid.shape}"
-        assert interp.shape == (10, 10), f"Expected interp.shape == (10, 10), got {interp.shape}"
+        assert interp.shape == (10, n_signals), f"Expected interp.shape == (10, {n_signals}), got {interp.shape}"
 
 
+@pytest.mark.parametrize("n_signals", [0, 1, 10, 50])
 @pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
-def test_nearest_neighbor_interpolation_with_inbetween_times(sampling_rate):
+def test_nearest_neighbor_interpolation_with_inbetween_times(n_signals, sampling_rate):
     with sequence_data_and_interpolator(data_kwargs=dict(
-        n_signals=10,
+        n_signals=n_signals,
         use_mem_mapped=True,
         t_end=5.0,
         sampling_rate=sampling_rate,
@@ -81,11 +84,12 @@ def test_nearest_neighbor_interpolation_with_inbetween_times(sampling_rate):
         assert np.allclose(interp, data[1:11]), "Nearest neighbor interpolation does not match expected data"
 
 
+@pytest.mark.parametrize("n_signals", [0, 1, 10, 50])
 @pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
 @pytest.mark.parametrize("use_mem_mapped", [False, True])
-def test_nearest_neighbor_interpolation_with_phase_shifts(sampling_rate, use_mem_mapped):
+def test_nearest_neighbor_interpolation_with_phase_shifts(n_signals, sampling_rate, use_mem_mapped):
     with sequence_data_and_interpolator(data_kwargs=dict(
-        n_signals=10,
+        n_signals=n_signals,
         use_mem_mapped=use_mem_mapped,
         t_end=5.0,
         sampling_rate=sampling_rate,
@@ -101,7 +105,7 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(sampling_rate, use_mem
         assert np.all(valid), "All samples should be valid"
         assert np.allclose(interp, data[0:10]), "Nearest neighbor interpolation does not match expected data"
         assert valid.shape == (10,), f"Expected valid.shape == (10,), got {valid.shape}"
-        assert interp.shape == (10, 10), f"Expected interp.shape == (10, 10), got {interp.shape}"
+        assert interp.shape == (10, n_signals), f"Expected interp.shape == (10, {n_signals}), got {interp.shape}"
 
         # Test phase shifts
         for i in range(data.shape[1]):
@@ -122,10 +126,11 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(sampling_rate, use_mem
                 ), f"Data at {dt} does not match original data (use_mem_mapped={use_mem_mapped}, sampling_rate={sampling_rate}, shifts_per_signal={True})"
 
 
+@pytest.mark.parametrize("n_signals", [0, 1, 10, 50])
 @pytest.mark.parametrize("keep_nans", [False, True])
-def test_nearest_neighbor_interpolation_with_phase_shifts_handles_nans(keep_nans):
+def test_nearest_neighbor_interpolation_with_phase_shifts_handles_nans(n_signals, keep_nans):
     with sequence_data_and_interpolator(data_kwargs=dict(
-        n_signals=10,
+        n_signals=n_signals,
         use_mem_mapped=True,
         t_end=5.0,
         sampling_rate=10.0,
@@ -141,15 +146,16 @@ def test_nearest_neighbor_interpolation_with_phase_shifts_handles_nans(keep_nans
         assert np.all(valid), "All samples should be valid"
         assert np.allclose(interp, data[0:10], equal_nan=True), "Nearest neighbor interpolation does not match expected data"
         assert valid.shape == (10,), f"Expected valid.shape == (10,), got {valid.shape}"
-        assert interp.shape == (10, 10), f"Expected interp.shape == (10, 10), got {interp.shape}"
+        assert interp.shape == (10, n_signals), f"Expected interp.shape == (10, {n_signals}), got {interp.shape}"
 
 
+@pytest.mark.parametrize("n_signals", [0, 1, 10, 50])
 @pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
 @pytest.mark.parametrize("use_mem_mapped", [False, True])
 @pytest.mark.parametrize("contain_nans", [False, True])
-def test_linear_interpolation(sampling_rate, use_mem_mapped, contain_nans):
+def test_linear_interpolation(n_signals, sampling_rate, use_mem_mapped, contain_nans):
     with sequence_data_and_interpolator(data_kwargs=dict(
-        n_signals=10,
+        n_signals=n_signals,
         use_mem_mapped=use_mem_mapped,
         t_end=5.0,
         sampling_rate=sampling_rate,
@@ -160,25 +166,27 @@ def test_linear_interpolation(sampling_rate, use_mem_mapped, contain_nans):
 
         delta_t = 1.0 / sampling_rate
         idx = [i for i in range(1, 11)]
-        times = timestamps[idx] + 0.5 * delta_t
+        times = timestamps[idx][:, None] + 0.5 * delta_t
 
-        t1, t2 = timestamps[idx], timestamps[[id+1 for id in idx]]
+        t1, t2 = timestamps[idx][:, None], timestamps[[id+1 for id in idx]][:, None]
         y1, y2 = data[idx], data[[id+1 for id in idx]]
+        print(t1.shape, t2.shape, y1.shape, y2.shape, times.shape)
         expected = y1 + ((times - t1) / (t2 - t1)) * (y2 - y1)
 
         interp, valid = seq_interp.interpolate(times=times)
 
         assert np.all(valid), "All samples should be valid"
         assert np.allclose(interp, expected, atol=1e-6, equal_nan=True), "Linear interpolation does not match expected data"
-        assert valid.shape == (10,), f"Expected valid.shape == (10,), got {valid.shape}"
-        assert interp.shape == (10, 10), f"Expected interp.shape == (10, 10), got {interp.shape}"
+        assert valid.shape == (10, 1), f"Expected valid.shape == (10,), got {valid.shape}"
+        assert interp.shape == (10, n_signals), f"Expected interp.shape == (10, {n_signals}), got {interp.shape}"
 
 
+@pytest.mark.parametrize("n_signals", [0, 1, 10, 50])
 @pytest.mark.parametrize("phase_shifts", [True, False])
-def test_linear_interpolation_replaces_nans(phase_shifts):
+def test_linear_interpolation_replaces_nans(n_signals, phase_shifts):
     sampling_rate = 10.0
     with sequence_data_and_interpolator(data_kwargs=dict(
-        n_signals=10,
+        n_signals=n_signals,
         use_mem_mapped=True,
         t_end=5.0,
         sampling_rate=sampling_rate,
@@ -197,14 +205,15 @@ def test_linear_interpolation_replaces_nans(phase_shifts):
         assert np.all(valid), "All samples should be valid"
         assert np.isnan(interp).sum() == 0, "Interpolated data should not contain NaNs"
         assert valid.shape == (10,), f"Expected valid.shape == (10,), got {valid.shape}"
-        assert interp.shape == (10, 10), f"Expected interp.shape == (10, 10), got {interp.shape}"
+        assert interp.shape == (10, n_signals), f"Expected interp.shape == (10, {n_signals}), got {interp.shape}"
 
 
+@pytest.mark.parametrize("n_signals", [0, 1, 10, 50])
 @pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
 @pytest.mark.parametrize("use_mem_mapped", [False, True])
-def test_linear_interpolation_with_phase_shifts(sampling_rate, use_mem_mapped):
+def test_linear_interpolation_with_phase_shifts(n_signals, sampling_rate, use_mem_mapped):
     with sequence_data_and_interpolator(data_kwargs=dict(
-        n_signals=10,
+        n_signals=n_signals,
         use_mem_mapped=use_mem_mapped,
         t_end=5.0,
         sampling_rate=sampling_rate,
