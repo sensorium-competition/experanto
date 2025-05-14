@@ -153,7 +153,11 @@ class SequenceInterpolator(Interpolator):
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
-        valid_times = times[valid]        
+        valid_times = times[valid]
+
+        if len(valid_times) == 0:
+            return np.array([]), valid
+        
         idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
             int
         )
@@ -238,6 +242,9 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
+
+        if len(valid_times) == 0:
+            return np.array([]), valid
         
         idx_lower = np.floor(
             (
