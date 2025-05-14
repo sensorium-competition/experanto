@@ -80,7 +80,6 @@ class SequenceInterpolator(Interpolator):
         root_folder: str,
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
-        interp_window: int = 5,
         normalize: bool = False,
         normalize_subtract_mean: bool = False,
         normalize_std_threshold: typing.Optional[float] = None,  # or 0.01
@@ -89,13 +88,10 @@ class SequenceInterpolator(Interpolator):
         """
         interpolation_mode - nearest neighbor or linear
         keep_nans - if we keep nans in linear interpolation
-        interp_window - how many points before or after the target period
-            are considered for interpolation
         """
         super().__init__(root_folder)
         meta = self.load_meta()
         self.keep_nans = keep_nans
-        self.interp_window = interp_window
         self.interpolation_mode = interpolation_mode
         self.normalize = normalize
         self.normalize_subtract_mean = normalize_subtract_mean
@@ -216,7 +212,6 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
         root_folder: str,
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
-        interp_window: int = 5,
         normalize: bool = False,
         normalize_subtract_mean: bool = False,
         normalize_std_threshold: typing.Optional[float] = None,  # or 0.01
@@ -226,7 +221,6 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             root_folder,
             keep_nans=keep_nans,
             interpolation_mode=interpolation_mode,
-            interp_window=interp_window,
             normalize=normalize,
             normalize_subtract_mean=normalize_subtract_mean,
             normalize_std_threshold=normalize_std_threshold,
@@ -260,9 +254,14 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             return data, valid
         
         elif self.interpolation_mode == "linear":
-
             idx_upper = idx_lower + 1
-            overflow_mask = (idx_upper >= self._data.shape[0]) | (idx_lower < 0)
+            overflow_mask = idx_upper >= self._data.shape[0]
+
+            if np.any(idx_lower < 0): # should not be possible
+                warnings.warn(
+                    f"Interpolation index {idx_lower} is negative. This should not happen."
+                )
+                overflow_mask = overflow_mask | idx_lower < 0
 
             times_lower = (idx_lower * self.time_delta)
             times_upper = (idx_upper * self.time_delta)

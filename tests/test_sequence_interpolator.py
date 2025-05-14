@@ -256,42 +256,48 @@ def test_linear_interpolation_with_phase_shifts(n_signals, sampling_rate, use_me
 
 
 @pytest.mark.parametrize("interpolation_mode", ["nearest_neighbor", "linear"])
-def test_interpolation_for_invalid_times(interpolation_mode):
+@pytest.mark.parametrize("keep_nans", [False, True])
+def test_interpolation_for_invalid_times(interpolation_mode, keep_nans):
     with sequence_data_and_interpolator(data_kwargs=dict(
         n_signals=10,
         use_mem_mapped=True,
         t_end=5.0,
         sampling_rate=10.0,
-    )) as (_, _, _, seq_interp):
+    ), interp_kwargs=dict(keep_nans=keep_nans)) as (_, _, _, seq_interp):
         assert isinstance(
             seq_interp, SequenceInterpolator
         ), "Interpolation object is not a SequenceInterpolator"
         seq_interp.interpolation_mode = interpolation_mode
 
-        _, valid = seq_interp.interpolate(
-            times=np.array([-0.1, 0.1, 4.9, 5.0, 5.1])
+        interp, valid = seq_interp.interpolate(
+            times=np.array([-5.0, -0.1, 0.1, 4.9, 5.0, 5.1, 10.0])
         )
-        assert np.all(valid == np.array([False, True, True, False, False])), "Validity does not match expected values"
+        assert np.all(valid == np.array([False, False, True, True, False, False, False])), "Validity does not match expected values"
+        assert interp.shape == (2, 10), f"Expected interp.shape == (2, {10}), got {interp.shape}"
 
 
 @pytest.mark.parametrize("interpolation_mode", ["nearest_neighbor", "linear"])
-def test_interpolation_with_phase_shifts_for_invalid_times(interpolation_mode):
+@pytest.mark.parametrize("end_time", [0.1, 1.0, 5.0])
+@pytest.mark.parametrize("keep_nans", [False, True])
+def test_interpolation_with_phase_shifts_for_invalid_times(interpolation_mode, end_time, keep_nans):
     with sequence_data_and_interpolator(data_kwargs=dict(
         n_signals=10,
         use_mem_mapped=True,
-        t_end=5.0,
+        t_end=end_time,
         sampling_rate=10.0,
         shifts_per_signal=True,
-    )) as (_, _, _, seq_interp):
+    ), interp_kwargs=dict(keep_nans=keep_nans)) as (_, _, _, seq_interp):
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"
         seq_interp.interpolation_mode = interpolation_mode
 
-        _, valid = seq_interp.interpolate(
-            times=np.array([-0.1, 0.1, 4.9, 5.0, 5.1])
+        interp, valid = seq_interp.interpolate(
+            times=np.array([-5.0, -0.1, 0.1, 4.9, 5.0, 5.1, 10.0])
         )
-        assert np.all(valid == np.array([False, True, True, True, False])), "Validity does not match expected values"
+        expected_nr_valid = 3 if end_time >= 5.0 else (2 if end_time >= 4.9 else 1)
+        assert np.all(valid == np.array([False, False, True, end_time >= 4.9, end_time >= 5.0, False, False])), "Validity does not match expected values"
+        assert interp.shape == (expected_nr_valid, 10), f"Expected interp.shape == ({expected_nr_valid}, {10}), got {interp.shape}"
 
 
 @pytest.mark.parametrize("interpolation_mode", ["nearest_neighbor", "linear"])
