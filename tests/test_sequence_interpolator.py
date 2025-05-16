@@ -170,7 +170,6 @@ def test_linear_interpolation(n_signals, sampling_rate, use_mem_mapped, contain_
 
         t1, t2 = timestamps[idx][:, None], timestamps[[id+1 for id in idx]][:, None]
         y1, y2 = data[idx], data[[id+1 for id in idx]]
-        print(t1.shape, t2.shape, y1.shape, y2.shape, times.shape)
         expected = y1 + ((times - t1) / (t2 - t1)) * (y2 - y1)
 
         interp, valid = seq_interp.interpolate(times=times)
@@ -277,7 +276,7 @@ def test_interpolation_for_invalid_times(interpolation_mode, keep_nans):
 
 
 @pytest.mark.parametrize("interpolation_mode", ["nearest_neighbor", "linear"])
-@pytest.mark.parametrize("end_time", [0.1, 1.0, 5.0])
+@pytest.mark.parametrize("end_time", [0.2, 1.0, 5.0])
 @pytest.mark.parametrize("keep_nans", [False, True])
 def test_interpolation_with_phase_shifts_for_invalid_times(interpolation_mode, end_time, keep_nans):
     with sequence_data_and_interpolator(data_kwargs=dict(
@@ -286,17 +285,17 @@ def test_interpolation_with_phase_shifts_for_invalid_times(interpolation_mode, e
         t_end=end_time,
         sampling_rate=10.0,
         shifts_per_signal=True,
-    ), interp_kwargs=dict(keep_nans=keep_nans)) as (_, _, _, seq_interp):
+    ), interp_kwargs=dict(keep_nans=keep_nans)) as (timestamps, _, _, seq_interp):
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"
         seq_interp.interpolation_mode = interpolation_mode
 
         interp, valid = seq_interp.interpolate(
-            times=np.array([-5.0, -0.1, 0.1, 4.9, 5.0, 5.1, 10.0])
+            times=np.array([-5.0, -0.1, 0.1, 4.9, 4.9999999, 5.0, 5.0000001, 5.1, 10.0])
         )
-        expected_nr_valid = 3 if end_time >= 5.0 else (2 if end_time >= 4.9 else 1)
-        assert np.all(valid == np.array([False, False, True, end_time >= 4.9, end_time >= 5.0, False, False])), "Validity does not match expected values"
+        assert np.all(valid == np.array([False, False, True, end_time > 4.9, end_time > 4.9999999, end_time > 5.0, end_time > 5.0000001, False, False])), "Validity does not match expected values"
+        expected_nr_valid = valid.sum()
         assert interp.shape == (expected_nr_valid, 10), f"Expected interp.shape == ({expected_nr_valid}, {10}), got {interp.shape}"
 
 

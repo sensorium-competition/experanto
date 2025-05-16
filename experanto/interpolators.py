@@ -154,9 +154,7 @@ class SequenceInterpolator(Interpolator):
         if len(valid_times) == 0:
             return np.array([]), valid
         
-        idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
-            int
-        )
+        idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(int)
 
         if self.interpolation_mode == "nearest_neighbor":
             data = self._data[idx_lower]
@@ -165,7 +163,14 @@ class SequenceInterpolator(Interpolator):
         elif self.interpolation_mode == "linear":
 
             idx_upper = idx_lower + 1
-            overflow_mask = (idx_upper >= self._data.shape[0]) | (idx_lower < 0)
+            overflow_mask = idx_upper >= self._data.shape[0]
+
+            if np.any(idx_lower < 0): # should not be possible
+                warnings.warn(
+                    f"Interpolation index {idx_lower} is negative. This should not happen."
+                )
+                overflow_mask = overflow_mask | idx_lower < 0
+
             compute_mask = ~overflow_mask
                 
             idx_upper = idx_upper[compute_mask]
