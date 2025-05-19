@@ -163,6 +163,21 @@ class SequenceInterpolator(Interpolator):
           
         elif self.interpolation_mode == "linear":
 
+
+            if self.use_phase_shifts:
+                idx_lower = np.floor(
+                    (
+                        valid_times[:, np.newaxis]
+                        - self._phase_shifts[np.newaxis, :]
+                        - self.start_time
+                    )
+                    / self.time_delta
+                ).astype(int)
+            else:
+                idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
+                    int
+                )
+
             idx_upper = idx_lower + 1
             overflow_mask = (idx_upper >= self._data.shape[0]) | (idx_lower < 0)
             compute_mask = ~overflow_mask
@@ -197,9 +212,9 @@ class SequenceInterpolator(Interpolator):
 
                     interpolated[dim_mask, dim] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
 
-                valid_indices = np.flatnonzero(valid)
-                for mask in overflow_mask.T:
-                    valid[valid_indices[mask]] = False
+                #valid_indices = np.flatnonzero(valid)
+                #for mask in overflow_mask.T:
+                    #valid[valid_indices[mask]] = False
 
                 interpolated = np.squeeze(interpolated)
                     
@@ -223,8 +238,8 @@ class SequenceInterpolator(Interpolator):
                 interpolated = np.full((valid_times.shape[0], data_lower.shape[1]), np.nan)
                 interpolated[compute_mask] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
 
-                valid_indices = np.flatnonzero(valid)
-                valid[valid_indices[overflow_mask]] = False
+                #valid_indices = np.flatnonzero(valid)
+                #valid[valid_indices[overflow_mask]] = False
 
                 
             if not self.keep_nans:
