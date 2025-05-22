@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import typing
@@ -11,11 +12,9 @@ import cv2
 import numpy as np
 import numpy.lib.format as fmt
 import yaml
-import json
-
-from .utils import linear_interpolate_1d_sequence, linear_interpolate_sequences
 
 from .intervals import TimeInterval
+from .utils import linear_interpolate_1d_sequence, linear_interpolate_sequences
 
 
 class Interpolator:
@@ -57,7 +56,7 @@ class SequenceInterpolator(Interpolator):
     def __init__(
         self,
         root_folder: str,
-        cache_data: bool = False, # already cached, put it here for consistency
+        cache_data: bool = False,  # already cached, put it here for consistency
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
         interp_window: int = 5,
@@ -108,7 +107,9 @@ class SequenceInterpolator(Interpolator):
 
         is_memmap = isinstance(self._data, np.memmap)
         if cache_data and is_memmap:
-            self._data = np.array(self._data).astype(np.float32)  # Convert memmap to ndarray
+            self._data = np.array(self._data).astype(
+                np.float32
+            )  # Convert memmap to ndarray
 
         if self.normalize:
             self.normalize_init()
@@ -137,10 +138,9 @@ class SequenceInterpolator(Interpolator):
             data = data - self.mean
         data = data * self._precision
         return data
-            
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        
+
         valid = self.valid_times(times)
         valid_times = times[valid]
         if self.interpolation_mode == "nearest_neighbor":
@@ -153,28 +153,46 @@ class SequenceInterpolator(Interpolator):
                     )
                     / self.time_delta
                 ).astype(int)
-                data = np.take_along_axis(self._data, idx_lower, axis=0).astype(np.float32)
-            else:
-                idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
-                    int
+                data = np.take_along_axis(self._data, idx_lower, axis=0).astype(
+                    np.float32
                 )
+            else:
+                idx_lower = np.floor(
+                    (valid_times - self.start_time) / self.time_delta
+                ).astype(int)
                 data = self._data[idx_lower].astype(np.float32)
             return data, valid
-          
+
         elif self.interpolation_mode == "linear":
+
+            if self.use_phase_shifts:
+                idx_lower = np.floor(
+                    (
+                        valid_times[:, np.newaxis]
+                        - self._phase_shifts[np.newaxis, :]
+                        - self.start_time
+                    )
+                    / self.time_delta
+                ).astype(int)
+            else:
+                idx_lower = np.floor(
+                    (valid_times - self.start_time) / self.time_delta
+                ).astype(int)
 
             idx_upper = idx_lower + 1
             overflow_mask = (idx_upper >= self._data.shape[0]) | (idx_lower < 0)
             compute_mask = ~overflow_mask
-            
+
             if self.use_phase_shifts:
 
                 valid_times = valid_times[:, None]
-                interpolated = np.full((valid_times.shape[0], idx_lower.shape[1], 1), np.nan)
+                interpolated = np.full(
+                    (valid_times.shape[0], idx_lower.shape[1], 1), np.nan
+                )
 
-                for dim in range (idx_upper.shape[1]):
+                for dim in range(idx_upper.shape[1]):
 
-                    dim_mask = compute_mask[:,dim]
+                    dim_mask = compute_mask[:, dim]
 
                     idx_lower_single_dim = idx_lower[dim_mask, dim]
                     idx_upper_single_dim = idx_upper[dim_mask, dim]
@@ -187,46 +205,49 @@ class SequenceInterpolator(Interpolator):
 
                     lower_numerator = times_upper - time_dim
                     upper_numerator = time_dim - times_lower
-                    
-                    lower_signal_ratio = (lower_numerator / denom)
-                    upper_signal_ratio = (upper_numerator / denom)
-    
+
+                    lower_signal_ratio = lower_numerator / denom
+                    upper_signal_ratio = upper_numerator / denom
+
                     data_lower = self._data[idx_lower_single_dim, dim][:, None]
                     data_upper = self._data[idx_upper_single_dim, dim][:, None]
 
+                    interpolated[dim_mask, dim] = (
+                        lower_signal_ratio * data_lower
+                        + upper_signal_ratio * data_upper
+                    )
 
-                    interpolated[dim_mask, dim] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
-
-                valid_indices = np.flatnonzero(valid)
-                for mask in overflow_mask.T:
-                    valid[valid_indices[mask]] = False
-
+                # Combine all masks
+                combined_mask = overflow_mask.any(axis=0)
+                valid = valid[~combined_mask]
                 interpolated = np.squeeze(interpolated)
-                    
+
             else:
-                
+
                 idx_upper = idx_upper[compute_mask]
                 idx_lower = idx_lower[compute_mask]
-            
+
                 times_lower = idx_lower * self.time_delta
                 times_upper = idx_upper * self.time_delta
                 denom = times_upper - times_lower
-                
+
                 times_valid = valid_times[compute_mask]
-                
+
                 lower_signal_ratio = ((times_upper - times_valid) / denom)[:, None]
                 upper_signal_ratio = ((times_valid - times_lower) / denom)[:, None]
-        
+
                 data_lower = self._data[idx_lower]
                 data_upper = self._data[idx_upper]
 
-                interpolated = np.full((valid_times.shape[0], data_lower.shape[1]), np.nan)
-                interpolated[compute_mask] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+                interpolated = np.full(
+                    (valid_times.shape[0], data_lower.shape[1]), np.nan
+                )
+                interpolated[compute_mask] = (
+                    lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+                )
 
-                valid_indices = np.flatnonzero(valid)
-                valid[valid_indices[overflow_mask]] = False
+                valid = valid[~overflow_mask]
 
-                
             if not self.keep_nans:
                 neuron_means = np.nanmean(interpolated, axis=0)
                 # Replace NaNs with the column means directly
@@ -238,7 +259,7 @@ class SequenceInterpolator(Interpolator):
             raise NotImplementedError(
                 f"interpolation_mode should be linear or nearest_neighbor"
             )
-            
+
 
 class ScreenInterpolator(Interpolator):
     def __init__(
@@ -311,17 +332,17 @@ class ScreenInterpolator(Interpolator):
             for f in (self.root_folder / "meta").iterdir()
             if f.is_file() and is_numbered_yml(f.name)
         ]
-        meta_files.sort(key=lambda f: int(os.path.splitext(f.name)[0]))        
+        meta_files.sort(key=lambda f: int(os.path.splitext(f.name)[0]))
 
         # Read each YAML file and store under its filename
         for meta_file in meta_files:
-            with open(meta_file, 'r') as file:
+            with open(meta_file, "r") as file:
                 file_base_name = meta_file.stem
                 yaml_content = yaml.safe_load(file)
                 all_data[file_base_name] = yaml_content
 
         output_path = self.root_folder / "combined_meta.json"
-        with open(output_path, 'w') as file:
+        with open(output_path, "w") as file:
             json.dump(all_data, file)
 
     def read_combined_meta(self) -> None:
@@ -329,9 +350,9 @@ class ScreenInterpolator(Interpolator):
             print("Combining metadatas...")
             self._combine_metadatas()
 
-        with open(self.root_folder / "combined_meta.json", 'r') as file:
+        with open(self.root_folder / "combined_meta.json", "r") as file:
             self.combined_meta = json.load(file)
-        
+
         metadatas = []
         keys = []
         for key, value in self.combined_meta.items():
@@ -339,7 +360,7 @@ class ScreenInterpolator(Interpolator):
             keys.append(key)
 
         return metadatas, keys
-    
+
     def _parse_trials(self) -> None:
         self.trials = []
         metadatas, keys = self.read_combined_meta()
@@ -347,11 +368,11 @@ class ScreenInterpolator(Interpolator):
         for key, metadata in zip(keys, metadatas):
             data_file_name = self.root_folder / "data" / f"{key}.npy"
             # Pass the cache_trials parameter when creating trials
-            self.trials.append(ScreenTrial.create(
-                data_file_name, 
-                metadata,
-                cache_data=self.cache_trials
-            ))
+            self.trials.append(
+                ScreenTrial.create(
+                    data_file_name, metadata, cache_data=self.cache_trials
+                )
+            )
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
@@ -374,7 +395,9 @@ class ScreenInterpolator(Interpolator):
             data = self.trials[u_idx].get_data()
             # TODO: establish convention of dimensons for time/channels. Then we can remove this
             # TODO: revisit this for on the fly decoding
-            if ((len(data.shape) == 2) or (data.shape[-1] == 3)) and (len(data.shape) < 4):
+            if ((len(data.shape) == 2) or (data.shape[-1] == 3)) and (
+                len(data.shape) < 4
+            ):
 
                 data = np.expand_dims(data, axis=0)
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
@@ -424,7 +447,9 @@ class ScreenTrial:
             self._cached_data = self.get_data_()
 
     @staticmethod
-    def create(data_file_name: str, meta_data: dict, cache_data: bool = False) -> "ScreenTrial":
+    def create(
+        data_file_name: str, meta_data: dict, cache_data: bool = False
+    ) -> "ScreenTrial":
         modality = meta_data.get("modality")
         class_name = modality.lower().capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"

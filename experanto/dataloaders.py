@@ -1,24 +1,27 @@
-from typing import Any, Dict, List, Optional, Union, Type
+import logging
 import os
 import time
 import warnings
 from pathlib import Path
-import logging
+from typing import Any, Dict, List, Optional, Type, Union
+
+import numpy as np
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
-import numpy as np
 
 from .datasets import ChunkDataset
-from .utils import MultiEpochsDataLoader, LongCycler, SessionConcatDataset, FastSessionDataLoader
-
+from .utils import (FastSessionDataLoader, LongCycler, MultiEpochsDataLoader,
+                    SessionConcatDataset)
 
 logger = logging.getLogger(__name__)
 
 
-def get_multisession_dataloader(paths: List[str],
-                                configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
-                                shuffle_keys: bool = False,
-                                **kwargs) -> DataLoader:
+def get_multisession_dataloader(
+    paths: List[str],
+    configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
+    shuffle_keys: bool = False,
+    **kwargs,
+) -> DataLoader:
     """
     Create a multisession dataloader from a list of paths and corresponding configs.
     Args:
@@ -37,7 +40,6 @@ def get_multisession_dataloader(paths: List[str],
     if isinstance(configs, (DictConfig, dict)):
         configs = [configs] * len(paths)
 
-
     dataloaders = {}
     for i, (path, cfg) in enumerate(zip(paths, configs)):
         # TODO use saved meta dict to find data key
@@ -48,19 +50,21 @@ def get_multisession_dataloader(paths: List[str],
         else:
             dataset_name = f"session_{i}"
         dataset = ChunkDataset(path, **cfg.dataset)
-        dataloaders[dataset_name] = MultiEpochsDataLoader(dataset,
-                                                          **cfg.dataloader,)
-
-
+        dataloaders[dataset_name] = MultiEpochsDataLoader(
+            dataset,
+            **cfg.dataloader,
+        )
 
     return LongCycler(dataloaders)
 
 
-def get_multisession_concat_dataloader(paths: List[str],
-                                       configs: Union[Dict, List[Dict]] = None,
-                                       seed: Optional[int] = 0,
-                                       dataloader_config: Optional[Dict] = None,
-                                       **kwargs) -> 'FastSessionDataLoader':
+def get_multisession_concat_dataloader(
+    paths: List[str],
+    configs: Union[Dict, List[Dict]] = None,
+    seed: Optional[int] = 0,
+    dataloader_config: Optional[Dict] = None,
+    **kwargs,
+) -> "FastSessionDataLoader":
     """
     Creates a multi-session dataloader using SessionConcatDataset and SessionDataLoader.
     Returns (session_key, batch) pairs during iteration.
@@ -95,10 +99,10 @@ def get_multisession_concat_dataloader(paths: List[str],
         dataset_seed = seed + path_hash if seed is not None else None
 
         # Set specific seed for this dataset if needed
-        if hasattr(cfg.get('dataset', {}), 'seed') and dataset_seed is not None:
-            cfg['dataset']['seed'] = dataset_seed
+        if hasattr(cfg.get("dataset", {}), "seed") and dataset_seed is not None:
+            cfg["dataset"]["seed"] = dataset_seed
         if "dataset" in cfg:
-            cfg = cfg['dataset']
+            cfg = cfg["dataset"]
         try:
             # Assuming ChunkDataset is defined elsewhere
             dataset = ChunkDataset(path, **cfg)
@@ -114,17 +118,12 @@ def get_multisession_concat_dataloader(paths: List[str],
     if not datasets:
         return None
 
-
     # Create the concatenated dataset
     concat_dataset = SessionConcatDataset(datasets, session_names)
 
     # Get dataloader config from the first config
     if dataloader_config is None:
-        dataloader_config = dict(configs[0].get('dataloader', {}))
+        dataloader_config = dict(configs[0].get("dataloader", {}))
 
     # Create the dataloader with our simplified implementation
-    return FastSessionDataLoader(
-        dataset=concat_dataset,
-        seed=seed,
-        **dataloader_config
-    )
+    return FastSessionDataLoader(dataset=concat_dataset, seed=seed, **dataloader_config)
