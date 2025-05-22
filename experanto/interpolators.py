@@ -94,7 +94,6 @@ class SequenceInterpolator(Interpolator):
 
         self.n_signals = meta["n_signals"]
         # read .mem (memmap) or .npy file
-        breakpoint()
         if self.is_mem_mapped:
             self._data = np.memmap(
                 self.root_folder / "data.mem",
@@ -180,7 +179,6 @@ class SequenceInterpolator(Interpolator):
             data_upper = self._data[idx_upper]
 
             interpolated = np.full((valid_times.shape[0], data_lower.shape[1]), np.nan)
-            breakpoint()
             interpolated[compute_mask] = lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
 
             valid = valid[~overflow_mask]

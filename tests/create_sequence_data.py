@@ -46,7 +46,6 @@ def create_sequence_data(
             nan_indices = np.random.choice(data.size, size=int(0.1 * data.size), replace=False)
             data.flat[nan_indices] = np.nan
 
-        breakpoint()
         if not use_mem_mapped:
             np.save(SEQUENCE_ROOT / "data.npy", data)
         else:
