@@ -217,10 +217,9 @@ class SequenceInterpolator(Interpolator):
                         + upper_signal_ratio * data_upper
                     )
 
-                # valid_indices = np.flatnonzero(valid)
-                # for mask in overflow_mask.T:
-                # valid[valid_indices[mask]] = False
-
+                # Combine all masks
+                combined_mask = overflow_mask.any(axis=0)
+                valid = valid[~combined_mask]
                 interpolated = np.squeeze(interpolated)
 
             else:
@@ -247,8 +246,7 @@ class SequenceInterpolator(Interpolator):
                     lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
                 )
 
-                # valid_indices = np.flatnonzero(valid)
-                # valid[valid_indices[overflow_mask]] = False
+                valid = valid[~overflow_mask]
 
             if not self.keep_nans:
                 neuron_means = np.nanmean(interpolated, axis=0)

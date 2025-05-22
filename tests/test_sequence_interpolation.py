@@ -100,11 +100,12 @@ def test_sequence_data(shifts_per_signal, sampling_rate, use_mem_mapped):
         ), "Interpolation object is not a SequenceInterpolator"
 
         if not shifts_per_signal:
+            times = timestamps[:10] + 1e-9
             interp, valid = seq_interp.interpolate(
-                times=timestamps[:10] + 1e-9
+                times
             )  # Add a small epsilon to avoid floating point errors
             assert np.allclose(interp, data[:10]), "Data does not match original data"
-            # assert np.all(valid), "All samples should be valid"
+            assert valid.shape == times.shape, "All samples should be valid"
         else:
             delta_t = 1.0 / sampling_rate
             idx = slice(1, 11)
@@ -119,7 +120,7 @@ def test_sequence_data(shifts_per_signal, sampling_rate, use_mem_mapped):
             assert np.allclose(
                 interp, data[ret_idx]
             ), "Data does not match original data"
-            # assert np.all(valid), "All samples should be valid"
+            assert valid.shape == times.shape, "All samples should be valid"
 
             # Test phase shifts
             for i in range(data.shape[1]):

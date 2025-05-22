@@ -19,7 +19,7 @@ def create_screen_data(
         data_dir.mkdir(parents=True, exist_ok=True)
         meta_dir.mkdir(parents=True, exist_ok=True)
 
-        n_frames = int(np.round(duration * fps))
+        n_frames = int(np.floor(duration * fps))
         timestamps = np.linspace(0.0, duration, n_frames, endpoint=False)
         np.save(SCREEN_ROOT / "timestamps.npy", timestamps)
 

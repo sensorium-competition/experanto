@@ -494,9 +494,10 @@ class ChunkDataset(Dataset):
                 ]
                 transform_list.insert(0, add_channel)
             else:
-                transform_list = [
-                    Compose([ToImage(), ToDtype(torch.float32, scale=True)])
-                ]
+
+                transform_list = Compose([
+                    lambda arr: torch.from_numpy(arr.transpose((2, 0, 1))).contiguous()
+                ])
 
             # Normalization.
             if self.modality_config[device_name].transforms.get("normalization", False):
