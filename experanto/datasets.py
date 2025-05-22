@@ -16,7 +16,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.utils.data import Dataset
 from torchvision.transforms import v2
-from torchvision.transforms.v2 import Compose, Lambda, ToDtype, ToImage
+from torchvision.transforms.v2 import Compose, Lambda, ToTensor
 
 from .configs import DEFAULT_MODALITY_CONFIG
 from .experiment import Experiment
