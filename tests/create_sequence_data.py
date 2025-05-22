@@ -26,7 +26,7 @@ def create_sequence_data(
         meta = {
             "start_time": 0,
             "end_time": t_end,
-            "modality": "phase_shifted_sequence" if shifts_per_signal else "sequence",
+            "modality": "sequence",
             "sampling_rate": sampling_rate,
             "phase_shift_per_signal": shifts_per_signal,
             "is_mem_mapped": use_mem_mapped,

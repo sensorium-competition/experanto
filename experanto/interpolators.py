@@ -48,9 +48,20 @@ class Interpolator:
         with open(Path(root_folder) / "meta.yml", "r") as file:
             meta_data = yaml.load(file, Loader=yaml.SafeLoader)
         modality = meta_data.get("modality")
-        class_name = modality.title().replace("_", "") + "Interpolator"
-        assert class_name in globals(), f"Unknown modality: {modality}"
-        return globals()[class_name](root_folder, cache_data, **kwargs)
+
+        if modality == "sequence":
+            if meta_data.get("phase_shift_per_signal", False):
+                return PhaseShiftedSequenceInterpolator(
+                    root_folder, cache_data, **kwargs
+                )
+            else:
+                return SequenceInterpolator(root_folder, cache_data, **kwargs)
+        elif modality == "screen":
+            return ScreenInterpolator(root_folder, cache_data, **kwargs)
+        else:
+            raise ValueError(
+                f"There is no interpolator for {modality}. Please use 'sequence' or 'screen' as modality."
+            )
 
     def valid_times(self, times: np.ndarray) -> np.ndarray:
         return self.valid_interval.intersect(times)
