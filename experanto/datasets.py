@@ -495,7 +495,7 @@ class ChunkDataset(Dataset):
                 transform_list.insert(0, add_channel)
             else:
 
-                 transform_list = [ToTensor()]
+                transform_list = [ToTensor()]
 
             # Normalization.
             if self.modality_config[device_name].transforms.get("normalization", False):
