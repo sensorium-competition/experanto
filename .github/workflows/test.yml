@@ -31,7 +31,7 @@ jobs:
       - name: Run Black and Isort
         run: |
           # Check if event is a push to the same repo where workflow runs
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.repository }}" == "${{ github.ref_repository }}" ]]; then
+          if [[ "${{ github.event_name }}" == "push" ]]; then
             echo "Push to own repo detected: Running black and isort with auto-format and commit"
             black .
             isort .
