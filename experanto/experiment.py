@@ -8,8 +8,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .interpolators import Interpolator
 from .configs import DEFAULT_MODALITY_CONFIG
+from .interpolators import Interpolator
 
 log = logging.getLogger(__name__)
 
@@ -19,17 +19,20 @@ class Experiment:
         self,
         root_folder: str,
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
+        cache_data: bool = False,
     ) -> None:
         """
         root_folder: path to the data folder
         interp_config: dict for configuring interpolators, like
             interp_config = {"screen": {...}, {"eye_tracker": {...}, }
+        cache_data: if True, loads and keeps all trial data in memory
         """
         self.root_folder = Path(root_folder)
         self.devices = dict()
         self.start_time = np.inf
         self.end_time = -np.inf
         self.modality_config = modality_config
+        self.cache_data = cache_data
         self._load_devices()
 
     def _load_devices(self) -> None:
@@ -42,7 +45,11 @@ class Experiment:
                 log.info(f"Skipping {d.name} data... ")
                 continue
             log.info(f"Parsing {d.name} data... ")
-            dev = Interpolator.create(d, **self.modality_config[d.name]["interpolation"])
+            dev = Interpolator.create(
+                d,
+                cache_data=self.cache_data,
+                **self.modality_config[d.name]["interpolation"],
+            )
             self.devices[d.name] = dev
             self.start_time = dev.start_time
             self.end_time = dev.end_time

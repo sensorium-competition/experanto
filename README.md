@@ -25,3 +25,4 @@ pip install -e /path_to/sensorium_2023
 (Repository: [sensorium_2023](https://github.com/ecker-lab/sensorium_2023))
 
 Ensure you replace `/path_to/` with the actual path to the cloned repositories.
+

@@ -1,19 +1,27 @@
-from contextlib import contextmanager, closing
 import shutil
-import yaml
+from contextlib import contextmanager, closing
 from pathlib import Path
+
 import numpy as np
 from experanto.interpolators import Interpolator
+import yaml
 
 SEQUENCE_ROOT = Path("tests/sequence_data")
 
 
 @contextmanager
-def create_sequence_data(n_signals = 10, shifts_per_signal = False, use_mem_mapped = False, t_end = 10.0, sampling_rate = 10.0, contain_nans=False):
-    try: 
+def create_sequence_data(
+    n_signals=10,
+    shifts_per_signal=False,
+    use_mem_mapped=False,
+    t_end=10.0,
+    sampling_rate=10.0,
+    contain_nans=False,
+):
+    try:
         SEQUENCE_ROOT.mkdir(parents=True, exist_ok=True)
         (SEQUENCE_ROOT / "meta").mkdir(parents=True, exist_ok=True)
-        
+
         meta = {
             "start_time": 0,
             "end_time": t_end,
@@ -23,12 +31,14 @@ def create_sequence_data(n_signals = 10, shifts_per_signal = False, use_mem_mapp
             "is_mem_mapped": use_mem_mapped,
             "n_signals": n_signals,
         }
-        
-            
-        timestamps = np.linspace(meta["start_time"], meta["end_time"], int((meta["end_time"] - meta["start_time"]) * meta["sampling_rate"]) + 1)
+
+        timestamps = np.linspace(
+            meta["start_time"],
+            meta["end_time"],
+            int((meta["end_time"] - meta["start_time"]) * meta["sampling_rate"]) + 1,
+        )
         np.save(SEQUENCE_ROOT / "timestamps.npy", timestamps)
         meta["n_timestamps"] = len(timestamps)
-        
 
         data = np.random.rand(len(timestamps), n_signals)
 
@@ -36,24 +46,24 @@ def create_sequence_data(n_signals = 10, shifts_per_signal = False, use_mem_mapp
             nan_indices = np.random.choice(data.size, size=int(0.1 * data.size), replace=False)
             data.flat[nan_indices] = np.nan
 
+        breakpoint()
         if not use_mem_mapped:
             np.save(SEQUENCE_ROOT / "data.npy", data)
         else:
             filename = SEQUENCE_ROOT / "data.mem"
-            
-            fp = np.memmap(filename, dtype=data.dtype, mode='w+', shape=data.shape)
+
+            fp = np.memmap(filename, dtype=data.dtype, mode="w+", shape=data.shape)
             fp[:] = data[:]
             fp.flush()  # Ensure data is written to disk
             del fp
         meta["dtype"] = str(data.dtype)
-        
+
         if shifts_per_signal:
             shifts = np.random.rand(n_signals) / meta["sampling_rate"] * 0.9
             np.save(SEQUENCE_ROOT / "meta" / "phase_shifts.npy", shifts)
 
         with open(SEQUENCE_ROOT / "meta.yml", "w") as f:
             yaml.dump(meta, f)
-
 
         yield timestamps, data, shifts if shifts_per_signal else None
     finally:

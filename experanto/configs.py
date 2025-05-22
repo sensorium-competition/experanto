@@ -1,8 +1,13 @@
+from pathlib import Path
+
 from hydra import compose, initialize, initialize_config_dir
+from omegaconf import OmegaConf, open_dict
 
-
-with initialize(version_base=None, config_path="../configs/", ):
-    cfg = compose(config_name="default", )
+# get config relative to this file
+script_dir = Path(__file__).parent
+config_path = script_dir / ".." / "configs" / "default.yaml"
+config_path = config_path.resolve()
+cfg = OmegaConf.load(config_path)
 
 DEFAULT_CONFIG = cfg
 DEFAULT_DATASET_CONFIG = cfg.dataset
