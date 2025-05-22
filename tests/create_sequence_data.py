@@ -1,10 +1,11 @@
 import shutil
-from contextlib import contextmanager, closing
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 import numpy as np
-from experanto.interpolators import Interpolator
 import yaml
+
+from experanto.interpolators import Interpolator
 
 SEQUENCE_ROOT = Path("tests/sequence_data")
 
@@ -43,7 +44,9 @@ def create_sequence_data(
         data = np.random.rand(len(timestamps), n_signals)
 
         if contain_nans:
-            nan_indices = np.random.choice(data.size, size=int(0.1 * data.size), replace=False)
+            nan_indices = np.random.choice(
+                data.size, size=int(0.1 * data.size), replace=False
+            )
             data.flat[nan_indices] = np.nan
 
         if not use_mem_mapped:
@@ -67,11 +70,14 @@ def create_sequence_data(
         yield timestamps, data, shifts if shifts_per_signal else None
     finally:
         shutil.rmtree(SEQUENCE_ROOT)
-    
+
+
 @contextmanager
 def sequence_data_and_interpolator(data_kwargs=None, interp_kwargs=None):
     data_kwargs = data_kwargs or {}
     interp_kwargs = interp_kwargs or {}
     with create_sequence_data(**data_kwargs) as (timestamps, data, shifts):
-        with closing(Interpolator.create("tests/sequence_data", **interp_kwargs)) as seq_interp:
+        with closing(
+            Interpolator.create("tests/sequence_data", **interp_kwargs)
+        ) as seq_interp:
             yield timestamps, data, shifts, seq_interp
