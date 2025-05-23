@@ -153,7 +153,9 @@ class SequenceInterpolator(Interpolator):
         valid_times = times[valid]
 
         if len(valid_times) == 0:
-            warnings.warn('Sequence interpolation returns empty array, no valid times queried')
+            warnings.warn(
+                "Sequence interpolation returns empty array, no valid times queried"
+            )
             return np.empty((0, self._data.shape[1])), valid
 
         idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
@@ -249,7 +251,9 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
         valid_times = times[valid]
 
         if len(valid_times) == 0:
-            warnings.warn('Sequence interpolation returns empty array, no valid times queried')
+            warnings.warn(
+                "Sequence interpolation returns empty array, no valid times queried"
+            )
             return np.empty((0, self._data.shape[1])), valid
 
         idx_lower = np.floor(
