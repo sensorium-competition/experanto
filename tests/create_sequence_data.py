@@ -63,13 +63,11 @@ def create_sequence_data(
         if shifts_per_signal:
             shifts = np.random.rand(n_signals) / meta["sampling_rate"] * 0.9
             np.save(SEQUENCE_ROOT / "meta" / "phase_shifts.npy", shifts)
-        else:
-            shifts = np.zeros(n_signals)
 
         with open(SEQUENCE_ROOT / "meta.yml", "w") as f:
             yaml.dump(meta, f)
 
-        yield timestamps, data, shifts
+        yield timestamps, data, shifts if shifts_per_signal else None
     finally:
         shutil.rmtree(SEQUENCE_ROOT)
 
