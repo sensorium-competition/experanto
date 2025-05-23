@@ -14,13 +14,11 @@ import numpy.lib.format as fmt
 import yaml
 
 from .intervals import TimeInterval
-from .utils import linear_interpolate_1d_sequence, linear_interpolate_sequences
 
 
 class Interpolator:
     def __init__(self, root_folder: str) -> None:
         self.root_folder = Path(root_folder)
-        meta = self.load_meta()
         self.start_time = None
         self.end_time = None
         # Valid interval can be different to start time and end time.
@@ -39,17 +37,39 @@ class Interpolator:
     def __contains__(self, times: np.ndarray):
         return np.any(self.valid_times(times))
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
     @staticmethod
     def create(root_folder: str, cache_data: bool = False, **kwargs) -> "Interpolator":
         with open(Path(root_folder) / "meta.yml", "r") as file:
             meta_data = yaml.load(file, Loader=yaml.SafeLoader)
         modality = meta_data.get("modality")
-        class_name = modality.capitalize() + "Interpolator"
-        assert class_name in globals(), f"Unknown modality: {modality}"
-        return globals()[class_name](root_folder, cache_data, **kwargs)
+
+        if modality == "sequence":
+            if meta_data.get("phase_shift_per_signal", False):
+                return PhaseShiftedSequenceInterpolator(
+                    root_folder, cache_data, **kwargs
+                )
+            else:
+                return SequenceInterpolator(root_folder, cache_data, **kwargs)
+        elif modality == "screen":
+            return ScreenInterpolator(root_folder, cache_data, **kwargs)
+        else:
+            raise ValueError(
+                f"There is no interpolator for {modality}. Please use 'sequence' or 'screen' as modality."
+            )
 
     def valid_times(self, times: np.ndarray) -> np.ndarray:
         return self.valid_interval.intersect(times)
+
+    def close(self):
+        ...
+        # generally, nothing to do
+        # can be overwritten to close any open files or resources
 
 
 class SequenceInterpolator(Interpolator):
@@ -59,7 +79,6 @@ class SequenceInterpolator(Interpolator):
         cache_data: bool = False,  # already cached, put it here for consistency
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
-        interp_window: int = 5,
         normalize: bool = False,
         normalize_subtract_mean: bool = False,
         normalize_std_threshold: typing.Optional[float] = None,  # or 0.01
@@ -68,13 +87,10 @@ class SequenceInterpolator(Interpolator):
         """
         interpolation_mode - nearest neighbor or linear
         keep_nans - if we keep nans in linear interpolation
-        interp_window - how many points before or after the target period
-            are considered for interpolation
         """
         super().__init__(root_folder)
         meta = self.load_meta()
         self.keep_nans = keep_nans
-        self.interp_window = interp_window
         self.interpolation_mode = interpolation_mode
         self.normalize = normalize
         self.normalize_subtract_mean = normalize_subtract_mean
@@ -83,21 +99,13 @@ class SequenceInterpolator(Interpolator):
         self.time_delta = 1.0 / self.sampling_rate
         self.start_time = meta["start_time"]
         self.end_time = meta["end_time"]
+        self.is_mem_mapped = meta["is_mem_mapped"] if "is_mem_mapped" in meta else False
         # Valid interval can be different to start time and end time.
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
 
-        self.use_phase_shifts = meta["phase_shift_per_signal"]
-        if meta["phase_shift_per_signal"]:
-            self._phase_shifts = np.load(self.root_folder / "meta/phase_shifts.npy")
-            self.valid_interval = TimeInterval(
-                self.start_time + np.max(self._phase_shifts),
-                self.end_time + np.min(self._phase_shifts),
-            )
         self.n_signals = meta["n_signals"]
-        # read .npy or .mem (memmap) file
-        if (self.root_folder / "data.npy").exists():
-            self._data = np.load(self.root_folder / "data.npy")
-        else:
+        # read .mem (memmap) or .npy file
+        if self.is_mem_mapped:
             self._data = np.memmap(
                 self.root_folder / "data.mem",
                 dtype=meta["dtype"],
@@ -105,11 +113,12 @@ class SequenceInterpolator(Interpolator):
                 shape=(meta["n_timestamps"], meta["n_signals"]),
             )
 
-        is_memmap = isinstance(self._data, np.memmap)
-        if cache_data and is_memmap:
-            self._data = np.array(self._data).astype(
-                np.float32
-            )  # Convert memmap to ndarray
+            if cache_data:
+                self._data = np.array(self._data).astype(
+                    np.float32
+                )  # Convert memmap to ndarray
+        else:
+            self._data = np.load(self.root_folder / "data.npy")
 
         if self.normalize:
             self.normalize_init()
@@ -140,113 +149,157 @@ class SequenceInterpolator(Interpolator):
         return data
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-
         valid = self.valid_times(times)
         valid_times = times[valid]
+
+        if len(valid_times) == 0:
+            warnings.warn(
+                "Sequence interpolation returns empty array, no valid times queried"
+            )
+            return np.empty((0, self._data.shape[1])), valid
+
+        idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
+            int
+        )
+
         if self.interpolation_mode == "nearest_neighbor":
-            if self.use_phase_shifts:
-                idx_lower = np.floor(
-                    (
-                        valid_times[:, np.newaxis]
-                        - self._phase_shifts[np.newaxis, :]
-                        - self.start_time
-                    )
-                    / self.time_delta
-                ).astype(int)
-                data = np.take_along_axis(self._data, idx_lower, axis=0).astype(
-                    np.float32
-                )
-            else:
-                idx_lower = np.floor(
-                    (valid_times - self.start_time) / self.time_delta
-                ).astype(int)
-                data = self._data[idx_lower].astype(np.float32)
+            data = self._data[idx_lower]
+
             return data, valid
 
         elif self.interpolation_mode == "linear":
-
-            if self.use_phase_shifts:
-                idx_lower = np.floor(
-                    (
-                        valid_times[:, np.newaxis]
-                        - self._phase_shifts[np.newaxis, :]
-                        - self.start_time
-                    )
-                    / self.time_delta
-                ).astype(int)
-            else:
-                idx_lower = np.floor(
-                    (valid_times - self.start_time) / self.time_delta
-                ).astype(int)
-
             idx_upper = idx_lower + 1
-            overflow_mask = (idx_upper >= self._data.shape[0]) | (idx_lower < 0)
-            compute_mask = ~overflow_mask
+            overflow_mask = idx_upper >= self._data.shape[0]
 
-            if self.use_phase_shifts:
-
-                valid_times = valid_times[:, None]
-                interpolated = np.full(
-                    (valid_times.shape[0], idx_lower.shape[1], 1), np.nan
+            if np.any(idx_lower < 0):  # should not be possible
+                warnings.warn(
+                    f"Interpolation index {idx_lower} is negative. This should not happen."
                 )
+                overflow_mask = overflow_mask | idx_lower < 0
 
-                for dim in range(idx_upper.shape[1]):
+            valid = valid[~overflow_mask]
 
-                    dim_mask = compute_mask[:, dim]
+            idx_upper = idx_upper[~overflow_mask]
+            idx_lower = idx_lower[~overflow_mask]
 
-                    idx_lower_single_dim = idx_lower[dim_mask, dim]
-                    idx_upper_single_dim = idx_upper[dim_mask, dim]
+            times_lower = idx_lower * self.time_delta
+            times_upper = idx_upper * self.time_delta
+            denom = times_upper - times_lower
 
-                    times_lower = (idx_lower_single_dim * self.time_delta)[:, None]
-                    times_upper = (idx_upper_single_dim * self.time_delta)[:, None]
-                    denom = times_upper - times_lower
+            times_valid = valid_times[~overflow_mask]
 
-                    time_dim = valid_times[dim_mask] - self._phase_shifts[dim]
+            lower_signal_ratio = ((times_upper - times_valid) / denom)[:, None]
+            upper_signal_ratio = ((times_valid - times_lower) / denom)[:, None]
 
-                    lower_numerator = times_upper - time_dim
-                    upper_numerator = time_dim - times_lower
+            data_lower = self._data[idx_lower]
+            data_upper = self._data[idx_upper]
 
-                    lower_signal_ratio = lower_numerator / denom
-                    upper_signal_ratio = upper_numerator / denom
+            interpolated = (
+                lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+            )
 
-                    data_lower = self._data[idx_lower_single_dim, dim][:, None]
-                    data_upper = self._data[idx_upper_single_dim, dim][:, None]
+            if not self.keep_nans:
+                neuron_means = np.nanmean(interpolated, axis=0)
+                # Replace NaNs with the column means directly
+                np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
 
-                    interpolated[dim_mask, dim] = (
-                        lower_signal_ratio * data_lower
-                        + upper_signal_ratio * data_upper
-                    )
+            return interpolated, valid
 
-                # Combine all masks
-                combined_mask = overflow_mask.any(axis=0)
-                valid = valid[~combined_mask]
-                interpolated = np.squeeze(interpolated)
+        else:
+            raise NotImplementedError(
+                f"interpolation_mode should be linear or nearest_neighbor"
+            )
 
-            else:
+    def close(self) -> None:
+        super().close()
+        del self._data
 
-                idx_upper = idx_upper[compute_mask]
-                idx_lower = idx_lower[compute_mask]
 
-                times_lower = idx_lower * self.time_delta
-                times_upper = idx_upper * self.time_delta
-                denom = times_upper - times_lower
+class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
+    def __init__(
+        self,
+        root_folder: str,
+        cache_data: bool = False,  # already cached, put it here for consistency
+        keep_nans: bool = False,
+        interpolation_mode: str = "nearest_neighbor",
+        normalize: bool = False,
+        normalize_subtract_mean: bool = False,
+        normalize_std_threshold: typing.Optional[float] = None,  # or 0.01
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            root_folder,
+            cache_data=cache_data,
+            keep_nans=keep_nans,
+            interpolation_mode=interpolation_mode,
+            normalize=normalize,
+            normalize_subtract_mean=normalize_subtract_mean,
+            normalize_std_threshold=normalize_std_threshold,
+            **kwargs,
+        )
 
-                times_valid = valid_times[compute_mask]
+        self._phase_shifts = np.load(self.root_folder / "meta/phase_shifts.npy")
+        self.valid_interval = TimeInterval(
+            self.start_time
+            + (np.max(self._phase_shifts) if len(self._phase_shifts) > 0 else 0),
+            self.end_time
+            + (np.min(self._phase_shifts) if len(self._phase_shifts) > 0 else 0),
+        )
 
-                lower_signal_ratio = ((times_upper - times_valid) / denom)[:, None]
-                upper_signal_ratio = ((times_valid - times_lower) / denom)[:, None]
+    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        valid = self.valid_times(times)
+        valid_times = times[valid]
 
-                data_lower = self._data[idx_lower]
-                data_upper = self._data[idx_upper]
+        if len(valid_times) == 0:
+            warnings.warn(
+                "Sequence interpolation returns empty array, no valid times queried"
+            )
+            return np.empty((0, self._data.shape[1])), valid
 
-                interpolated = np.full(
-                    (valid_times.shape[0], data_lower.shape[1]), np.nan
+        idx_lower = np.floor(
+            (
+                valid_times[:, np.newaxis]
+                - self._phase_shifts[np.newaxis, :]
+                - self.start_time
+            )
+            / self.time_delta
+        ).astype(int)
+
+        if self.interpolation_mode == "nearest_neighbor":
+            data = np.take_along_axis(self._data, idx_lower, axis=0)
+            return data, valid
+
+        elif self.interpolation_mode == "linear":
+            idx_upper = idx_lower + 1
+            overflow_mask = idx_upper >= self._data.shape[0]
+
+            if np.any(idx_lower < 0):  # should not be possible
+                warnings.warn(
+                    f"Interpolation index {idx_lower} is negative. This should not happen."
                 )
-                interpolated[compute_mask] = (
-                    lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
-                )
+                overflow_mask = overflow_mask | idx_lower < 0
 
-                valid = valid[~overflow_mask]
+            valid = valid[~overflow_mask.any(axis=1)]
+
+            times_lower = idx_lower * self.time_delta
+            times_upper = idx_upper * self.time_delta
+            denom = times_upper - times_lower
+
+            time_dim = valid_times[:, np.newaxis] - self._phase_shifts[np.newaxis, :]
+
+            lower_numerator = times_upper - time_dim
+            upper_numerator = time_dim - times_lower
+
+            lower_signal_ratio = lower_numerator / denom
+            upper_signal_ratio = upper_numerator / denom
+
+            _, cols = np.indices(idx_lower.shape)
+            data_lower = self._data[idx_lower, cols]
+            data_upper = self._data[idx_upper, cols]
+
+            interpolated = (
+                lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+            )
 
             if not self.keep_nans:
                 neuron_means = np.nanmean(interpolated, axis=0)
