@@ -153,7 +153,8 @@ class SequenceInterpolator(Interpolator):
         valid_times = times[valid]
 
         if len(valid_times) == 0:
-            return np.array([]), valid
+            warnings.warn('Sequence interpolation returns empty array, no valid times queried')
+            return np.empty((0, self._data.shape[1])), valid
 
         idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
             int
@@ -174,16 +175,16 @@ class SequenceInterpolator(Interpolator):
                 )
                 overflow_mask = overflow_mask | idx_lower < 0
 
-            compute_mask = ~overflow_mask
+            valid = valid[~overflow_mask]
 
-            idx_upper = idx_upper[compute_mask]
-            idx_lower = idx_lower[compute_mask]
+            idx_upper = idx_upper[~overflow_mask]
+            idx_lower = idx_lower[~overflow_mask]
 
             times_lower = idx_lower * self.time_delta
             times_upper = idx_upper * self.time_delta
             denom = times_upper - times_lower
 
-            times_valid = valid_times[compute_mask]
+            times_valid = valid_times[~overflow_mask]
 
             lower_signal_ratio = ((times_upper - times_valid) / denom)[:, None]
             upper_signal_ratio = ((times_valid - times_lower) / denom)[:, None]
@@ -191,12 +192,9 @@ class SequenceInterpolator(Interpolator):
             data_lower = self._data[idx_lower]
             data_upper = self._data[idx_upper]
 
-            interpolated = np.full((valid_times.shape[0], data_lower.shape[1]), np.nan)
-            interpolated[compute_mask] = (
+            interpolated = (
                 lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
             )
-
-            valid = valid[~overflow_mask]
 
             if not self.keep_nans:
                 neuron_means = np.nanmean(interpolated, axis=0)
@@ -251,7 +249,8 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
         valid_times = times[valid]
 
         if len(valid_times) == 0:
-            return np.array([]), valid
+            warnings.warn('Sequence interpolation returns empty array, no valid times queried')
+            return np.empty((0, self._data.shape[1])), valid
 
         idx_lower = np.floor(
             (
@@ -276,6 +275,8 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
                 )
                 overflow_mask = overflow_mask | idx_lower < 0
 
+            valid = valid[~overflow_mask.any(axis=1)]
+
             times_lower = idx_lower * self.time_delta
             times_upper = idx_upper * self.time_delta
             denom = times_upper - times_lower
@@ -295,8 +296,6 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             interpolated = (
                 lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
             )
-
-            valid = valid[~overflow_mask.any(axis=1)]
 
             if not self.keep_nans:
                 neuron_means = np.nanmean(interpolated, axis=0)
