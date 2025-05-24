@@ -9,54 +9,6 @@ on:
       - '**'
 
 jobs:
-  lint-and-format:
-    name: Lint & Auto-format
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12.8'
-
-      - name: Install tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install "black[jupyter]" isort
-
-
-      - name: Run Black and Isort
-        run: |
-          # Check if event is a push to the same repo where workflow runs
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "Push to own repo detected: Running black and isort with auto-format and commit"
-            black .
-            isort .
-            git config user.name "github-actions"
-            git config user.email "github-actions@github.com"
-            if ! git diff --quiet; then
-              git commit -am "style: auto-format with black and isort"
-              git push
-            else
-              echo "No formatting changes to commit."
-            fi
-
-          # For PRs from same repo branches: check only
-          elif [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.head.repo.full_name }}" == "${{ github.repository }}" ]]; then
-            echo "PR from same repo branch detected: Running black and isort in check mode"
-            black --check .
-            isort --check-only .
-
-          # For pushes or PRs from forks or other repos: check only
-          else
-            echo "Push or PR from fork or different repo detected: Running black and isort in check mode"
-            black --check .
-            isort --check-only .
-          fi
-
   test:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -79,3 +31,53 @@ jobs:
       - name: Run pytest
         run: |
           pytest -v tests/
+
+
+  lint-and-format:
+    name: Lint & Auto-format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.8'
+
+      - name: Install tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install "black[jupyter]==25.1.0" isort==6.0.1
+
+
+      - name: Run Black and Isort
+        run: |
+          # Check if event is a push to the same repo where workflow runs
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "Push to own repo detected: Running black and isort with auto-format and commit"
+            black .
+            isort .
+            git config user.name "github-actions"
+            git config user.email "github-actions@github.com"
+            if ! git diff --quiet; then
+              git commit -am "style: auto-format with black and isort"
+              git push
+            else
+              echo "No formatting changes to commit."
+            fi
+
+          # For PRs from same repo branches: check only
+          elif [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.head.repo.full_name }}" == "${{ github.repository }}" ]]; then
+            echo "PR from same repo branch detected: Running black and isort in check mode"
+            black --check . || { echo "❌ Black formatting issues found. Run 'black .' to fix."; exit 1; }
+            isort --check-only . || { echo "❌ isort import order issues found. Run 'isort .' to fix."; exit 1; }
+
+          # For pushes or PRs from forks or other repos: check only
+          else
+            echo "Push or PR from fork or different repo detected: Running black and isort in check mode"
+            black --check . || { echo "❌ Black formatting issues found. Run 'black .' to fix."; exit 1; }
+            isort --check-only . || { echo "❌ isort import order issues found. Run 'isort .' to fix."; exit 1; }
+          fi
+
