@@ -1,9 +1,11 @@
 import numpy as np
 
 from experanto.interpolators import Interpolator
-from experanto.intervals import (TimeInterval,
-                                 find_complement_of_interval_array,
-                                 uniquefy_interval_array)
+from experanto.intervals import (
+    TimeInterval,
+    find_complement_of_interval_array,
+    uniquefy_interval_array,
+)
 
 
 def nan_filter(vicinity=0.05):
