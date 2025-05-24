@@ -1,10 +1,8 @@
 import numpy as np
 import pytest
 
-from experanto.interpolators import (
-    PhaseShiftedSequenceInterpolator,
-    SequenceInterpolator,
-)
+from experanto.interpolators import (PhaseShiftedSequenceInterpolator,
+                                     SequenceInterpolator)
 
 from .create_sequence_data import sequence_data_and_interpolator
 

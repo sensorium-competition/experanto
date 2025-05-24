@@ -10,12 +10,8 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
 from .datasets import ChunkDataset
-from .utils import (
-    FastSessionDataLoader,
-    LongCycler,
-    MultiEpochsDataLoader,
-    SessionConcatDataset,
-)
+from .utils import (FastSessionDataLoader, LongCycler, MultiEpochsDataLoader,
+                    SessionConcatDataset)
 
 logger = logging.getLogger(__name__)
 

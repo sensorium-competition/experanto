@@ -21,11 +21,9 @@ from torchvision.transforms.v2 import Compose, Lambda, ToTensor
 from .configs import DEFAULT_MODALITY_CONFIG
 from .experiment import Experiment
 from .interpolators import ImageTrial, VideoTrial
-from .intervals import (
-    TimeInterval,
-    find_intersection_between_two_interval_arrays,
-    get_stats_for_valid_interval,
-)
+from .intervals import (TimeInterval,
+                        find_intersection_between_two_interval_arrays,
+                        get_stats_for_valid_interval)
 from .utils import add_behavior_as_channels, replace_nan_with_batch_mean
 
 # see .configs.py for the definition of DEFAULT_MODALITY_CONFIG
