@@ -257,7 +257,9 @@ class ChunkDataset(Dataset):
                     # https://github.com/sinzlab/neuralpredictors/blob/2b420058b2c0c029842ba739829114ddfa0f8b50/neuralpredictors/data/transforms.py#L375-L378
                     threshold = 0.01 * np.nanmean(stds)
                     idx = stds[0, :] < threshold  # response std shape: (1, n_neurons)
-                    stds[0, idx] = threshold  # setting stds which are smaller than threshold to threshold
+                    stds[0, idx] = (
+                        threshold  # setting stds which are smaller than threshold to threshold
+                    )
 
                 # if mode is a dict, it will override the means and stds
                 if not isinstance(mode, str):
@@ -623,10 +625,7 @@ class ChunkDataset(Dataset):
             # convert everything to int to avoid numerical issues
             start_time = int(round(s * self.scale_precision))
             offset = int(
-                round(
-                    sample_dataset.modality_config[device_name].offset
-                    * self.scale_precision
-                )
+                round(self.modality_config[device_name].offset * self.scale_precision)
             )
             time_delta = int(round((1.0 / sampling_rate) * self.scale_precision))
             # Generate times as ints - important as for np.floats the summation is not associative
