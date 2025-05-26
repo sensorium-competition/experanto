@@ -257,9 +257,7 @@ class ChunkDataset(Dataset):
                     # https://github.com/sinzlab/neuralpredictors/blob/2b420058b2c0c029842ba739829114ddfa0f8b50/neuralpredictors/data/transforms.py#L375-L378
                     threshold = 0.01 * np.nanmean(stds)
                     idx = stds[0, :] < threshold  # response std shape: (1, n_neurons)
-                    stds[0, idx] = (
-                        threshold  # setting stds which are smaller than 1 to threshold
-                    )
+                    stds[0, idx] = threshold  # setting stds which are smaller than threshold to threshold
 
                 # if mode is a dict, it will override the means and stds
                 if not isinstance(mode, str):
