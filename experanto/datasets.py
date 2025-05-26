@@ -21,9 +21,11 @@ from torchvision.transforms.v2 import Compose, Lambda, ToTensor
 from .configs import DEFAULT_MODALITY_CONFIG
 from .experiment import Experiment
 from .interpolators import ImageTrial, VideoTrial
-from .intervals import (TimeInterval,
-                        find_intersection_between_two_interval_arrays,
-                        get_stats_for_valid_interval)
+from .intervals import (
+    TimeInterval,
+    find_intersection_between_two_interval_arrays,
+    get_stats_for_valid_interval,
+)
 from .utils import add_behavior_as_channels, replace_nan_with_batch_mean
 
 # see .configs.py for the definition of DEFAULT_MODALITY_CONFIG
@@ -144,7 +146,7 @@ class ChunkDataset(Dataset):
         self.root_folder = Path(root_folder)
         self.data_key = self.get_data_key_from_root_folder(root_folder)
         self.interpolate_precision = interpolate_precision
-        self.scale_precision = 10 ** self.interpolate_precision
+        self.scale_precision = 10**self.interpolate_precision
 
         self.modality_config = instantiate(modality_config)
         self.chunk_sizes, self.sampling_rates, self.chunk_s = {}, {}, {}
@@ -255,7 +257,9 @@ class ChunkDataset(Dataset):
                     # https://github.com/sinzlab/neuralpredictors/blob/2b420058b2c0c029842ba739829114ddfa0f8b50/neuralpredictors/data/transforms.py#L375-L378
                     threshold = 0.01 * np.nanmean(stds)
                     idx = stds[0, :] < threshold  # response std shape: (1, n_neurons)
-                    stds[0, idx] = threshold  # setting stds which are smaller than 1 to threshold
+                    stds[0, idx] = (
+                        threshold  # setting stds which are smaller than 1 to threshold
+                    )
 
                 # if mode is a dict, it will override the means and stds
                 if not isinstance(mode, str):
@@ -620,11 +624,16 @@ class ChunkDataset(Dataset):
 
             # convert everything to int to avoid numerical issues
             start_time = int(round(s * self.scale_precision))
-            offset = int(round(sample_dataset.modality_config[device_name].offset * self.scale_precision))
+            offset = int(
+                round(
+                    sample_dataset.modality_config[device_name].offset
+                    * self.scale_precision
+                )
+            )
             time_delta = int(round((1.0 / sampling_rate) * self.scale_precision))
             # Generate times as ints - important as for np.floats the summation is not associative
             times = start_time + offset + np.arange(chunk_size) * time_delta
-            # scale everything back to truncated values 
+            # scale everything back to truncated values
             times = times.astype(np.float64) / self.scale_precision
 
             data, _ = self._experiment.interpolate(times, device=device_name)
