@@ -83,7 +83,7 @@ class ChunkDataset(Dataset):
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
         seed: Optional[int] = None,
         safe_interval_threshold: float = 0.5,
-        interpolate_precision: float = 5,
+        interpolate_precision: int = 5,
     ) -> None:
         """
         interpolate_precision: number of digits after the dot to keep, without it we might get different numbers from interpolation
