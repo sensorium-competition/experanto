@@ -9,6 +9,7 @@ from abc import abstractmethod
 from pathlib import Path
 
 import cv2
+from torchcodec.decoders import VideoDecoder
 import numpy as np
 import numpy.lib.format as fmt
 import yaml
@@ -419,11 +420,15 @@ class ScreenInterpolator(Interpolator):
         metadatas, keys = self.read_combined_meta()
 
         for key, metadata in zip(keys, metadatas):
-            data_file_name = self.root_folder / "data" / f"{key}.npy"
+            format = metadata.get("format")
+            if format == None: # Small check to avoid cluttering meta files with format tags for invalids and blanks
+                format = ".npy"
+            data_file_name = self.root_folder / "data" / f"{key}{format}"
+            encoded = metadata.get("encoded")
             # Pass the cache_trials parameter when creating trials
             self.trials.append(
                 ScreenTrial.create(
-                    data_file_name, metadata, cache_data=self.cache_trials
+                    data_file_name, metadata, cache_data=self.cache_trials, encoded=encoded
                 )
             )
 
@@ -501,10 +506,12 @@ class ScreenTrial:
 
     @staticmethod
     def create(
-        data_file_name: str, meta_data: dict, cache_data: bool = False
+        data_file_name: str, meta_data: dict, cache_data: bool = False, encoded: bool = False
     ) -> "ScreenTrial":
         modality = meta_data.get("modality")
         class_name = modality.lower().capitalize() + "Trial"
+        if encoded and modality in ('image', 'video'):
+            class_name = "Encoded" + class_name
         assert class_name in globals(), f"Unknown modality: {modality}"
         return globals()[class_name](data_file_name, meta_data, cache_data=cache_data)
 
@@ -534,6 +541,22 @@ class ImageTrial(ScreenTrial):
         )
 
 
+class EncodedImageTrial(ScreenTrial):
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+        super().__init__(
+            data_file_name,
+            meta_data,
+            tuple(meta_data.get("image_size")),
+            meta_data.get("first_frame_idx"),
+            1,
+            cache_data=cache_data,
+        )
+
+    def get_data_(self) -> np.array:
+        """Override base implementation to load compressed images"""
+        return cv2.imread(self.data_file_name, cv2.IMREAD_GRAYSCALE) # greyscale for compatibily with current interpolation method need to fix / generalize dims. Look todo interpolation method.
+        
+
 class VideoTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         super().__init__(
@@ -545,6 +568,24 @@ class VideoTrial(ScreenTrial):
             cache_data=cache_data,
         )
 
+
+class EncodedVideoTrial(ScreenTrial):
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+        super().__init__(
+            data_file_name,
+            meta_data,
+            tuple(meta_data.get("image_size")),
+            meta_data.get("first_frame_idx"),
+            meta_data.get("num_frames"),
+            cache_data=cache_data,
+        )
+        self.video_decoder = VideoDecoder(self.data_file_name)
+
+    def get_data_(self) -> np.array:
+        """Override base implementation to load compressed videos"""
+        full_video = np.transpose(self.video_decoder[:].numpy(), (0, 2, 3, 1)) # Important! this loads entire video right now. This is unnecessary but works with interpolation loop. Will improve if we decide on it
+        return np.array([cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in full_video]) # Quick hack to make compatible with current interpolation loop. Shapes are weird atm, look todo in interpolation method.
+            
 
 class BlankTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
