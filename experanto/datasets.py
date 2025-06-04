@@ -725,10 +725,10 @@ class ChunkDataset(Dataset):
                 if out[device_name].shape[0] == chunk_size:
                     out[device_name] = out[device_name].transpose(0, 1)
 
-            if device_name == 'responses':
-                if self._experiment.devices["responses"].use_phase_shifts:
-                    phase_shifts = self._experiment.devices["responses"]._phase_shifts
-                    times = times[:, None] + phase_shifts[None, :]
+            #if device_name == 'responses':
+            #    if self._experiment.devices["responses"].use_phase_shifts:
+            #        phase_shifts = self._experiment.devices["responses"]._phase_shifts
+            #        times = times[:, None] + phase_shifts[None, :]
 
             times = torch.from_numpy(times)
             if self.normalize_timestamps:
