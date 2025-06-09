@@ -208,9 +208,9 @@ class LongCycler:
     def __iter__(self):
         cycles = [cycle(loader) for loader in self.loaders.values()]
         for k, loader, _ in zip(
-                cycle(self.loaders.keys()),
-                (cycle(cycles)),
-                range(len(self.loaders) * self.max_batches),
+            cycle(self.loaders.keys()),
+            (cycle(cycles)),
+            range(len(self.loaders) * self.max_batches),
         ):
             yield k, next(loader)
 
@@ -231,9 +231,9 @@ class ShortCycler:
     def __iter__(self):
         cycles = [cycle(loader) for loader in self.loaders.values()]
         for k, loader, _ in zip(
-                cycle(self.loaders.keys()),
-                (cycle(cycles)),
-                range(len(self.loaders) * self.min_batches),
+            cycle(self.loaders.keys()),
+            (cycle(cycles)),
+            range(len(self.loaders) * self.min_batches),
         ):
             yield k, next(loader)
 
