@@ -20,6 +20,8 @@ def nan_filter(vicinity=0.05):
         # Create invalid TimeIntervals around each nan point
         invalid_intervals = []
         vicinity_seconds = vicinity  # vicinity is already in seconds
+        buffer = max(2 * time_delta, 0.1 * vicinity_seconds)
+        vicinity_seconds = vicinity_seconds + buffer
         for idx in nan_indices:
             time_point = start_time + idx * time_delta
             interval_start = max(start_time, time_point - vicinity_seconds)
