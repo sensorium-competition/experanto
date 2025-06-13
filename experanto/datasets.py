@@ -303,10 +303,10 @@ class ChunkDataset(Dataset):
         def __init__(self, mean, std):
             self.mean = mean
             self.std = std
-    
+
         def __call__(self, tensor):
             return (tensor - self.mean) / self.std
-    
+
     def initialize_transforms(self):
         """
         Initializes the transforms for each device based on the modality config.
@@ -323,31 +323,33 @@ class ChunkDataset(Dataset):
                     if isinstance(v, torch.nn.Module)
                 ]
                 transform_list.insert(0, add_channel)
-    
-                if self.modality_config[device_name].transforms.get("normalization", False):
+
+                if self.modality_config[device_name].transforms.get(
+                    "normalization", False
+                ):
                     transform_list.append(
                         torchvision.transforms.Normalize(
                             self._statistics[device_name]["mean"],
                             self._statistics[device_name]["std"],
                         )
                     )
-    
+
             else:
-                transform_list = [
-                    lambda x: torch.from_numpy(x).float()
-                ]
-    
+                transform_list = [lambda x: torch.from_numpy(x).float()]
+
                 # Normalisation without torchvision since it's not image data
-                if self.modality_config[device_name].transforms.get("normalization", False):
+                if self.modality_config[device_name].transforms.get(
+                    "normalization", False
+                ):
                     transform_list.append(
                         self.NormalizeTensor(
                             self._statistics[device_name]["mean"],
-                            self._statistics[device_name]["std"]
+                            self._statistics[device_name]["std"],
                         )
                     )
-    
+
             transforms[device_name] = Compose(transform_list)
-    
+
         return transforms
 
     def _get_callable_filter(self, filter_config):
@@ -686,7 +688,7 @@ class ChunkDataset(Dataset):
                     final_out[key] = out[key].contiguous()
                 else:
                     final_out[key] = out[key]
-                    
+
         return final_out
 
     def get_state(self) -> Dict[str, Any]:
