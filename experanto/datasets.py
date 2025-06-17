@@ -389,7 +389,8 @@ class ChunkDataset(Dataset):
         # the _valid_screen_times are the indices from which the starting points for the chunks will be taken
         # sampling stride is used to reduce the number of starting points by the stride
         # default of stride is 1, so all starting points are used
-        self._valid_screen_times = self._full_valid_sample_times_filtered[::self.sample_stride]
+        self._unshuffled_valid_screen_times = self._full_valid_sample_times_filtered[::self.sample_stride]
+        self._valid_screen_times = self._unshuffled_valid_screen_times.copy()
 
         self.transforms = self.initialize_transforms()
 
@@ -753,6 +754,11 @@ class ChunkDataset(Dataset):
                     final_out[key] = out[key]
 
         return final_out
+    
+    def reset_state(self):
+        """Reset the state of the dataset."""
+        # TODO: Should we reset the RNG state?
+        self._valid_screen_times = self._unshuffled_valid_screen_times.copy()
 
     def get_state(self) -> Dict[str, Any]:
         """Return the current state of the dataset's RNG."""

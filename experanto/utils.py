@@ -25,6 +25,8 @@ from torch.utils.data import ConcatDataset, Dataset, DataLoader, Sampler
 # local libraries
 from .intervals import TimeInterval
 
+logger = logging.getLogger(__name__)
+
 
 def replace_nan_with_batch_mean(data: np.array) -> np.array:
     row, col = np.where(np.isnan(data))
@@ -330,6 +332,34 @@ class SessionConcatDataset(Dataset):
         """Get number of sessions and count of samples per session."""
         return {name: end - start for name, (start, end) in self.session_indices.items()}
 
+    def reset_state(self):
+        """Reset the state of the dataset."""
+        for d in self.datasets:
+            d.reset_state()
+
+    def get_state(self):
+        """Return the state of the dataset."""
+        return {
+            'dataset_states': {
+                d.data_key: d.get_state() for d in self.datasets
+            }
+        }
+
+    def set_state(self, state, strict=False):
+        """Restore the state of the dataset."""
+        data_keys = set([d.data_key for d in self.datasets])
+        state_keys = set(state['dataset_states'].keys())
+        if not state_keys == data_keys:
+            msg = (f"SessionConcatDataset states keys do not match: "
+                  f"{state_keys} != {data_keys}")
+            if strict:
+                raise ValueError(msg)
+            logger.warning(msg)
+        for d in self.datasets:
+            dkey = d.data_key
+            if dkey in state['dataset_states']:
+                d.set_state(state['dataset_states'][d.data_key])
+
 
 class SessionBatchSampler(Sampler):
     """
@@ -397,8 +427,8 @@ class SessionBatchSampler(Sampler):
         Sessions are shuffled unless their appearance order needs to be controlled.
         """
         order = list(self.session_names)
-        self.prv_rng_state = self.rng.get_state()
         if self.shuffle:
+            self.prv_rng_state = self.rng.get_state()
             self.rng.shuffle(order)
 
         # Remove consumed sessions from order
@@ -406,6 +436,11 @@ class SessionBatchSampler(Sampler):
             order.remove(session_name)
 
         return order
+    
+    def reset_state(self):
+        """Reset the state of the sampler."""
+        # TODO: Should we reset the RNG state?
+        self.consumed_sessions = []
 
     def get_state(self):
         """Return the state of the sampler (including RNG state)."""
@@ -416,10 +451,10 @@ class SessionBatchSampler(Sampler):
 
     def set_state(self, state):
         """Restore the state of the sampler (including RNG state)."""
-        rng_state = state.get('prv_rng_state')
-        if rng_state is not None and self.rng is not None:
-            self.rng.set_state(rng_state)
-        self.prv_rng_state = None
+        self.prv_rng_state = state.get('prv_rng_state')
+        if self.prv_rng_state is not None and self.rng is not None:
+            self.rng.set_state(self.prv_rng_state)
+        # self.prv_rng_state = None
         self.consumed_sessions = state.get('consumed_sessions', [])
 
 
@@ -498,11 +533,10 @@ class FastSessionDataLoader:
 
         # State tracking variables
         self.current_batch = 0
-        self.epoch = 0
+        self.position_in_epoch = 0
         self.session_positions = {name: 0 for name in self.session_names}
-        self.batches_from_session = defaultdict(
-            int)  # Tracks batches yielded per session in the current epoch iteration
-
+        # Tracks batches yielded per session in the current epoch iteration
+        self.batches_from_session = defaultdict(int)  
         # Track active sessions
         self.active_sessions = set(self.session_names)
 
@@ -513,11 +547,23 @@ class FastSessionDataLoader:
         """Return the total number of batches in an epoch."""
         return sum(self.batches_per_session.values())
 
+    def reset_state(self):
+        """Reset the state of the dataloader."""
+        self.current_batch = 0
+        self.position_in_epoch = 0
+        for name in self.session_names:
+            self.session_positions[name] = 0
+            self.session_dataloaders[name].batch_sampler.reset_state()
+        self.batches_from_session = defaultdict(int)
+        self.active_sessions = set(self.session_names)
+        self.batch_sampler.reset_state()
+        self.dataset.reset_state()
+
     def get_state(self):
         """Return the current state of the dataloader."""
         return {
             'current_batch': self.current_batch,
-            'epoch': self.epoch,
+            'position_in_epoch': self.position_in_epoch,
             'session_positions': self.session_positions.copy(),
             'batches_from_session': self.batches_from_session.copy(),
             'active_sessions': list(self.active_sessions),  # Store as list for serialization
@@ -525,10 +571,11 @@ class FastSessionDataLoader:
             'session_sampler_states': {
                 name: dl.batch_sampler.get_state()
                 for name, dl in self.session_dataloaders.items()
-            }
+            },
+            'dataset_state': self.dataset.get_state(),
         }
 
-    def set_state(self, state):
+    def set_state(self, state, strict=False):
         """Restore the dataloader state."""
         if not state:
             return
@@ -536,18 +583,17 @@ class FastSessionDataLoader:
         # Restore batch counter
         self.current_batch = state.get('current_batch', 0)
 
-        # Restore epoch counter
-        self.epoch = state.get('epoch', 0)
+        self.position_in_epoch = state.get('position_in_epoch', 0)
 
         # Restore session positions
         session_positions = state.get('session_positions')
         if session_positions:
             self.session_positions = session_positions
 
-        # Restore RNG state for the main dataloader
-        dataloader_rng_state = state.get('dataloader_rng_state')
-        if dataloader_rng_state is not None and self.rng is not None:
-            self.rng.set_state(dataloader_rng_state)
+        # # Restore RNG state for the main dataloader
+        # dataloader_rng_state = state.get('dataloader_rng_state')
+        # if dataloader_rng_state is not None and self.rng is not None:
+        #     self.rng.set_state(dataloader_rng_state)
 
         # Restore RNG state for the batch sampler
         batch_sampler_state = state.get('batch_sampler_state')
@@ -583,8 +629,10 @@ class FastSessionDataLoader:
             sampler_state = session_sampler_states.get(session_name)
             if sampler_state is not None and hasattr(sampler, 'set_state'):
                 sampler.set_state(sampler_state)
+        
+        self.dataset.set_state(state.get('dataset_state'), strict=strict)
 
-        print(f"Restored dataloader state to batch {self.current_batch}, epoch {self.epoch}")
+        print(f"Restored dataloader state to batch {self.current_batch}")
 
     def __iter__(self):
         """
@@ -595,12 +643,6 @@ class FastSessionDataLoader:
         2. Samples within a session are properly batched and optionally shuffled
         3. The epoch ends when the longest session is exhausted
         """
-        # Track active sessions
-        active_sessions = self.active_sessions
-        # Track position within each session
-        position_in_epoch = 0
-
-        batches_from_session = self.batches_from_session
 
         # Reset session positions if needed
         for session_name in self.session_names:
@@ -620,7 +662,7 @@ class FastSessionDataLoader:
 
         # Continue until we've gone through one full epoch
         # (i.e., until the longest session is exhausted)
-        while active_sessions and position_in_epoch < self.max_batches_per_session:
+        while self.active_sessions and self.position_in_epoch < self.max_batches_per_session:
 
             # Create a cycle order of sessions
             cycle_order = self.batch_sampler.get_session_cycle()
@@ -628,12 +670,12 @@ class FastSessionDataLoader:
             # Process one batch from each active session in this cycle
             for session_name in cycle_order:
                 # Skip if session is already exhausted
-                if session_name not in active_sessions:
+                if session_name not in self.active_sessions:
                     continue
 
                 # Skip if we've already processed all batches for this session in the current epoch
-                if batches_from_session[session_name] >= self.batches_per_session.get(session_name, 0):
-                    active_sessions.remove(session_name)
+                if self.batches_from_session[session_name] >= self.batches_per_session.get(session_name, 0):
+                    self.active_sessions.remove(session_name)
                     continue
 
                 # Get iterator for this session
@@ -648,31 +690,23 @@ class FastSessionDataLoader:
                     # Update state tracking
                     self.current_batch += 1
                     self.session_positions[session_name] += 1
-                    batches_from_session[session_name] += 1  # Update local dictionary
+                    self.batches_from_session[session_name] += 1  # Update local dictionary
+                    self.batch_sampler.consumed_sessions.append(session_name)
 
                     # Yield session name and batch
                     yield session_name, batch
 
                 except StopIteration:
                     # This session is exhausted for the current epoch
-                    active_sessions.remove(session_name)
-
-                self.batch_sampler.consumed_sessions.append(session_name)
+                    self.active_sessions.remove(session_name)
 
             self.batch_sampler.consumed_sessions = []
 
             # If we've completed a full cycle, increment the position counter
-            position_in_epoch += 1
+            self.position_in_epoch += 1
 
-        # End of epoch - increment epoch counter
-        self.epoch += 1
-
-        # Reset session positions for next epoch
-        for session_name in self.session_names:
-            self.session_positions[session_name] = 0
-
-        self.batches_from_session = defaultdict(int)
-        self.active_sessions = set(self.session_names)
+        # End of epoch - reset state
+        self.reset_state()
 
 
 class SessionSpecificSampler(Sampler):
@@ -716,6 +750,11 @@ class SessionSpecificSampler(Sampler):
         """Set the current batch position."""
         self.position = position % self.num_batches if self.num_batches > 0 else 0
 
+    def reset_state(self):
+        """Reset the state of the sampler."""
+        # TODO: Should we reset the RNG state?
+        self.position = 0
+
     def get_state(self):
         """Return the state of the sampler (including RNG state)."""
         return {
@@ -724,10 +763,9 @@ class SessionSpecificSampler(Sampler):
 
     def set_state(self, state):
         """Restore the state of the sampler (including RNG state)."""
-        rng_state = state.get('prv_rng_state')
-        if rng_state is not None and self.rng is not None:
-            self.rng.set_state(rng_state)
-        self.prv_rng_state = None
+        self.prv_rng_state = state.get('prv_rng_state')
+        if self.prv_rng_state is not None and self.rng is not None:
+            self.rng.set_state(self.prv_rng_state)
 
     def __iter__(self):
         """
@@ -736,6 +774,7 @@ class SessionSpecificSampler(Sampler):
         # Create shuffled indices if needed
         if self.shuffle and self.rng is not None:
             indices = self.indices.copy()
+            self.prv_rng_state = self.rng.get_state()
             self.rng.shuffle(indices)
         else:
             indices = self.indices
@@ -756,3 +795,6 @@ class SessionSpecificSampler(Sampler):
                 continue
 
             yield batch_indices
+        
+        # Reset state
+        self.reset_state()
