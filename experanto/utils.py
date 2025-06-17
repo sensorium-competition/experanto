@@ -632,7 +632,7 @@ class FastSessionDataLoader:
         
         self.dataset.set_state(state.get('dataset_state'), strict=strict)
 
-        print(f"Restored dataloader state to batch {self.current_batch}, epoch {self.epoch}")
+        print(f"Restored dataloader state to batch {self.current_batch}")
 
     def __iter__(self):
         """
