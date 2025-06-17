@@ -421,6 +421,10 @@ class ChunkDataset(Dataset):
                 means = np.load(self._experiment.devices[device_name].root_folder / "meta/means.npy")
                 stds = np.load(self._experiment.devices[device_name].root_folder / "meta/stds.npy")
                 if device_name == "responses":
+                    if means.ndim == 1:
+                        means = means[None, :]
+                    if stds.ndim == 1:
+                        stds = stds[None, :]
                     idx = stds[0, :] < 1 # response std shape: (1, n_neurons)
                     stds[0, idx] = 1 # setting stds which are smaller than 1 to 1
 
