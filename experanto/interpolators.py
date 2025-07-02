@@ -426,10 +426,12 @@ class ScreenInterpolator(Interpolator):
 
             if format is None:
                 format = ".npy"
-            
+
             if self.image_names:
                 image_name = metadata.get("image_name")
-                data_file_name = self.root_folder.parent / "stimuli" / f"{image_name}{format}"
+                data_file_name = (
+                    self.root_folder.parent / "stimuli" / f"{image_name}{format}"
+                )
             else:
                 data_file_name = self.root_folder / "data" / f"{key}{format}"
             encoded = metadata.get("encoded")
