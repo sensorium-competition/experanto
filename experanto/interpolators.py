@@ -558,7 +558,7 @@ class ImageTrial(ScreenTrial):
         )
 
 
-class EncodedimageTrial(ScreenTrial):
+class EncodedImageTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         super().__init__(
             data_file_name,
@@ -588,7 +588,7 @@ class VideoTrial(ScreenTrial):
         )
 
 
-class EncodedvideoTrial(ScreenTrial):
+class EncodedVideoTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         super().__init__(
             data_file_name,
