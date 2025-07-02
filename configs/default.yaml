@@ -24,6 +24,7 @@ dataset:
       interpolation:
         rescale: True
         rescale_size: [144, 256]
+        image_names: False # new value that tells interpolation to load files from stimuli/data folder
     responses:
       keep_nans : False
       sampling_rate: 8

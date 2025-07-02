@@ -322,6 +322,7 @@ class ScreenInterpolator(Interpolator):
         cache_data: bool = False,  # New parameter
         rescale: bool = False,
         rescale_size: typing.Optional[tuple(int, int)] = None,
+        image_names: bool = False,
         normalize: bool = False,
         **kwargs,
     ) -> None:
@@ -335,6 +336,7 @@ class ScreenInterpolator(Interpolator):
         self.end_time = self.timestamps[-1]
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
         self.rescale = rescale
+        self.image_names = image_names
         self.cache_trials = cache_data  # Store the cache preference
         self._parse_trials()
 
@@ -420,12 +422,16 @@ class ScreenInterpolator(Interpolator):
         metadatas, keys = self.read_combined_meta()
 
         for key, metadata in zip(keys, metadatas):
-            format = metadata.get("format")
-            if (
-                format == None
-            ):  # Small check to avoid cluttering meta files with format tags for invalids and blanks
+            format = metadata.get("file_format")
+
+            if format is None:
                 format = ".npy"
-            data_file_name = self.root_folder / "data" / f"{key}{format}"
+            
+            if self.image_names:
+                image_name = metadata.get("image_name")
+                data_file_name = self.root_folder.parent / "stimuli" / f"{image_name}{format}"
+            else:
+                data_file_name = self.root_folder / "data" / f"{key}{format}"
             encoded = metadata.get("encoded")
             # Pass the cache_trials parameter when creating trials
             self.trials.append(
@@ -517,6 +523,7 @@ class ScreenTrial:
         encoded: bool = False,
     ) -> "ScreenTrial":
         modality = meta_data.get("modality")
+
         class_name = modality.lower().capitalize() + "Trial"
         if encoded and modality in ("image", "video"):
             class_name = "Encoded" + class_name
@@ -549,7 +556,7 @@ class ImageTrial(ScreenTrial):
         )
 
 
-class EncodedImageTrial(ScreenTrial):
+class EncodedimageTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         super().__init__(
             data_file_name,
@@ -579,7 +586,7 @@ class VideoTrial(ScreenTrial):
         )
 
 
-class EncodedVideoTrial(ScreenTrial):
+class EncodedvideoTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         super().__init__(
             data_file_name,
