@@ -86,13 +86,13 @@ class Experiment:
         
         start_time = int(round(interval.start * self.scale_precision))
         end_time = int(round(interval.end * self.scale_precision))
+        time_delta = int(round((1.0 / target_sampling_rate) * self.scale_precision))
 
         out = {}
         for device in devices:
             offset = int(
                 round(self.modality_config[device].get('offset', 0) * self.scale_precision)
             )
-            time_delta = int(round((1.0 / target_sampling_rate) * self.scale_precision))
             # Generate times as ints - important as for np.floats the summation is not associative
             times = np.arange(start_time + offset, end_time + offset, time_delta)
             # Scale everything back to truncated values
