@@ -46,8 +46,7 @@ def test_nearest_neighbor_interpolation(
         expected_indices = np.round((times - timestamps[0]) * fps).astype(int)
         expected_frames = raw_array[expected_indices]
 
-        interp, valid = interp_obj.interpolate(times=times)
-        assert times.shape == valid.shape, "All interpolated frames should be valid"
+        interp = interp_obj.interpolate(times=times)
 
         if expected_frames.max() > 1.1:
             # convert back to float. For export into mp4 int values are necessary

@@ -656,7 +656,7 @@ class ChunkDataset(Dataset):
             # scale everything back to truncated values
             times = times.astype(np.float64) / self.scale_precision
 
-            data, _ = self._experiment.interpolate(times, device=device_name)
+            data = self._experiment.interpolate(times, device=device_name)
             out[device_name] = self.transforms[device_name](data).squeeze(
                 0
             )  # remove dim0 for response/eye_tracker/treadmill
