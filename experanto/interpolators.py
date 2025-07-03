@@ -58,6 +58,8 @@ class Interpolator:
                 return SequenceInterpolator(root_folder, cache_data, **kwargs)
         elif modality == "screen":
             return ScreenInterpolator(root_folder, cache_data, **kwargs)
+        elif modality == "time_interval":
+            return TimeIntervalInterpolator(root_folder, cache_data, **kwargs)
         else:
             raise ValueError(
                 f"There is no interpolator for {modality}. Please use 'sequence' or 'screen' as modality."
@@ -126,12 +128,12 @@ class SequenceInterpolator(Interpolator):
     def normalize_init(self):
         self.mean = np.load(self.root_folder / "meta/means.npy")
         self.std = np.load(self.root_folder / "meta/stds.npy")
-        assert (
-            self.mean.shape[0] == self.n_signals
-        ), f"mean shape does not match: {self.mean.shape} vs {self._data.shape}"
-        assert (
-            self.std.shape[0] == self.n_signals
-        ), f"std shape does not match: {self.std.shape} vs {self._data.shape}"
+        assert self.mean.shape[0] == self.n_signals, (
+            f"mean shape does not match: {self.mean.shape} vs {self._data.shape}"
+        )
+        assert self.std.shape[0] == self.n_signals, (
+            f"std shape does not match: {self.std.shape} vs {self._data.shape}"
+        )
         self.mean = self.mean.T
         self.std = self.std.T
         if self.normalize_std_threshold:
@@ -361,12 +363,12 @@ class ScreenInterpolator(Interpolator):
         if self.rescale:
             self.mean = self.rescale_frame(self.mean.T).T
             self.std = self.rescale_frame(self.std.T).T
-        assert (
-            self.mean.shape == self._image_size
-        ), f"mean size is different: {self.mean.shape} vs {self._image_size}"
-        assert (
-            self.std.shape == self._image_size
-        ), f"std size is different: {self.std.shape} vs {self._image_size}"
+        assert self.mean.shape == self._image_size, (
+            f"mean size is different: {self.mean.shape} vs {self._image_size}"
+        )
+        assert self.std.shape == self._image_size, (
+            f"std size is different: {self.std.shape} vs {self._image_size}"
+        )
 
     def normalize_data(self, data):
         return (data - self.mean) / self.std
@@ -436,9 +438,9 @@ class ScreenInterpolator(Interpolator):
         idx = (
             np.searchsorted(self.timestamps, valid_times) - 1
         )  # convert times to frame indices
-        assert np.all(
-            (idx >= 0) & (idx < len(self.timestamps))
-        ), "All times must be within the valid range"
+        assert np.all((idx >= 0) & (idx < len(self.timestamps))), (
+            "All times must be within the valid range"
+        )
         data_file_idx = self._data_file_idx[idx]
 
         # Go through files, load them and extract all frames
@@ -451,7 +453,6 @@ class ScreenInterpolator(Interpolator):
             if ((len(data.shape) == 2) or (data.shape[-1] == 3)) and (
                 len(data.shape) < 4
             ):
-
                 data = np.expand_dims(data, axis=0)
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
             if self.rescale:
@@ -476,6 +477,64 @@ class ScreenInterpolator(Interpolator):
         return cv2.resize(frame, self._image_size, interpolation=cv2.INTER_AREA).astype(
             np.float32
         )
+
+
+class TimeIntervalInterpolator(Interpolator):
+    def __init__(self, root_folder: str, cache_data: bool = False, **kwargs):
+        super().__init__(root_folder)
+        self.cache_data = cache_data
+
+        meta = self.load_meta()
+        self.labels = list(sorted(meta["labels"].keys()))
+        self.start_time = meta["start_time"]
+        self.end_time = meta["end_time"]
+        self.valid_interval = TimeInterval(self.start_time, self.end_time)
+
+        if self.cache_data:
+            self.label_data = {
+                label: np.load(self.root_folder / f"{label}.npy", allow_pickle=True)
+                for label in self.labels
+            }
+
+    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Interpolates over TimeInterval modality.
+
+        The key idea is the following: we have a meta.yml file whose "main" key is called labels. The keys of meta["labels"] are strings containing the labels of the time intervals we are interested.
+
+        Examples of labels for tiers are: train, validation and test.
+        Other examples of labels: saccade, gaze, target.
+
+        The values of meta["labels"] are filenames to .npy files and the .npy files contain np.array's of shape (n, 2), where n is the number of keys we have, say, for training, and 2 is the starting and the end time of the respective key.
+
+        The interpolation works as follows: the output signal array, out, is a np.array of shape (len(valid_times), number of labels). The values are boolean and we compute them as follows: out[valid_time, label] = 1 if start <= valid_times[i] <= end for one of the (start, end) pairs in the respective label.npy file, and 0 otherwise.
+        """
+        valid = self.valid_times(times)
+        valid_times = times[valid]
+
+        n_labels = len(self.labels)
+        n_times = len(valid_times)
+
+        if n_times == 0:
+            warnings.warn(
+                "TimeIntervalInterpolator returns an empty array, no valid times queried."
+            )
+            return np.empty((0, n_labels), dtype=bool), valid
+
+        out = np.zeros((n_times, n_labels), dtype=bool)
+
+        for l, label in enumerate(self.labels):
+            if self.cache_data:
+                label_intervals = self.label_data[label]
+            else:
+                label_intervals = np.load(
+                    self.root_folder / f"{label}.npy", allow_pickle=True
+                )
+
+            for start, end in label_intervals:
+                mask = (valid_times >= start) & (valid_times < end)
+                out[mask, l] = True
+
+        return out, valid
 
 
 class ScreenTrial:
@@ -548,7 +607,6 @@ class VideoTrial(ScreenTrial):
 
 class BlankTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
-
         self.interleave_value = meta_data.get("interleave_value")
 
         super().__init__(
@@ -567,7 +625,6 @@ class BlankTrial(ScreenTrial):
 
 class InvalidTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
-
         self.interleave_value = meta_data.get("interleave_value")
 
         super().__init__(

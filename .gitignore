@@ -2,7 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-data/
+data*
 local dev/
 
 # C extensions
