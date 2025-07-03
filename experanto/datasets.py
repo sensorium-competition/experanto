@@ -298,6 +298,15 @@ class ChunkDataset(Dataset):
         else:
             return torch.from_numpy(x)
 
+    # Helper class to call normalization and for non image data
+    class NormalizeTensor:
+        def __init__(self, mean, std):
+            self.mean = mean
+            self.std = std
+
+        def __call__(self, tensor):
+            return (tensor - self.mean) / self.std
+
     def initialize_transforms(self):
         """
         Initializes the transforms for each device based on the modality config.
@@ -307,26 +316,40 @@ class ChunkDataset(Dataset):
         for device_name in self.device_names:
             if device_name == "screen":
                 add_channel = Lambda(self.add_channel_function)
+
                 transform_list = [
                     v
                     for v in self.modality_config.screen.transforms.values()
                     if isinstance(v, torch.nn.Module)
                 ]
                 transform_list.insert(0, add_channel)
-            else:
 
-                transform_list = [ToTensor()]
-
-            # Normalization.
-            if self.modality_config[device_name].transforms.get("normalization", False):
-                transform_list.append(
-                    torchvision.transforms.Normalize(
-                        self._statistics[device_name]["mean"],
-                        self._statistics[device_name]["std"],
+                if self.modality_config[device_name].transforms.get(
+                    "normalization", False
+                ):
+                    transform_list.append(
+                        torchvision.transforms.Normalize(
+                            self._statistics[device_name]["mean"],
+                            self._statistics[device_name]["std"],
+                        )
                     )
-                )
+
+            else:
+                transform_list = [lambda x: torch.from_numpy(x).float()]
+
+                # Normalisation without torchvision since it's not image data
+                if self.modality_config[device_name].transforms.get(
+                    "normalization", False
+                ):
+                    transform_list.append(
+                        self.NormalizeTensor(
+                            self._statistics[device_name]["mean"],
+                            self._statistics[device_name]["std"],
+                        )
+                    )
 
             transforms[device_name] = Compose(transform_list)
+
         return transforms
 
     def _get_callable_filter(self, filter_config):
