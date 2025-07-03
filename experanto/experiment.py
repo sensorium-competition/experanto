@@ -5,11 +5,13 @@ import re
 from collections import namedtuple
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Union, List, Optional
 
 import numpy as np
 
 from .configs import DEFAULT_MODALITY_CONFIG
 from .interpolators import Interpolator
+from .intervals import TimeInterval
 
 log = logging.getLogger(__name__)
 
@@ -20,6 +22,7 @@ class Experiment:
         root_folder: str,
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
         cache_data: bool = False,
+        interpolate_precision: int = 5,
     ) -> None:
         """
         root_folder: path to the data folder
@@ -33,6 +36,7 @@ class Experiment:
         self.end_time = -np.inf
         self.modality_config = modality_config
         self.cache_data = cache_data
+        self.scale_precision = 10**interpolate_precision
         self._load_devices()
 
     def _load_devices(self) -> None:
@@ -59,7 +63,7 @@ class Experiment:
     def device_names(self):
         return tuple(self.devices.keys())
 
-    def interpolate(self, times: slice, device=None) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(self, times: slice, device: str = None) -> tuple[np.ndarray, np.ndarray]:
         if device is None:
             values = {}
             valid = {}
@@ -72,3 +76,28 @@ class Experiment:
 
     def get_valid_range(self, device_name) -> tuple:
         return tuple(self.devices[device_name].valid_interval)
+
+    def get_interval(self, interval: TimeInterval, target_sampling_rate: float, devices: Optional[Union[str, List[str]]] = None) -> tuple[np.ndarray, np.ndarray]:
+        if devices is None:
+            devices = self.devices.keys()
+        else:
+            devices = devices if isinstance(devices, list) else [devices]
+            for device in devices: assert device in self.devices, f"Unknown device '{device}'"
+        
+        start_time = int(round(interval.start * self.scale_precision))
+        end_time = int(round(interval.end * self.scale_precision))
+
+        out = {}
+        for device in devices:
+            offset = int(
+                round(self.modality_config[device].get('offset', 0) * self.scale_precision)
+            )
+            time_delta = int(round((1.0 / target_sampling_rate) * self.scale_precision))
+            # Generate times as ints - important as for np.floats the summation is not associative
+            times = np.arange(start_time + offset, end_time + offset, time_delta)
+            # Scale everything back to truncated values
+            times = times.astype(np.float64) / self.scale_precision
+
+            data, _ = self.interpolate(times, device=device)
+            out[device] = data
+        return out
