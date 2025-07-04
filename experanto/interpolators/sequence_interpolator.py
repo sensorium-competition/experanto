@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-import json
-import os
-import re
 import typing
 import warnings
 
-import cv2
 import numpy as np
-import numpy.lib.format as fmt
-import yaml
 
 from ..intervals import TimeInterval
 from .base import Interpolator
@@ -154,7 +148,7 @@ class SequenceInterpolator(Interpolator):
 
         else:
             raise NotImplementedError(
-                f"interpolation_mode should be linear or nearest_neighbor"
+                "interpolation_mode should be linear or nearest_neighbor"
             )
 
     def close(self) -> None:
@@ -262,5 +256,5 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
         else:
             raise NotImplementedError(
-                f"interpolation_mode should be linear or nearest_neighbor"
+                "interpolation_mode should be linear or nearest_neighbor"
             )

@@ -4,11 +4,9 @@ import json
 import os
 import re
 import typing
-import warnings
 
 import cv2
 import numpy as np
-import numpy.lib.format as fmt
 import yaml
 
 from ..intervals import TimeInterval
