@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from experanto.interpolators import Interpolator, TimeIntervalInterpolator
+
 from .create_time_intervals_data import create_time_intervals_data
 
 
