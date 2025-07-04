@@ -60,7 +60,9 @@ class Interpolator:
         elif modality == "screen":
             number_channels = meta_data.get("number_channels", 1)
             image_names = meta_data.get("image_names", False)
-            return ScreenInterpolator(root_folder, cache_data, number_channels, image_names, **kwargs)
+            return ScreenInterpolator(
+                root_folder, cache_data, number_channels, image_names, **kwargs
+            )
         else:
             raise ValueError(
                 f"There is no interpolator for {modality}. Please use 'sequence' or 'screen' as modality."
@@ -433,9 +435,7 @@ class ScreenInterpolator(Interpolator):
 
             if self.image_names:
                 image_name = metadata.get("image_name")
-                data_file_name = (
-                    self.root_folder / "data" / f"{image_name}{format}"
-                )
+                data_file_name = self.root_folder / "data" / f"{image_name}{format}"
             else:
                 data_file_name = self.root_folder / "data" / f"{key}{format}"
             encoded = metadata.get("encoded")
@@ -495,7 +495,6 @@ class ScreenInterpolator(Interpolator):
             0, 3, 1, 2
         )  # transform into (C, T, H, W) after finishing with Cv2 operations
         return out
-    
 
     def format_data(self, data: np.array) -> np.array:
         # Make sure all data has shape (T, H, W, C)
@@ -519,8 +518,10 @@ class ScreenInterpolator(Interpolator):
             pass
 
         else:
-            raise ValueError(f"Unexpected data shape: we expect 2,3 or 4-dimensional array but got data.shape={data.shape}")
-        
+            raise ValueError(
+                f"Unexpected data shape: we expect 2,3 or 4-dimensional array but got data.shape={data.shape}"
+            )
+
         # Format number of channels correctly to fit output array
         if data.shape[3] == self.number_channels:
             pass
