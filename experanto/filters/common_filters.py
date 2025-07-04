@@ -1,6 +1,6 @@
 import numpy as np
 
-from experanto.interpolators import Interpolator
+from experanto.interpolators import SequenceInterpolator
 from experanto.intervals import (
     TimeInterval,
     find_complement_of_interval_array,
@@ -9,8 +9,7 @@ from experanto.intervals import (
 
 
 def nan_filter(vicinity=0.05):
-
-    def implementation(device_: Interpolator):
+    def implementation(device_: SequenceInterpolator):
         time_delta = device_.time_delta
         start_time = device_.start_time
         end_time = device_.end_time

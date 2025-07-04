@@ -40,3 +40,6 @@ skip = [".ipynb_checkpoints"]
 profile = "black"
 line_length = 88
 known_first_party = ["experanto"]
+
+[tool.ruff]
+exclude = ["**"]
