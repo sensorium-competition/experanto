@@ -4,8 +4,6 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from .registry import INTERPOLATOR_SELECTORS, ensure_default_interpolators_registered
-
 
 class Interpolator:
     def __init__(self, root_folder: str) -> None:
@@ -33,25 +31,6 @@ class Interpolator:
 
     def __exit__(self, *exc):
         self.close()
-
-    @staticmethod
-    def create(root_folder: str, cache_data: bool = False, **kwargs) -> "Interpolator":
-        with open(Path(root_folder) / "meta.yml", "r") as file:
-            meta_data = yaml.load(file, Loader=yaml.SafeLoader)
-        modality = meta_data.get("modality")
-
-        ensure_default_interpolators_registered()
-
-        sorted_selectors = sorted(
-            INTERPOLATOR_SELECTORS, key=lambda x: -x[0]
-        )  # highest priority first
-
-        for priority, selector_fn, cls in sorted_selectors:
-            if selector_fn(meta_data):
-                print(f"[INFO] Using {cls.__name__} (priority={priority})")
-                return cls(root_folder, cache_data, **kwargs)
-
-        raise ValueError(f"No interpolator found for metadata={meta_data}.")
 
     def valid_times(self, times: np.ndarray) -> np.ndarray:
         return self.valid_interval.intersect(times)

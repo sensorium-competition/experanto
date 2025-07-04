@@ -9,7 +9,3 @@ def register_interpolator(selector_fn, *, priority=10):
         return cls
 
     return decorator
-
-
-def ensure_default_interpolators_registered():
-    from . import screen_interpolator, sequence_interpolator
