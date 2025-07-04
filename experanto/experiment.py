@@ -79,7 +79,7 @@ class Experiment:
     def get_valid_range(self, device_name) -> tuple:
         return tuple(self.devices[device_name].valid_interval)
 
-    def get_interval(
+    def get_data_for_interval(
         self,
         interval: TimeInterval,
         target_sampling_rates: Optional[Union[float, dict[str, float]]] = None,
@@ -111,29 +111,12 @@ class Experiment:
         ValueError
             If no sampling rate is specified or available for a device.
         """
-        if devices is None:
-            devices = self.devices.keys()
-        else:
-            devices = devices if isinstance(devices, list) else [devices]
-            for device in devices:
-                assert device in self.devices, f"Unknown device '{device}'"
-
-        if target_sampling_rates is None:
-            target_sampling_rates = [
-                self.modality_config[device].get("sampling_rate") for device in devices
-            ]
-        elif isinstance(target_sampling_rates, (float, int)):
-            target_sampling_rates = {
-                device: target_sampling_rates for device in devices
-            }
+        devices = self._resolve_devices(devices)
+        target_sampling_rates = self._resolve_sampling_rates(devices, target_sampling_rates)
 
         out = {}
         for device in devices:
-            target_sampling_rate = (
-                target_sampling_rates[device]
-                if device in target_sampling_rates
-                else self.modality_config[device].get("sampling_rate")
-            )
+            target_sampling_rate = target_sampling_rates[device]
             if target_sampling_rate is None:
                 raise ValueError(
                     f"Target sampling rate for device '{device}' is not specified."
@@ -141,12 +124,12 @@ class Experiment:
 
             start_time = int(round(interval.start * self.scale_precision))
             end_time = int(round(interval.end * self.scale_precision))
-            time_delta = int(round((1.0 / target_sampling_rate) * self.scale_precision))
             offset = int(
                 round(
                     self.modality_config[device].get("offset", 0) * self.scale_precision
                 )
             )
+            time_delta = int(round((1.0 / target_sampling_rate) * self.scale_precision))
             # Generate times as ints - important as for np.floats the summation is not associative
             times = np.arange(start_time + offset, end_time + offset, time_delta)
             # Scale everything back to truncated values
@@ -155,3 +138,102 @@ class Experiment:
             data, _ = self.interpolate(times, device=device)
             out[device] = data
         return out
+
+    def get_data_for_chunks(
+        self,
+        start_time: float,
+        chunk_sizes: Optional[Union[int, dict[str, int]]] = None,
+        target_sampling_rates: Optional[Union[float, dict[str, float]]] = None,
+        devices: Optional[Union[str, List[str]]] = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Retrieve interpolated data for a fixed number of timesteps (chunk size) per device.
+
+        Parameters
+        ----------
+        chunk_sizes : int or dict[str, int], optional
+            Number of time steps to retrieve per device. If a single int is provided, it is used for all devices.
+            If a dictionary is provided, it should map device names to their respective number of timesteps.
+            If None, default chunk sizes defined in the configuration are used.
+        target_sampling_rates : float or dict[str, float], optional
+            Target sampling rate(s) in Hz. If a single float is provided, it is applied to all devices.
+            If a dictionary is provided, it should map device names to their respective sampling rates.
+            If None or a device is not specified in the dictionary, the default sampling rate from the modality config is used.
+        devices : str or list of str, optional
+            Devices to retrieve data for. If None, all available devices (`self.devices`) are used.
+
+        Returns
+        -------
+        dict[str, np.ndarray]
+            A dictionary mapping each device name to its corresponding interpolated data array 
+            of shape `(chunk_size, ...)`.
+
+        Raises
+        ------
+        AssertionError
+            If a specified device is not found in `self.devices`.
+        ValueError
+            If no sampling rate is specified or available for a device.
+        """
+        devices = self._resolve_devices(devices)
+        chunk_sizes = self._resolve_chunk_sizes(devices, chunk_sizes)
+        target_sampling_rates = self._resolve_sampling_rates(devices, target_sampling_rates)
+
+        start_time = int(round(start_time * self.scale_precision))
+        out = {}
+        timestamps = {}
+        for device in devices:
+            chunk_size = chunk_sizes[device]
+            target_sampling_rate = target_sampling_rates[device]
+            if target_sampling_rate is None:
+                raise ValueError(
+                    f"Target sampling rate for device '{device}' is not specified."
+                )
+
+            offset = int(
+                round(
+                    self.modality_config[device].get("offset", 0) * self.scale_precision
+                )
+            )
+            time_delta = int(round((1.0 / target_sampling_rate) * self.scale_precision))
+            # Generate times as ints - important as for np.floats the summation is not associative
+            times = start_time + offset + np.arange(chunk_size) * time_delta
+            # Scale everything back to truncated values
+            times = times.astype(np.float64) / self.scale_precision
+
+            data, _ = self.interpolate(times, device=device)
+            out[device] = data
+            timestamps[device] = times
+        return out, timestamps
+
+    def _resolve_devices(self, devices):
+        if devices is None:
+            return list(self.devices.keys())
+        if isinstance(devices, str):
+            devices = [devices]
+        for device in devices:
+            assert device in self.devices, f"Unknown device '{device}'"
+        return devices
+
+    def _resolve_sampling_rates(self, devices, rates):
+        if rates is None:
+            return {
+                d: self.modality_config[d].get("sampling_rate") for d in devices
+            }
+        elif isinstance(rates, (int, float)):
+            return {d: rates for d in devices}
+        else:
+            return rates
+
+    def _resolve_chunk_sizes(self, devices, chunk_sizes):
+        if chunk_sizes is None:
+            return {
+                d: self.modality_config[d].get("chunk_size") for d in devices
+            }
+        elif isinstance(chunk_sizes, (int, float)):
+            return {d: int(chunk_sizes) for d in devices}
+        else:
+            return chunk_sizes
+
+    def _get_device_offset(self, device: str) -> int:
+        return int(round(self.modality_config[device].get("offset", 0) * self.scale_precision))

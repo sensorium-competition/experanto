@@ -149,7 +149,7 @@ class ChunkDataset(Dataset):
         self.scale_precision = 10**self.interpolate_precision
 
         self.modality_config = instantiate(modality_config)
-        self.chunk_sizes, self.sampling_rates, self.chunk_s = {}, {}, {}
+        self.chunk_sizes, self.sampling_rates = {}, {}
         for device_name in self.modality_config.keys():
             cfg = self.modality_config[device_name]
             self.chunk_sizes[device_name] = global_chunk_size or cfg.chunk_size
@@ -617,38 +617,29 @@ class ChunkDataset(Dataset):
         out = {}
         timestamps = {}
         s = self._valid_screen_times[idx]
+        out, timestamps = self._experiment.get_data_for_chunks(
+            s, 
+            chunk_sizes=self.chunk_sizes, 
+            target_sampling_rates=self.sampling_rates, 
+            devices=self.device_names
+        )
+
         for device_name in self.device_names:
-            sampling_rate = self.sampling_rates[device_name]
-            chunk_size = self.chunk_sizes[device_name]
-            chunk_s = chunk_size / sampling_rate
-
-            # convert everything to int to avoid numerical issues
-            start_time = int(round(s * self.scale_precision))
-            offset = int(
-                round(self.modality_config[device_name].offset * self.scale_precision)
-            )
-            time_delta = int(round((1.0 / sampling_rate) * self.scale_precision))
-            # Generate times as ints - important as for np.floats the summation is not associative
-            times = start_time + offset + np.arange(chunk_size) * time_delta
-            # scale everything back to truncated values
-            times = times.astype(np.float64) / self.scale_precision
-
-            data, _ = self._experiment.interpolate(times, device=device_name)
-            out[device_name] = self.transforms[device_name](data).squeeze(
+            out[device_name] = self.transforms[device_name](out[device_name]).squeeze(
                 0
             )  # remove dim0 for response/eye_tracker/treadmill
-            # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
-            if device_name == "screen":
-                if out[device_name].shape[-1] == 3:
-                    out[device_name] = out[device_name].permute(0, 3, 1, 2)
-                if out[device_name].shape[0] == chunk_size:
-                    out[device_name] = out[device_name].transpose(0, 1)
-            # all signals are interpolated for the same times, so no phase shifts adjustment is needed
-            times = torch.from_numpy(times)
+            times = torch.from_numpy(timestamps[device_name])
             if self.normalize_timestamps:
-                times = times - self._experiment.devices["responses"].start_time
+                times = times - self._experiment.devices[device_name].start_time
                 times = times.to(torch.float32).contiguous()
             timestamps[device_name] = times
+            
+        # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
+        if "screen" in out:
+            if out["screen"].shape[-1] == 3:
+                out["screen"] = out["screen"].permute(0, 3, 1, 2)
+            if out["screen"].shape[0] == self.chunk_sizes["screen"]:
+                out["screen"] = out["screen"].transpose(0, 1)
 
         out["timestamps"] = timestamps
 
