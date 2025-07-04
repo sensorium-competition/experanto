@@ -85,11 +85,8 @@ class ChunkDataset(Dataset):
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
         seed: Optional[int] = None,
         safe_interval_threshold: float = 0.5,
-        interpolate_precision: int = 5,
     ) -> None:
         """
-        interpolate_precision: number of digits after the dot to keep, without it we might get different numbers from interpolation
-
         The full modality config is a nested dictionary.
         The following is an example of a modality config for a screen, responses, eye_tracker, and treadmill:
 
@@ -145,8 +142,6 @@ class ChunkDataset(Dataset):
         """
         self.root_folder = Path(root_folder)
         self.data_key = self.get_data_key_from_root_folder(root_folder)
-        self.interpolate_precision = interpolate_precision
-        self.scale_precision = 10**self.interpolate_precision
 
         self.modality_config = instantiate(modality_config)
         self.chunk_sizes, self.sampling_rates = {}, {}

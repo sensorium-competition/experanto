@@ -29,6 +29,7 @@ class Experiment:
         interp_config: dict for configuring interpolators, like
             interp_config = {"screen": {...}, {"eye_tracker": {...}, }
         cache_data: if True, loads and keeps all trial data in memory
+        interpolate_precision: number of digits after the dot to keep, without it we might get different numbers from interpolation
         """
         self.root_folder = Path(root_folder)
         self.devices = dict()
