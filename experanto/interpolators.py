@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import numpy.lib.format as fmt
 import yaml
+from torchcodec.decoders import VideoDecoder
 
 from .intervals import TimeInterval
 
@@ -57,7 +58,11 @@ class Interpolator:
             else:
                 return SequenceInterpolator(root_folder, cache_data, **kwargs)
         elif modality == "screen":
-            return ScreenInterpolator(root_folder, cache_data, **kwargs)
+            number_channels = meta_data.get("number_channels", 1)
+            image_names = meta_data.get("image_names", False)
+            return ScreenInterpolator(
+                root_folder, cache_data, number_channels, image_names, **kwargs
+            )
         else:
             raise ValueError(
                 f"There is no interpolator for {modality}. Please use 'sequence' or 'screen' as modality."
@@ -156,7 +161,7 @@ class SequenceInterpolator(Interpolator):
             warnings.warn(
                 "Sequence interpolation returns empty array, no valid times queried"
             )
-            return np.empty((0, self._data.shape[1])), valid
+            return np.empty((0, self._data.shape[1]))
 
         idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
             int
@@ -165,7 +170,7 @@ class SequenceInterpolator(Interpolator):
         if self.interpolation_mode == "nearest_neighbor":
             data = self._data[idx_lower]
 
-            return data, valid
+            return data
 
         elif self.interpolation_mode == "linear":
             idx_upper = idx_lower + 1
@@ -203,7 +208,7 @@ class SequenceInterpolator(Interpolator):
                 # Replace NaNs with the column means directly
                 np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
 
-            return interpolated, valid
+            return interpolated
 
         else:
             raise NotImplementedError(
@@ -254,7 +259,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             warnings.warn(
                 "Sequence interpolation returns empty array, no valid times queried"
             )
-            return np.empty((0, self._data.shape[1])), valid
+            return np.empty((0, self._data.shape[1]))
 
         idx_lower = np.floor(
             (
@@ -267,7 +272,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
         if self.interpolation_mode == "nearest_neighbor":
             data = np.take_along_axis(self._data, idx_lower, axis=0)
-            return data, valid
+            return data
 
         elif self.interpolation_mode == "linear":
             idx_upper = idx_lower + 1
@@ -306,7 +311,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
                 # Replace NaNs with the column means directly
                 np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
 
-            return interpolated, valid
+            return interpolated
 
         else:
             raise NotImplementedError(
@@ -319,6 +324,8 @@ class ScreenInterpolator(Interpolator):
         self,
         root_folder: str,
         cache_data: bool = False,  # New parameter
+        number_channels: int = 1,
+        image_names: bool = False,
         rescale: bool = False,
         rescale_size: typing.Optional[tuple(int, int)] = None,
         normalize: bool = False,
@@ -334,6 +341,8 @@ class ScreenInterpolator(Interpolator):
         self.end_time = self.timestamps[-1]
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
         self.rescale = rescale
+        self.image_names = image_names
+        self.number_channels = number_channels
         self.cache_trials = cache_data  # Store the cache preference
         self._parse_trials()
 
@@ -419,11 +428,24 @@ class ScreenInterpolator(Interpolator):
         metadatas, keys = self.read_combined_meta()
 
         for key, metadata in zip(keys, metadatas):
-            data_file_name = self.root_folder / "data" / f"{key}.npy"
+            format = metadata.get("file_format")
+
+            if format is None:
+                format = ".npy"
+
+            if self.image_names:
+                image_name = metadata.get("image_name")
+                data_file_name = self.root_folder / "data" / f"{image_name}{format}"
+            else:
+                data_file_name = self.root_folder / "data" / f"{key}{format}"
+            encoded = metadata.get("encoded")
             # Pass the cache_trials parameter when creating trials
             self.trials.append(
                 ScreenTrial.create(
-                    data_file_name, metadata, cache_data=self.cache_trials
+                    data_file_name,
+                    metadata,
+                    cache_data=self.cache_trials,
+                    encoded=encoded,
                 )
             )
 
@@ -443,39 +465,115 @@ class ScreenInterpolator(Interpolator):
 
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
-        out = np.zeros([len(valid_times)] + list(self._image_size), dtype=np.float32)
+        out = np.zeros(
+            [len(valid_times)] + list(self._image_size) + [self.number_channels],
+            dtype=np.float32,
+        )
+
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
-            # TODO: establish convention of dimensons for time/channels. Then we can remove this
-            # TODO: revisit this for on the fly decoding
-            if ((len(data.shape) == 2) or (data.shape[-1] == 3)) and (
-                len(data.shape) < 4
-            ):
-
-                data = np.expand_dims(data, axis=0)
+            data = self.format_data(
+                data
+            )  # add channels for proper handeling. Handels missing time / channels dimensions.
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
+
             if self.rescale:
                 orig_size = data[idx[idx_for_this_file] - self._first_frame_idx[u_idx]]
                 out[idx_for_this_file] = np.stack(
                     [
-                        self.rescale_frame(np.asarray(frame, dtype=np.float32).T).T
+                        self.rescale_frame(frame.astype(np.float32))
                         for frame in orig_size
                     ]
                 )
+
             else:
                 out[idx_for_this_file] = data[
                     idx[idx_for_this_file] - self._first_frame_idx[u_idx]
                 ]
-        return out, valid
+
+        out = out.transpose(
+            0, 3, 1, 2
+        )  # transform into (C, T, H, W) after finishing with Cv2 operations
+        return out
+
+    def format_data(self, data: np.array) -> np.array:
+        # Make sure all data has shape (T, H, W, C)
+        if len(data.shape) == 2:
+            # (H, W) → add time=1 and channels=3
+            data = data[np.newaxis, :, :, np.newaxis]  # (1, H, W, 1)
+
+        elif len(data.shape) == 3:
+            # Could be either (H, W, C) or (T, H, W)
+            if data.shape[2] in range(
+                1, 5 or data.shape[2] == self.number_channels
+            ):  # This checks if last column is within 1 to 4, to decide if it is width or channels dim.
+                # Assume (H, W, C)
+                data = data[np.newaxis, :, :, :]  # (1, H, W, C)
+
+            else:
+                # Assume (T, H, W) - add channels dim and repeat channels
+                data = data[:, :, :, np.newaxis]  # (T, H, W, 1)
+
+        elif len(data.shape) == 4:
+            pass
+
+        else:
+            raise ValueError(
+                f"Unexpected data shape: we expect 2,3 or 4-dimensional array but got data.shape={data.shape}"
+            )
+
+        # Format number of channels correctly to fit output array
+        if data.shape[3] == self.number_channels:
+            pass
+
+        # If single channel then repeat into desired amount
+        elif data.shape[3] < self.number_channels and data.shape[3] == 1:
+            data = np.repeat(data, self.number_channels, axis=3)
+
+        # Downsample multichannel images to greyscale
+        elif self.number_channels == 1 and data.shape[3] != self.number_channels:
+            # Sample a subset to check for stacked grayscale
+            sample = data[
+                ::10, ::20, ::20, :
+            ]  # sample every 10th frame and check if channels are equal. What is the best way to do this? np.all way to expensive
+            if np.allclose(sample[..., 0], sample[..., 1], atol=1e-3) and np.allclose(
+                sample[..., 1], sample[..., 2], atol=1e-3
+            ):
+                data = data[..., 0][
+                    ..., np.newaxis
+                ]  # Keep shape consistent (T, H, W, 1)
+            elif data.shape[3] == 3:
+                data = np.array(
+                    [cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY) for frame in data]
+                )
+                data = data[:, :, :, np.newaxis]
+
+            else:
+                raise ValueError(
+                    f"Cannot reduce channels from : {data.shape[3]} to {self.number_channels}."
+                )
+
+        else:
+            raise ValueError(
+                f"Cannot broadcast data with : {data.shape[3]} channels into {self.number_channels} channels."
+            )
+
+        return data
 
     def rescale_frame(self, frame: np.array) -> np.array:
         """
         Changes the resolution of the image to this size.
         Returns: Rescaled image
         """
-        return cv2.resize(frame, self._image_size, interpolation=cv2.INTER_AREA).astype(
-            np.float32
-        )
+        resized = cv2.resize(
+            frame, np.flip(self._image_size), interpolation=cv2.INTER_AREA
+        ).astype(np.float32)
+
+        # If input has shape (H, W, 1), output looses channel dim and becomes (H, W). Hence we have to add it back
+        if resized.ndim == 2:
+            resized = resized[:, :, np.newaxis]
+
+        return resized
 
 
 class ScreenTrial:
@@ -501,10 +599,16 @@ class ScreenTrial:
 
     @staticmethod
     def create(
-        data_file_name: str, meta_data: dict, cache_data: bool = False
+        data_file_name: str,
+        meta_data: dict,
+        cache_data: bool = False,
+        encoded: bool = False,
     ) -> "ScreenTrial":
         modality = meta_data.get("modality")
+
         class_name = modality.lower().capitalize() + "Trial"
+        if encoded and modality in ("image", "video"):
+            class_name = "Encoded" + class_name
         assert class_name in globals(), f"Unknown modality: {modality}"
         return globals()[class_name](data_file_name, meta_data, cache_data=cache_data)
 
@@ -534,6 +638,23 @@ class ImageTrial(ScreenTrial):
         )
 
 
+class EncodedImageTrial(ScreenTrial):
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+        super().__init__(
+            data_file_name,
+            meta_data,
+            tuple(meta_data.get("image_size")),
+            meta_data.get("first_frame_idx"),
+            1,
+            cache_data=cache_data,
+        )
+
+    def get_data_(self) -> np.array:
+        """Override base implementation to load compressed images"""
+        img = cv2.imread(self.data_file_name)
+        return img
+
+
 class VideoTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         super().__init__(
@@ -544,6 +665,29 @@ class VideoTrial(ScreenTrial):
             meta_data.get("num_frames"),
             cache_data=cache_data,
         )
+
+
+class EncodedVideoTrial(ScreenTrial):
+    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+        super().__init__(
+            data_file_name,
+            meta_data,
+            tuple(meta_data.get("image_size")),
+            meta_data.get("first_frame_idx"),
+            meta_data.get("num_frames"),
+            cache_data=cache_data,
+        )
+        self.video_decoder = VideoDecoder(self.data_file_name)
+
+    def get_data_(self) -> np.array:
+        """Override base implementation to load compressed videos"""
+        full_video_bgr = np.transpose(
+            self.video_decoder[:].numpy(), (0, 2, 3, 1)
+        )  # Important! this loads entire video right now. This is unnecessary but works with interpolation loop. Will improve if we decide on it
+        full_video_rgb = np.array(
+            [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in full_video_bgr]
+        )
+        return full_video_rgb
 
 
 class BlankTrial(ScreenTrial):

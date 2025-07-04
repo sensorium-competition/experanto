@@ -307,17 +307,17 @@ class ChunkDataset(Dataset):
         for device_name in self.device_names:
             if device_name == "screen":
                 add_channel = Lambda(self.add_channel_function)
+
                 transform_list = [
                     v
                     for v in self.modality_config.screen.transforms.values()
                     if isinstance(v, torch.nn.Module)
                 ]
                 transform_list.insert(0, add_channel)
+
             else:
+                transform_list = [lambda x: torch.from_numpy(x).float()]
 
-                transform_list = [ToTensor()]
-
-            # Normalization.
             if self.modality_config[device_name].transforms.get("normalization", False):
                 transform_list.append(
                     torchvision.transforms.Normalize(
@@ -327,6 +327,7 @@ class ChunkDataset(Dataset):
                 )
 
             transforms[device_name] = Compose(transform_list)
+
         return transforms
 
     def _get_callable_filter(self, filter_config):
@@ -633,7 +634,7 @@ class ChunkDataset(Dataset):
             # scale everything back to truncated values
             times = times.astype(np.float64) / self.scale_precision
 
-            data, _ = self._experiment.interpolate(times, device=device_name)
+            data = self._experiment.interpolate(times, device=device_name)
             out[device_name] = self.transforms[device_name](data).squeeze(
                 0
             )  # remove dim0 for response/eye_tracker/treadmill

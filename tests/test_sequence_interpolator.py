@@ -31,16 +31,12 @@ def test_nearest_neighbor_interpolation(n_signals, sampling_rate, use_mem_mapped
         ), "Interpolation object is a PhaseShiftedSequenceInterpolator"
 
         times = timestamps[:DEFAULT_SEQUENCE_LENGTH] + 1e-9
-        interp, valid = seq_interp.interpolate(
+        interp = seq_interp.interpolate(
             times=times
         )  # Add a small epsilon to avoid floating point errors
-        assert times.shape == valid.shape, "All samples should be valid"
         assert (
             interp == data[:DEFAULT_SEQUENCE_LENGTH]
         ).all(), "Nearest neighbor interpolation does not match expected data"
-        assert valid.shape == (
-            DEFAULT_SEQUENCE_LENGTH,
-        ), f"Expected valid.shape == ({DEFAULT_SEQUENCE_LENGTH},), got {valid.shape}"
         assert interp.shape == (
             DEFAULT_SEQUENCE_LENGTH,
             n_signals,
@@ -65,16 +61,12 @@ def test_nearest_neighbor_interpolation_handles_nans(n_signals, keep_nans):
         ), "Interpolation object is not a SequenceInterpolator"
 
         times = timestamps[:DEFAULT_SEQUENCE_LENGTH] + 1e-9
-        interp, valid = seq_interp.interpolate(
+        interp = seq_interp.interpolate(
             times=times
         )  # Add a small epsilon to avoid floating point errors
-        assert times.shape == valid.shape, "All samples should be valid"
         assert np.array_equal(
             interp, data[:DEFAULT_SEQUENCE_LENGTH], equal_nan=True
         ), "Nearest neighbor interpolation does not match expected data"
-        assert valid.shape == (
-            DEFAULT_SEQUENCE_LENGTH,
-        ), f"Expected valid.shape == ({DEFAULT_SEQUENCE_LENGTH},), got {valid.shape}"
         assert interp.shape == (
             DEFAULT_SEQUENCE_LENGTH,
             n_signals,
@@ -100,16 +92,14 @@ def test_nearest_neighbor_interpolation_with_inbetween_times(n_signals, sampling
 
         # timestamps multiplied by 0.8 should be floored to the same timestamp
         times = timestamps[:DEFAULT_SEQUENCE_LENGTH] + 0.8 * delta_t
-        interp, valid = seq_interp.interpolate(times=times)
-        assert times.shape == valid.shape, "All samples should be valid"
+        interp = seq_interp.interpolate(times=times)
         assert (
             interp == data[:DEFAULT_SEQUENCE_LENGTH]
         ).all(), "Nearest neighbor interpolation does not match expected data"
 
         # timestamps multiplied by 1.2 should be floored to the next timestamp
         times = timestamps[:DEFAULT_SEQUENCE_LENGTH] + 1.2 * delta_t
-        interp, valid = seq_interp.interpolate(times=times)
-        assert times.shape == valid.shape, "All samples should be valid"
+        interp = seq_interp.interpolate(times=times)
         assert (
             interp == data[1 : DEFAULT_SEQUENCE_LENGTH + 1]
         ).all(), "Nearest neighbor interpolation does not match expected data"
@@ -138,14 +128,10 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(
         times = (
             timestamps[1 : DEFAULT_SEQUENCE_LENGTH + 1] + 1e-9
         )  # Add a small epsilon to avoid floating point errors
-        interp, valid = seq_interp.interpolate(times=times)
-        assert times.shape == valid.shape, "All samples should be valid"
+        interp = seq_interp.interpolate(times=times)
         assert (
             interp == data[0:DEFAULT_SEQUENCE_LENGTH]
         ).all(), "Nearest neighbor interpolation does not match expected data"
-        assert valid.shape == (
-            DEFAULT_SEQUENCE_LENGTH,
-        ), f"Expected valid.shape == ({DEFAULT_SEQUENCE_LENGTH},), got {valid.shape}"
         assert interp.shape == (
             DEFAULT_SEQUENCE_LENGTH,
             n_signals,
@@ -156,7 +142,7 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(
             for dt in np.linspace(0, 0.99) * delta_t:
                 shifted_times = times + shift[i] + dt
 
-                interp, valid = seq_interp.interpolate(times=shifted_times)
+                interp = seq_interp.interpolate(times=shifted_times)
                 assert (
                     interp[:, i] == data[1 : DEFAULT_SEQUENCE_LENGTH + 1, i]
                 ).all(), f"Data at {dt} does not match original data (use_mem_mapped={use_mem_mapped}, sampling_rate={sampling_rate}, shifts_per_signal={True})"
@@ -164,7 +150,7 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(
             for dt in np.linspace(1.0, 1.99) * delta_t:
                 shifted_times = times + shift[i] + dt
 
-                interp, valid = seq_interp.interpolate(times=shifted_times)
+                interp = seq_interp.interpolate(times=shifted_times)
                 assert (
                     interp[:, i] == data[2 : DEFAULT_SEQUENCE_LENGTH + 2, i]
                 ).all(), f"Data at {dt} does not match original data (use_mem_mapped={use_mem_mapped}, sampling_rate={sampling_rate}, shifts_per_signal={True})"
@@ -193,14 +179,10 @@ def test_nearest_neighbor_interpolation_with_phase_shifts_handles_nans(
         times = (
             timestamps[1 : DEFAULT_SEQUENCE_LENGTH + 1] + 1e-9
         )  # Add a small epsilon to avoid floating point errors
-        interp, valid = seq_interp.interpolate(times=times)
-        assert times.shape == valid.shape, "All samples should be valid"
+        interp = seq_interp.interpolate(times=times)
         assert np.array_equal(
             interp, data[0:DEFAULT_SEQUENCE_LENGTH], equal_nan=True
         ), "Nearest neighbor interpolation does not match expected data"
-        assert valid.shape == (
-            DEFAULT_SEQUENCE_LENGTH,
-        ), f"Expected valid.shape == ({DEFAULT_SEQUENCE_LENGTH},), got {valid.shape}"
         assert interp.shape == (
             DEFAULT_SEQUENCE_LENGTH,
             n_signals,
@@ -242,15 +224,11 @@ def test_linear_interpolation(
         expected = y1 + ((times[:, np.newaxis] - t1) / (t2 - t1)) * (y2 - y1)
         if not keep_nans:
             np.copyto(expected, np.nanmean(expected, axis=0), where=np.isnan(expected))
-        interp, valid = seq_interp.interpolate(times=times)
+        interp = seq_interp.interpolate(times=times)
 
-        assert times.shape == valid.shape, "All samples should be valid"
         assert np.allclose(
             interp, expected, atol=1e-6, equal_nan=True
         ), "Linear interpolation does not match expected data"
-        assert valid.shape == (
-            DEFAULT_SEQUENCE_LENGTH,
-        ), f"Expected valid.shape == ({DEFAULT_SEQUENCE_LENGTH},), got {valid.shape}"
         assert interp.shape == (
             DEFAULT_SEQUENCE_LENGTH,
             n_signals,
@@ -311,13 +289,8 @@ def test_linear_interpolation_with_phase_shifts(
                     expected, np.nanmean(expected, axis=0), where=np.isnan(expected)
                 )
 
-            interp, valid = seq_interp.interpolate(times=shifted_times)
+            interp = seq_interp.interpolate(times=shifted_times)
 
-            valid_indices = np.where(valid)[0]
-            if len(valid_indices) > 0:
-                assert np.allclose(
-                    interp[valid_indices, sig_idx], expected[valid_indices], atol=1e-6
-                ), f"Linear interpolation mismatch for signal {sig_idx}"
             if not keep_nans:
                 assert (
                     np.isnan(interp).sum() == 0
@@ -347,16 +320,13 @@ def test_interpolation_for_invalid_times(interpolation_mode, end_time, keep_nans
         seq_interp.interpolation_mode = interpolation_mode
 
         times = np.array([-5.0, -0.1, 0.1, 4.9, 5.0, 5.1, 10.0])
-        interp, valid = seq_interp.interpolate(times=times)
+        interp = seq_interp.interpolate(times=times)
         expected_valid = (
             np.where((times >= 0.0) & (times <= end_time))[0]
             if interpolation_mode == "nearest_neighbor"
             else np.where((times >= 0.0) & (times < end_time))[0]
         )
-        assert (
-            expected_valid == valid
-        ).all(), "Valid times does not match expected values"
-        expected_nr_valid = len(valid)
+        expected_nr_valid = len(expected_valid)
         assert interp.shape == (
             expected_nr_valid,
             n_signals,
@@ -372,13 +342,14 @@ def test_interpolation_for_invalid_times(interpolation_mode, end_time, keep_nans
 def test_interpolation_with_phase_shifts_for_invalid_times(
     interpolation_mode, end_time, keep_nans
 ):
+    sampling_rate = 10
     n_signals = 10
     with sequence_data_and_interpolator(
         data_kwargs=dict(
             n_signals=n_signals,
             use_mem_mapped=True,
             t_end=end_time,
-            sampling_rate=10.0,
+            sampling_rate=sampling_rate,
             shifts_per_signal=True,
         ),
         interp_kwargs=dict(keep_nans=keep_nans),
@@ -389,19 +360,26 @@ def test_interpolation_with_phase_shifts_for_invalid_times(
         seq_interp.interpolation_mode = interpolation_mode
 
         times = np.array([-5.0, -0.1, 0.1, 4.9, 4.9999999, 5.0, 5.0000001, 5.1, 10.0])
-        interp, valid = seq_interp.interpolate(times=times)
-        assert (
-            np.where(
-                (times >= np.min(phase_shifts))
-                & (times <= end_time + np.max(phase_shifts))
-            )[0]
-            == valid
-        ).all(), "Valid times does not match expected values"
-        expected_nr_valid = len(valid)
-        assert interp.shape == (
-            expected_nr_valid,
-            n_signals,
-        ), f"Expected interp.shape == ({expected_nr_valid}, {n_signals}), got {interp.shape}"
+        interp = seq_interp.interpolate(times=times)
+        data_generated = (
+            int(np.floor(end_time * sampling_rate)) > 0
+        )  # necessary for small end times where no data is generated
+        expected_valid = (times >= np.min(phase_shifts)) & (
+            times <= end_time + np.max(phase_shifts)
+        )
+        expected_nr_valid = expected_valid.sum()
+
+        if not data_generated:
+            assert interp.shape == (
+                0,
+                n_signals,
+            ), f"Expected inter.shape == (0, {n_signals}), got {interp.shape}"
+
+        else:
+            assert interp.shape == (
+                expected_nr_valid,
+                n_signals,
+            ), f"Expected interp.shape == ({expected_nr_valid}, {n_signals}), got {interp.shape}"
 
 
 @pytest.mark.parametrize("interpolation_mode", ["nearest_neighbor", "linear"])
@@ -425,9 +403,8 @@ def test_interpolation_for_empty_times(interpolation_mode, phase_shifts):
             UserWarning,
             match="Sequence interpolation returns empty array, no valid times queried",
         ):
-            interp, valid = seq_interp.interpolate(times=np.array([]))
+            interp = seq_interp.interpolate(times=np.array([]))
         assert interp.shape[0] == 0, "No data expected"
-        assert valid.shape[0] == 0, "No data expected"
 
 
 def test_interpolation_mode_not_implemented():
