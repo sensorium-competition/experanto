@@ -1,10 +1,11 @@
-
 from abc import abstractmethod
 from pathlib import Path
-import yaml
+
 import numpy as np
+import yaml
 
 from .registry import INTERPOLATOR_SELECTORS, ensure_default_interpolators_registered
+
 
 class Interpolator:
     def __init__(self, root_folder: str) -> None:
@@ -38,10 +39,12 @@ class Interpolator:
         with open(Path(root_folder) / "meta.yml", "r") as file:
             meta_data = yaml.load(file, Loader=yaml.SafeLoader)
         modality = meta_data.get("modality")
-        
+
         ensure_default_interpolators_registered()
 
-        sorted_selectors = sorted(INTERPOLATOR_SELECTORS, key=lambda x: -x[0])  # highest priority first
+        sorted_selectors = sorted(
+            INTERPOLATOR_SELECTORS, key=lambda x: -x[0]
+        )  # highest priority first
 
         for priority, selector_fn, cls in sorted_selectors:
             if selector_fn(meta_data):

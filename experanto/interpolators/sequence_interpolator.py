@@ -11,12 +11,14 @@ import numpy as np
 import numpy.lib.format as fmt
 import yaml
 
+from ..intervals import TimeInterval
 from .base import Interpolator
 from .registry import register_interpolator
-from ..intervals import TimeInterval
 
 
-@register_interpolator(lambda meta: meta.get('modality', None) == "sequence", priority=0)
+@register_interpolator(
+    lambda meta: meta.get("modality", None) == "sequence", priority=0
+)
 class SequenceInterpolator(Interpolator):
     def __init__(
         self,
@@ -160,7 +162,11 @@ class SequenceInterpolator(Interpolator):
         del self._data
 
 
-@register_interpolator(lambda meta: meta.get('modality', None) == "sequence" and meta.get("phase_shift_per_signal", False), priority=1)
+@register_interpolator(
+    lambda meta: meta.get("modality", None) == "sequence"
+    and meta.get("phase_shift_per_signal", False),
+    priority=1,
+)
 class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
     def __init__(
         self,

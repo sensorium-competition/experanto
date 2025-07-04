@@ -1,3 +1,6 @@
 from .base import Interpolator
 from .screen_interpolator import ScreenInterpolator
-from .sequence_interpolator import SequenceInterpolator, PhaseShiftedSequenceInterpolator
+from .sequence_interpolator import (
+    PhaseShiftedSequenceInterpolator,
+    SequenceInterpolator,
+)
