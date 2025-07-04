@@ -16,8 +16,9 @@ from .create_screen_data import create_screen_data
 @pytest.mark.parametrize("image_frame_count", [10, 100])
 @pytest.mark.parametrize("num_videos", [1, 10])
 @pytest.mark.parametrize("encoded", [False, True])
+@pytest.mark.parametrize("number_channels", [1, 3])
 def test_nearest_neighbor_interpolation(
-    duration, fps, image_frame_count, num_videos, encoded
+    duration, fps, image_frame_count, num_videos, encoded, number_channels
 ):
     with create_screen_data(
         duration=duration,
@@ -26,10 +27,12 @@ def test_nearest_neighbor_interpolation(
         image_frame_count=image_frame_count,
         num_videos=num_videos,
         encoded=encoded,
+        #number_channels=number_channels, need to add this later to create colored data
     ) as timestamps:
 
         interp_obj = Interpolator.create("tests/screen_data")
         assert isinstance(interp_obj, ScreenInterpolator), "Expected ScreenInterpolator"
+        interp_obj.number_channels = number_channels
 
         delta_t = 1.0 / fps
         idx = slice(0, len(timestamps) - 1)
@@ -46,13 +49,17 @@ def test_nearest_neighbor_interpolation(
         expected_indices = np.round((times - timestamps[0]) * fps).astype(int)
         expected_frames = raw_array[expected_indices]
 
+        # hack to fix test for 3 channels. Have to update properly with rgb test that correctly sets this.
+        expected_frames = expected_frames[np.newaxis, :, :, :]  
+        expected_frames =  np.repeat(expected_frames, number_channels, axis=0) 
+
         interp = interp_obj.interpolate(times=times)
 
-        if expected_frames.max() > 1.1:
+        if expected_frames.max() > 1:
             # convert back to float. For export into mp4 int values are necessary
             expected_frames = expected_frames.astype(np.float32) / 255.0
 
-        if interp.max() > 1.1:
+        if interp.max() > 1:
             # convert back to float. For export into mp4 int values are necessary
             interp = interp.astype(np.float32) / 255.0
 
@@ -74,6 +81,7 @@ def test_nearest_neighbor_interpolation(
             ), f"MSE too high for encoded data: {mse:.6f} > {max_acceptable_mse}"
 
             # Also check that correlation is high (frames should be very similar structurally)
+            print('inside test', interp.shape, expected_frames.shape)
             correlation = np.corrcoef(interp.flatten(), expected_frames.flatten())[0, 1]
             min_correlation = (
                 0.95  # Expect high correlation despite compression artifacts

@@ -28,10 +28,11 @@ jobs:
         with:
           python-version: '3.12.8'
 
-      - name: Install system dependencies (FFmpeg)
+      - name: Install FFmpeg version 4.4.1
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg=7:4.4.1-1ubuntu0.1
+
 
       - name: Install dependencies
         run: |
