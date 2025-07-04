@@ -50,8 +50,8 @@ def test_nearest_neighbor_interpolation(
         expected_frames = raw_array[expected_indices]
 
         # hack to fix test for 3 channels. Have to update properly with rgb test that correctly sets this.
-        expected_frames = expected_frames[np.newaxis, :, :, :]
-        expected_frames = np.repeat(expected_frames, number_channels, axis=0)
+        expected_frames = expected_frames[:, np.newaxis, :, :]
+        expected_frames = np.repeat(expected_frames, number_channels, axis=1)
 
         interp = interp_obj.interpolate(times=times)
 

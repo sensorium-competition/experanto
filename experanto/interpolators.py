@@ -58,7 +58,9 @@ class Interpolator:
             else:
                 return SequenceInterpolator(root_folder, cache_data, **kwargs)
         elif modality == "screen":
-            return ScreenInterpolator(root_folder, cache_data, **kwargs)
+            number_channels = meta_data.get("number_channels", 1)
+            image_names = meta_data.get("image_names", False)
+            return ScreenInterpolator(root_folder, cache_data, number_channels, image_names, **kwargs)
         else:
             raise ValueError(
                 f"There is no interpolator for {modality}. Please use 'sequence' or 'screen' as modality."
@@ -320,10 +322,10 @@ class ScreenInterpolator(Interpolator):
         self,
         root_folder: str,
         cache_data: bool = False,  # New parameter
+        number_channels: int = 1,
+        image_names: bool = False,
         rescale: bool = False,
         rescale_size: typing.Optional[tuple(int, int)] = None,
-        image_names: bool = False,  # Defines whether stimuli are saved by index (00000.npy) or by name (image_1.npy). Image names are saved in meta file for each stimuli
-        number_channels: int = 1,
         normalize: bool = False,
         **kwargs,
     ) -> None:
@@ -432,7 +434,7 @@ class ScreenInterpolator(Interpolator):
             if self.image_names:
                 image_name = metadata.get("image_name")
                 data_file_name = (
-                    self.root_folder.parent / "stimuli" / f"{image_name}{format}"
+                    self.root_folder / "data" / f"{image_name}{format}"
                 )
             else:
                 data_file_name = self.root_folder / "data" / f"{key}{format}"
@@ -490,9 +492,10 @@ class ScreenInterpolator(Interpolator):
                 ]
 
         out = out.transpose(
-            3, 0, 1, 2
+            0, 3, 1, 2
         )  # transform into (C, T, H, W) after finishing with Cv2 operations
         return out
+    
 
     def format_data(self, data: np.array) -> np.array:
         # Make sure all data has shape (T, H, W, C)
@@ -516,8 +519,8 @@ class ScreenInterpolator(Interpolator):
             pass
 
         else:
-            raise ValueError(f"Unexpected data shape: {data.shape}")
-
+            raise ValueError(f"Unexpected data shape: we expect 2,3 or 4-dimensional array but got data.shape={data.shape}")
+        
         # Format number of channels correctly to fit output array
         if data.shape[3] == self.number_channels:
             pass
