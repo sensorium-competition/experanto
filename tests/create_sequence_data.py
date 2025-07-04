@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from experanto.interpolators import Interpolator
+from experanto.interpolators import create_interpolator
 
 SEQUENCE_ROOT = Path("tests/sequence_data")
 
@@ -78,6 +78,6 @@ def sequence_data_and_interpolator(data_kwargs=None, interp_kwargs=None):
     interp_kwargs = interp_kwargs or {}
     with create_sequence_data(**data_kwargs) as (timestamps, data, shifts):
         with closing(
-            Interpolator.create("tests/sequence_data", **interp_kwargs)
+            create_interpolator("tests/sequence_data", **interp_kwargs)
         ) as seq_interp:
             yield timestamps, data, shifts, seq_interp

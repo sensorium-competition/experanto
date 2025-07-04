@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from .configs import DEFAULT_MODALITY_CONFIG
-from .interpolators import Interpolator
+from .interpolators import create_interpolator
 
 log = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class Experiment:
                 log.info(f"Skipping {d.name} data... ")
                 continue
             log.info(f"Parsing {d.name} data... ")
-            dev = Interpolator.create(
+            dev = create_interpolator(
                 d,
                 cache_data=self.cache_data,
                 **self.modality_config[d.name]["interpolation"],

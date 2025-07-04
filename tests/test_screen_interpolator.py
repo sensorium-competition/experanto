@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from experanto.interpolators import Interpolator, ScreenInterpolator
+from experanto.interpolators import ScreenInterpolator, create_interpolator
 
 from .create_screen_data import create_screen_data
 
@@ -22,7 +22,7 @@ def test_nearest_neighbor_interpolation(duration, fps, image_frame_count, num_vi
         num_videos=num_videos,
     ) as timestamps:
 
-        interp_obj = Interpolator.create("tests/screen_data")
+        interp_obj = create_interpolator("tests/screen_data")
         assert isinstance(interp_obj, ScreenInterpolator), "Expected ScreenInterpolator"
 
         delta_t = 1.0 / fps

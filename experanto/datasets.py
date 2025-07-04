@@ -20,7 +20,6 @@ from torchvision.transforms.v2 import Compose, Lambda, ToTensor
 
 from .configs import DEFAULT_MODALITY_CONFIG
 from .experiment import Experiment
-from .interpolators import ImageTrial, VideoTrial
 from .intervals import (
     TimeInterval,
     find_intersection_between_two_interval_arrays,
