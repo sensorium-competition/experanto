@@ -322,7 +322,7 @@ class ScreenInterpolator(Interpolator):
         cache_data: bool = False,  # New parameter
         rescale: bool = False,
         rescale_size: typing.Optional[tuple(int, int)] = None,
-        image_names: bool = False, # Defines whether stimuli are saved by index (00000.npy) or by name (image_1.npy). Image names are saved in meta file for each stimuli
+        image_names: bool = False,  # Defines whether stimuli are saved by index (00000.npy) or by name (image_1.npy). Image names are saved in meta file for each stimuli
         number_channels: int = 1,
         normalize: bool = False,
         **kwargs,
@@ -463,29 +463,36 @@ class ScreenInterpolator(Interpolator):
 
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
-        out = np.zeros([len(valid_times)] + list(self._image_size) + [self.number_channels], dtype=np.float32)
+        out = np.zeros(
+            [len(valid_times)] + list(self._image_size) + [self.number_channels],
+            dtype=np.float32,
+        )
 
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
-            data = self.format_data(data) # add channels for proper handeling. Handels missing time / channels dimensions.
+            data = self.format_data(
+                data
+            )  # add channels for proper handeling. Handels missing time / channels dimensions.
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
-            
+
             if self.rescale:
                 orig_size = data[idx[idx_for_this_file] - self._first_frame_idx[u_idx]]
                 out[idx_for_this_file] = np.stack(
                     [
                         self.rescale_frame(frame.astype(np.float32))
                         for frame in orig_size
-                ])
+                    ]
+                )
 
             else:
                 out[idx_for_this_file] = data[
                     idx[idx_for_this_file] - self._first_frame_idx[u_idx]
                 ]
-        
-        out = out.transpose(3, 0, 1, 2) # transform into (C, T, H, W) after finishing with Cv2 operations
-        return out
 
+        out = out.transpose(
+            3, 0, 1, 2
+        )  # transform into (C, T, H, W) after finishing with Cv2 operations
+        return out
 
     def format_data(self, data: np.array) -> np.array:
         # Make sure all data has shape (T, H, W, C)
@@ -495,20 +502,22 @@ class ScreenInterpolator(Interpolator):
 
         elif len(data.shape) == 3:
             # Could be either (H, W, C) or (T, H, W)
-            if data.shape[2] in range(1, 10+self.number_channels): # This assumes that number of channels is smaller than image height. I think this is reasonable? Other Ideas on how to check this?
+            if data.shape[2] in range(
+                1, 10 + self.number_channels
+            ):  # This assumes that number of channels is smaller than image height. I think this is reasonable? Other Ideas on how to check this?
                 # Assume (H, W, C)
-                data = data[np.newaxis, :, :, :]       # (1, H, W, C)           
-                    
+                data = data[np.newaxis, :, :, :]  # (1, H, W, C)
+
             else:
                 # Assume (T, H, W) - add channels dim and repeat channels
-                data = data[:, :, :, np.newaxis]       # (T, H, W, 1)
+                data = data[:, :, :, np.newaxis]  # (T, H, W, 1)
 
         elif len(data.shape) == 4:
             pass
 
         else:
             raise ValueError(f"Unexpected data shape: {data.shape}")
-        
+
         # Format number of channels correctly to fit output array
         if data.shape[3] == self.number_channels:
             pass
@@ -520,35 +529,42 @@ class ScreenInterpolator(Interpolator):
         # Downsample multichannel images to greyscale
         elif self.number_channels == 1 and data.shape[3] != self.number_channels:
             # Sample a subset to check for stacked grayscale
-            sample = data[::10, ::20, ::20, :]  # sample every 10th frame and check if channels are equal. What is the best way to do this? np.all way to expensive
-            if (
-                np.allclose(sample[..., 0], sample[..., 1], atol=1e-3) and
-                np.allclose(sample[..., 1], sample[..., 2], atol=1e-3)
+            sample = data[
+                ::10, ::20, ::20, :
+            ]  # sample every 10th frame and check if channels are equal. What is the best way to do this? np.all way to expensive
+            if np.allclose(sample[..., 0], sample[..., 1], atol=1e-3) and np.allclose(
+                sample[..., 1], sample[..., 2], atol=1e-3
             ):
-                data = data[..., 0][..., np.newaxis]  # Keep shape consistent (T, H, W, 1)
+                data = data[..., 0][
+                    ..., np.newaxis
+                ]  # Keep shape consistent (T, H, W, 1)
             elif data.shape[3] == 3:
-                data = np.array([cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY) for frame in data])
+                data = np.array(
+                    [cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY) for frame in data]
+                )
                 data = data[:, :, :, np.newaxis]
-            
-            else:
-                raise ValueError(f"Cannot reduce channels from : {data.shape[3]} to {self.number_channels}.")
 
+            else:
+                raise ValueError(
+                    f"Cannot reduce channels from : {data.shape[3]} to {self.number_channels}."
+                )
 
         else:
-            raise ValueError(f"Cannot broadcast data with : {data.shape[3]} channels into {self.number_channels} channels.")
+            raise ValueError(
+                f"Cannot broadcast data with : {data.shape[3]} channels into {self.number_channels} channels."
+            )
 
         return data
-
 
     def rescale_frame(self, frame: np.array) -> np.array:
         """
         Changes the resolution of the image to this size.
         Returns: Rescaled image
         """
-        resized = cv2.resize(frame, np.flip(self._image_size), interpolation=cv2.INTER_AREA).astype(
-            np.float32
-        )
-    
+        resized = cv2.resize(
+            frame, np.flip(self._image_size), interpolation=cv2.INTER_AREA
+        ).astype(np.float32)
+
         # If input has shape (H, W, 1), output looses channel dim and becomes (H, W). Hence we have to add it back
         if resized.ndim == 2:
             resized = resized[:, :, np.newaxis]
@@ -633,7 +649,7 @@ class EncodedImageTrial(ScreenTrial):
         """Override base implementation to load compressed images"""
         img = cv2.imread(self.data_file_name)
         return img
-    
+
 
 class VideoTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
@@ -664,8 +680,11 @@ class EncodedVideoTrial(ScreenTrial):
         full_video_bgr = np.transpose(
             self.video_decoder[:].numpy(), (0, 2, 3, 1)
         )  # Important! this loads entire video right now. This is unnecessary but works with interpolation loop. Will improve if we decide on it
-        full_video_rgb = np.array([cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in full_video_bgr])
+        full_video_rgb = np.array(
+            [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in full_video_bgr]
+        )
         return full_video_rgb
+
 
 class BlankTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
