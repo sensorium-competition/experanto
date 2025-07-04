@@ -505,8 +505,8 @@ class ScreenInterpolator(Interpolator):
         elif len(data.shape) == 3:
             # Could be either (H, W, C) or (T, H, W)
             if data.shape[2] in range(
-                1, 10 + self.number_channels
-            ):  # This assumes that number of channels is smaller than image height. I think this is reasonable? Other Ideas on how to check this?
+                1, 5 or data.shape[2] == self.number_channels
+            ):  # This checks if last column is within 1 to 4, to decide if it is width or channels dim.
                 # Assume (H, W, C)
                 data = data[np.newaxis, :, :, :]  # (1, H, W, C)
 

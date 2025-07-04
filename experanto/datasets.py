@@ -298,15 +298,6 @@ class ChunkDataset(Dataset):
         else:
             return torch.from_numpy(x)
 
-    # Helper class to call normalization and for non image data
-    class NormalizeTensor:
-        def __init__(self, mean, std):
-            self.mean = mean
-            self.std = std
-
-        def __call__(self, tensor):
-            return (tensor - self.mean) / self.std
-
     def initialize_transforms(self):
         """
         Initializes the transforms for each device based on the modality config.
@@ -324,29 +315,16 @@ class ChunkDataset(Dataset):
                 ]
                 transform_list.insert(0, add_channel)
 
-                if self.modality_config[device_name].transforms.get(
-                    "normalization", False
-                ):
-                    transform_list.append(
-                        torchvision.transforms.Normalize(
-                            self._statistics[device_name]["mean"],
-                            self._statistics[device_name]["std"],
-                        )
-                    )
-
             else:
                 transform_list = [lambda x: torch.from_numpy(x).float()]
 
-                # Normalisation without torchvision since it's not image data
-                if self.modality_config[device_name].transforms.get(
-                    "normalization", False
-                ):
-                    transform_list.append(
-                        self.NormalizeTensor(
-                            self._statistics[device_name]["mean"],
-                            self._statistics[device_name]["std"],
-                        )
+            if self.modality_config[device_name].transforms.get("normalization", False):
+                transform_list.append(
+                    torchvision.transforms.Normalize(
+                        self._statistics[device_name]["mean"],
+                        self._statistics[device_name]["std"],
                     )
+                )
 
             transforms[device_name] = Compose(transform_list)
 
