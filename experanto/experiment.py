@@ -112,7 +112,9 @@ class Experiment:
             If no sampling rate is specified or available for a device.
         """
         devices = self._resolve_devices(devices)
-        target_sampling_rates = self._resolve_sampling_rates(devices, target_sampling_rates)
+        target_sampling_rates = self._resolve_sampling_rates(
+            devices, target_sampling_rates
+        )
 
         out = {}
         for device in devices:
@@ -165,7 +167,7 @@ class Experiment:
         Returns
         -------
         dict[str, np.ndarray]
-            A dictionary mapping each device name to its corresponding interpolated data array 
+            A dictionary mapping each device name to its corresponding interpolated data array
             of shape `(chunk_size, ...)`.
 
         Raises
@@ -177,7 +179,9 @@ class Experiment:
         """
         devices = self._resolve_devices(devices)
         chunk_sizes = self._resolve_chunk_sizes(devices, chunk_sizes)
-        target_sampling_rates = self._resolve_sampling_rates(devices, target_sampling_rates)
+        target_sampling_rates = self._resolve_sampling_rates(
+            devices, target_sampling_rates
+        )
 
         start_time = int(round(start_time * self.scale_precision))
         out = {}
@@ -217,9 +221,7 @@ class Experiment:
 
     def _resolve_sampling_rates(self, devices, rates):
         if rates is None:
-            return {
-                d: self.modality_config[d].get("sampling_rate") for d in devices
-            }
+            return {d: self.modality_config[d].get("sampling_rate") for d in devices}
         elif isinstance(rates, (int, float)):
             return {d: rates for d in devices}
         else:
@@ -227,13 +229,13 @@ class Experiment:
 
     def _resolve_chunk_sizes(self, devices, chunk_sizes):
         if chunk_sizes is None:
-            return {
-                d: self.modality_config[d].get("chunk_size") for d in devices
-            }
+            return {d: self.modality_config[d].get("chunk_size") for d in devices}
         elif isinstance(chunk_sizes, (int, float)):
             return {d: int(chunk_sizes) for d in devices}
         else:
             return chunk_sizes
 
     def _get_device_offset(self, device: str) -> int:
-        return int(round(self.modality_config[device].get("offset", 0) * self.scale_precision))
+        return int(
+            round(self.modality_config[device].get("offset", 0) * self.scale_precision)
+        )

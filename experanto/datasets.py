@@ -618,10 +618,10 @@ class ChunkDataset(Dataset):
         timestamps = {}
         s = self._valid_screen_times[idx]
         out, timestamps = self._experiment.get_data_for_chunks(
-            s, 
-            chunk_sizes=self.chunk_sizes, 
-            target_sampling_rates=self.sampling_rates, 
-            devices=self.device_names
+            s,
+            chunk_sizes=self.chunk_sizes,
+            target_sampling_rates=self.sampling_rates,
+            devices=self.device_names,
         )
 
         for device_name in self.device_names:
@@ -633,7 +633,7 @@ class ChunkDataset(Dataset):
                 times = times - self._experiment.devices[device_name].start_time
                 times = times.to(torch.float32).contiguous()
             timestamps[device_name] = times
-            
+
         # TODO: find better convention for image, video, color, gray channels. This makes the monkey data same as mouse.
         if "screen" in out:
             if out["screen"].shape[-1] == 3:
