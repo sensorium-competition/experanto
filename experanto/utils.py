@@ -477,7 +477,7 @@ class FastSessionDataLoader:
         num_workers=0,
         pin_memory=False,
         drop_last=False,
-        cycle_mode: Literal['active', 'max'] = 'active',
+        cycle_mode: Literal['active', 'balanced'] = 'active',
         seed=None,
         **kwargs,
     ):
@@ -502,8 +502,8 @@ class FastSessionDataLoader:
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.kwargs = kwargs
-        assert cycle_mode in ['active', 'max'], \
-            f"Invalid cycle mode: {cycle_mode}! Must be one of ['active', 'max']"
+        assert cycle_mode in ['active', 'balanced'], \
+            f"Invalid cycle mode: {cycle_mode}! Must be one of ['active', 'balanced']"
         self.cycle_mode = cycle_mode
         # Create batch sampler
         self.batch_sampler = SessionBatchSampler(
@@ -562,12 +562,12 @@ class FastSessionDataLoader:
         """Return the total number of batches in an epoch."""
         if self.cycle_mode == 'active':
             return sum(self.batches_per_session.values())
-        elif self.cycle_mode == 'max':
+        elif self.cycle_mode == 'balanced':
             return self.max_batches_per_session * len(self.session_names)
         else:
             raise ValueError(
                 f"Invalid cycle mode: {self.cycle_mode}! "
-                f"Must be one of ['active', 'max']"
+                f"Must be one of ['active', 'balanced']"
             )
 
     def reset_state(self):
@@ -724,7 +724,7 @@ class FastSessionDataLoader:
                         # This session is exhausted for the current epoch
                         if session_name in self.active_sessions:
                             self.active_sessions.remove(session_name)
-                    elif self.cycle_mode == 'max':
+                    elif self.cycle_mode == 'balanced':
                         # Reset iterator and try again. NOTE: `SessionSpecificSampler`
                         #  resets its state automatically when `__iter__` expires.
                         iterator = iter(self.session_dataloaders[session_name])
@@ -736,7 +736,7 @@ class FastSessionDataLoader:
                     else:
                         raise ValueError(
                             f"Invalid cycle mode: {self.cycle_mode}! "
-                            f"Must be one of ['active', 'max']"
+                            f"Must be one of ['active', 'balanced']"
                         )
 
             self.batch_sampler.consumed_sessions = []
