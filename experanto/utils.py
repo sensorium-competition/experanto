@@ -560,7 +560,15 @@ class FastSessionDataLoader:
 
     def __len__(self):
         """Return the total number of batches in an epoch."""
-        return sum(self.batches_per_session.values())
+        if self.cycle_mode == 'active':
+            return sum(self.batches_per_session.values())
+        elif self.cycle_mode == 'max':
+            return self.max_batches_per_session * len(self.session_names)
+        else:
+            raise ValueError(
+                f"Invalid cycle mode: {self.cycle_mode}! "
+                f"Must be one of ['active', 'max']"
+            )
 
     def reset_state(self):
         """Reset the state of the dataloader."""
@@ -687,7 +695,7 @@ class FastSessionDataLoader:
             if hasattr(sampler, 'set_position'):
                 sampler.set_position(self.session_positions[session_name])
 
-        # Create iterators for each session
+        # Create iterators for each session. NOTE: Calling `iter(dl)` actually increments sampler position by 2!
         session_iterators = {s: iter(dl) for s, dl in self.session_dataloaders.items()}
 
         # Continue until we've gone through one full epoch
