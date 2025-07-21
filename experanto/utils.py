@@ -686,17 +686,16 @@ class FastSessionDataLoader:
         3. The epoch ends when the longest session is exhausted
         """
 
-        # TODO: `SessionSpecificSampler` now handles it's own position, can we remove this? @konstantin
+        # Create iterators for each session. NOTE: Calling `iter(dl)` actually increments
+        #  sampler position by 2, so we do it before setting the position!
+        session_iterators = {s: iter(dl) for s, dl in self.session_dataloaders.items()}
+
         # Reset iterators with current positions
-        session_iterators = {}
         for session_name, dataloader in self.session_dataloaders.items():
             # Reset sampler position
             sampler = dataloader.batch_sampler
             if hasattr(sampler, 'set_position'):
                 sampler.set_position(self.session_positions[session_name])
-
-        # Create iterators for each session. NOTE: Calling `iter(dl)` actually increments sampler position by 2!
-        session_iterators = {s: iter(dl) for s, dl in self.session_dataloaders.items()}
 
         # Continue until we've gone through one full epoch
         # (i.e., until the longest session is exhausted)
@@ -729,6 +728,9 @@ class FastSessionDataLoader:
                         # Reset iterator and try again. NOTE: `SessionSpecificSampler`
                         #  resets its state automatically when `__iter__` expires.
                         iterator = iter(self.session_dataloaders[session_name])
+                        # HACK: Undo the increment of the sampler position during call to `iter`
+                        if hasattr(iterator._index_sampler, 'set_position'):
+                            iterator._index_sampler.set_position(0)
                         session_iterators[session_name] = iterator
                         yield self._get_next_batch(iterator, session_name)
                     else:
