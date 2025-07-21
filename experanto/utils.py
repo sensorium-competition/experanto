@@ -686,9 +686,14 @@ class FastSessionDataLoader:
         3. The epoch ends when the longest session is exhausted
         """
 
-        # Create iterators for each session. NOTE: Calling `iter(dl)` actually increments
-        #  sampler position by 2, so we do it before setting the position!
-        session_iterators = {s: iter(dl) for s, dl in self.session_dataloaders.items()}
+        # Create iterators for each session.
+        session_iterators = {}
+        for s, dl in self.session_dataloaders.items():
+            # NOTE: Calling `iter(dl)` actually increments sampler position by 2, so we
+            #  manually re-set the position to the pre-iteration value!
+            _pre_iter_position = dl.batch_sampler.position
+            session_iterators[s] = iter(dl)
+            dl.batch_sampler.set_position(_pre_iter_position)
 
         # Reset iterators with current positions
         for session_name, dataloader in self.session_dataloaders.items():
@@ -765,7 +770,8 @@ class SessionSpecificSampler(Sampler):
             shuffle: Whether to shuffle indices
             seed: Random seed for reproducibility
         """
-        self.indices = list(indices)  # Make a copy to avoid modification issues
+        self._original_indices = list(indices)  # Save a copy so we can shuffle from original state
+        self.indices = deepcopy(self._original_indices)
         self.batch_size = batch_size
         self.drop_last = drop_last
         self.shuffle = shuffle
@@ -789,6 +795,9 @@ class SessionSpecificSampler(Sampler):
         """Shuffle the indices."""
         if self.shuffle:
             self.prv_rng_state = self.rng.get_state()
+            # NOTE: We always shuffle from the original indices such that the shuffled result
+            #  only depends on the current RNG state, not on the previous state of the indices.
+            self.indices = deepcopy(self._original_indices)
             self.rng.shuffle(self.indices)
 
     def reset_state(self):
@@ -800,6 +809,8 @@ class SessionSpecificSampler(Sampler):
 
     def get_state(self):
         """Return the state of the sampler (including RNG state)."""
+        # NOTE: We don't save the indices! This requires that the reloaded sampler must be
+        #  initialized with the same indices *in the same order* as the original one.
         return {
             'prv_rng_state': self.prv_rng_state,
             'position': self.position,
