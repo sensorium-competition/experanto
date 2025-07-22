@@ -448,16 +448,16 @@ class SessionBatchSampler(Sampler):
     def get_state(self):
         """Return the state of the sampler (including RNG state)."""
         return {
-            'prv_rng_state': self.prv_rng_state,
-            'consumed_sessions': self.consumed_sessions
+            'prv_rng_state': deepcopy(self.prv_rng_state),
+            'consumed_sessions': deepcopy(self.consumed_sessions)
         }
 
     def set_state(self, state):
         """Restore the state of the sampler (including RNG state)."""
-        self.prv_rng_state = state.get('prv_rng_state')
+        self.prv_rng_state = deepcopy(state.get('prv_rng_state'))
         if self.prv_rng_state is not None:
             self.rng.set_state(self.prv_rng_state)
-        self.consumed_sessions = state.get('consumed_sessions', [])
+        self.consumed_sessions = deepcopy(state.get('consumed_sessions', []))
 
 
 class FastSessionDataLoader:
@@ -587,8 +587,8 @@ class FastSessionDataLoader:
         return {
             'current_batch': self.current_batch,
             'position_in_epoch': self.position_in_epoch,
-            'session_positions': self.session_positions.copy(),
-            'batches_from_session': self.batches_from_session.copy(),
+            'session_positions': deepcopy(self.session_positions),
+            'batches_from_session': deepcopy(self.batches_from_session),
             'active_sessions': list(self.active_sessions),  # Store as list for serialization
             'batch_sampler_state': self.batch_sampler.get_state(),
             'session_sampler_states': {
@@ -616,7 +616,7 @@ class FastSessionDataLoader:
         # Restore session positions
         session_positions = state.get('session_positions')
         if session_positions:
-            self.session_positions = session_positions
+            self.session_positions = deepcopy(session_positions)
 
         # Restore RNG state for the batch sampler
         batch_sampler_state = state.get('batch_sampler_state')
@@ -693,7 +693,7 @@ class FastSessionDataLoader:
             #  manually re-set the position to the pre-iteration value!
             _pre_iter_position = dl.batch_sampler.position
             session_iterators[s] = iter(dl)
-            dl.batch_sampler.set_position(_pre_iter_position)
+            dl.batch_sampler.position = _pre_iter_position
 
         # Reset iterators with current positions
         for session_name, dataloader in self.session_dataloaders.items():
@@ -736,6 +736,7 @@ class FastSessionDataLoader:
                         # HACK: Undo the increment of the sampler position during call to `iter`
                         if hasattr(iterator._index_sampler, 'set_position'):
                             iterator._index_sampler.set_position(0)
+                        self.session_positions[session_name] = 0
                         session_iterators[session_name] = iterator
                         yield self._get_next_batch(iterator, session_name)
                     else:
@@ -789,7 +790,16 @@ class SessionSpecificSampler(Sampler):
 
     def set_position(self, position: int):
         """Set the current batch position."""
-        self.position = position % self.num_batches if self.num_batches > 0 else 0
+        # NOTE: We set the position to the number of batches here such that the iterator
+        #  will get exhausted and reset on the next call to `__iter__`. This is neccessary
+        #  because when position == num_batches, we still haven't shuffled the indices, so
+        #  we don't want to reset the position yet.
+        if position == self.num_batches:
+            self.position = self.num_batches
+        elif self.num_batches > 0:
+            self.position = position % self.num_batches
+        else:
+            self.position = 0
 
     def shuffle_indices(self):
         """Shuffle the indices."""
@@ -812,13 +822,13 @@ class SessionSpecificSampler(Sampler):
         # NOTE: We don't save the indices! This requires that the reloaded sampler must be
         #  initialized with the same indices *in the same order* as the original one.
         return {
-            'prv_rng_state': self.prv_rng_state,
+            'prv_rng_state': deepcopy(self.prv_rng_state),
             'position': self.position,
         }
 
     def set_state(self, state):
         """Restore the state of the sampler (including RNG state)."""
-        self.prv_rng_state = state.get('prv_rng_state')
+        self.prv_rng_state = deepcopy(state.get('prv_rng_state'))
         if self.prv_rng_state is not None:
             self.rng.set_state(self.prv_rng_state)
             # shuffle indices with loaded RNG state
