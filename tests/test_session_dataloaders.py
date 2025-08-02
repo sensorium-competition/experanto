@@ -2,8 +2,10 @@
 Tests for SessionBatchSampler, SessionSpecificSampler, and FastSessionDataLoader functionality.
 """
 import pytest
+from typing import Dict, Optional, Any
 from copy import deepcopy
 from collections import defaultdict, Counter
+import math
 import numpy as np
 import torch
 
@@ -42,6 +44,41 @@ def states_equal(state1, state2):
     else:
         # For primitives and other types
         return state1 == state2
+
+
+def _get_sampler_attributes(
+    _fast_dataloader: FastSessionDataLoader,
+    _session_name: Optional[str] = None,
+    _attr_name: str = 'indices',
+):
+    _dummy_dl = list(_fast_dataloader.session_dataloaders.values())[0]
+    assert hasattr(_dummy_dl.batch_sampler, _attr_name), \
+        f"Session dataloader {_attr_name} attribute not found"
+    ret = {
+        k: deepcopy(getattr(v.batch_sampler, _attr_name))
+        for k, v in _fast_dataloader.session_dataloaders.items()
+    }
+    if _session_name is not None:
+        assert _session_name in ret, f"Session name {_session_name} not found in dataloader"
+        ret = {k: v for k, v in ret.items() if k == _session_name}
+    return ret
+
+
+def _update_state(
+    _prev: Dict[str, Any],
+    _curr: Dict[str, Any],
+    _validate_change: bool = True,
+    _session_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    if _session_name is not None:
+        assert _session_name in _prev and _session_name in _curr, \
+            f"Session name {_session_name} not found in state!"
+        _curr = {k: v for k, v in _curr.items() if k == _session_name}
+    if _validate_change:
+        assert not states_equal({k:v for k,v in _prev.items() if k in _curr},  _curr), \
+            "State did not change!"
+    _prev.update(_curr)
+    return _prev
 
 
 def _check_reset(_fast_dataloader: FastSessionDataLoader):
@@ -225,9 +262,8 @@ class TestSessionBatchSampler:
             prev_prv_rng_state = deepcopy(batch_sampler.prv_rng_state)
             curr_cycle = batch_sampler.get_session_cycle()
             next_prv_rng_state = deepcopy(batch_sampler.prv_rng_state)
-            assert (not all([np.array(s1 == s2).all() for s1, s2 in zip(
-                next_prv_rng_state, prev_prv_rng_state
-            )])), "RNG state did not change on call to `get_session_cycle`"
+            assert not states_equal(prev_prv_rng_state, next_prv_rng_state), \
+                "RNG state did not change on call to `get_session_cycle`"
             if not all(p == c for c, p in zip(curr_cycle, prev_cycle)):
                 shuffle_flag = True
                 break  # Order has changed, shuffling is working.
@@ -375,18 +411,34 @@ class TestBalancedFastSessionDataLoader:
         """Test that dataloader resets after epoch completion.
         
         TODO: Consider adding a few more validation checks
-        """
+        """    
         # Create dataloader and get synced length
         fast_dataloader = fast_dataloader_factory()
         # Create extended length (imitating 
         #  `unraveling.distributed.utils.SyncedFastSessionDataLoader`)
         synced_len = int(len(fast_dataloader) * 1.5)
+        # Get sessions list
+        sessions = fast_dataloader.session_names
         # Run for 2 (extended) epochs
-        epochs, global_step = 2, 0
+        epochs = 2
         while epochs > 0:
-            epoch_step, original_epoch_step = 0, 0
-            session_batch_counts = defaultdict(int)
-            session_batch_hashes = defaultdict(list)
+            # Initialize epoch counters
+            epoch_step = 0
+            epoch_batches_per_session = defaultdict(int)
+            epoch_batch_hashes_per_session = defaultdict(list)
+            # Initialize expected tracker values for this epoch
+            expected_current_batch = 0
+            expected_position_in_epoch = 0
+            expected_session_batch_counts = defaultdict(int)
+            expected_session_positions = {k: 0 for k in sessions}
+            expected_consumed_sessions = []
+            expected_sampler_indices = _get_sampler_attributes(
+                fast_dataloader, _attr_name='indices'
+            )
+            expected_prv_rng_states = _get_sampler_attributes(
+                fast_dataloader, _attr_name='prv_rng_state'
+            )
+            # Run epoch for `synced_len` batches
             dl_iter = iter(fast_dataloader)
             while epoch_step < synced_len:
                 try:
@@ -394,7 +446,21 @@ class TestBalancedFastSessionDataLoader:
                     key, batch = next(dl_iter)
                 except StopIteration:
                     # Reset "original" epoch step
-                    original_epoch_step = 0
+                    expected_current_batch = 0
+                    expected_position_in_epoch = 0
+                    expected_session_batch_counts = defaultdict(int)
+                    expected_session_positions = {k: 0 for k in sessions}
+                    expected_consumed_sessions = []
+                    _update_state(
+                        expected_sampler_indices,
+                        _get_sampler_attributes(fast_dataloader, _attr_name='indices'),
+                        _validate_change=True, # Check that indices were shuffled
+                    )
+                    _update_state(
+                        expected_prv_rng_states,
+                        _get_sampler_attributes(fast_dataloader, _attr_name='prv_rng_state'),
+                        _validate_change=True, # Check that RNG state was updated
+                    )
                     # Check automatic reset after exhausting iterator
                     _check_reset(fast_dataloader)
                     # Reset iterator
@@ -403,169 +469,76 @@ class TestBalancedFastSessionDataLoader:
                     _check_reset(fast_dataloader)
                     # Get next batch from new iterator
                     key, batch = next(dl_iter)
-                
-                # Validate `position_in_epoch`. NOTE: `position_in_epoch` incremented only after `yield`.
-                expected_position_in_epoch = original_epoch_step // 3
+                # Reset batch cycle
+                if len(expected_consumed_sessions) == len(sessions):
+                    expected_consumed_sessions = []
+                    expected_position_in_epoch += 1
+                # Reset session specific iterator
+                if expected_session_positions[key] == len(fast_dataloader.session_dataloaders[key]):
+                    expected_session_positions[key] = 0
+                    _update_state(
+                        expected_sampler_indices,
+                        _get_sampler_attributes(fast_dataloader, _attr_name='indices'),
+                        _session_name=key,
+                        _validate_change=True, # Check that indices were shuffled
+                    )
+                    _update_state(
+                        expected_prv_rng_states,
+                        _get_sampler_attributes(fast_dataloader, _attr_name='prv_rng_state'),
+                        _session_name=key,
+                        _validate_change=True, # Check that RNG state was updated
+                    )
+                # Update expected values
+                expected_current_batch += 1
+                expected_session_batch_counts[key] += 1
+                expected_session_positions[key] += 1
+                expected_consumed_sessions.append(key)
+                # Validate expected values
+                #  `current_batch`
+                assert expected_current_batch == fast_dataloader.current_batch
+                #  `position_in_epoch`
                 assert expected_position_in_epoch == fast_dataloader.position_in_epoch
-                original_epoch_step += 1
-                epoch_step += 1
-                global_step += 1
-                session_batch_counts[key] += 1
-                session_batch_hashes[key].append(
-                    hash(batch['responses'].flatten().tolist().__str__())
+                #  `batches_from_session`
+                assert expected_session_batch_counts == fast_dataloader.batches_from_session
+                #  `session_positions`
+                assert (
+                    expected_session_positions ==
+                    fast_dataloader.session_positions ==
+                    _get_sampler_attributes(fast_dataloader, _attr_name='position')
                 )
-                
-                # ===============================================
-                # COMPREHENSIVE TRACKER VALIDATION
-                # ===============================================
-                
-                # FastSessionDataLoader trackers:
-                # 1. current_batch - should match original_epoch_step  
-                assert original_epoch_step == fast_dataloader.current_batch
-                
-                # # 2. position_in_epoch - incremented after full cycle (see above)
-                
-                # 3. batches_from_session - should match actual counts within current epoch
-                max_batches_per_session = fast_dataloader.max_batches_per_session
-                for session_name in fast_dataloader.session_names:
-                    session_batch_count = session_batch_counts[session_name]
-                    if epoch_step > len(fast_dataloader):
-                        session_batch_count = session_batch_count % max_batches_per_session
-                    # NOTE: The batch count doesn't reset until after trying to get the next batch
-                    if session_batch_count > 0 and session_batch_count % max_batches_per_session == 0:
-                        expected_batches_from_session = max_batches_per_session
-                    else:
-                        expected_batches_from_session = session_batch_count % max_batches_per_session
-                    actual_batches_from_session = fast_dataloader.batches_from_session[session_name]
-                    assert expected_batches_from_session == actual_batches_from_session, \
-                        f"Session {session_name}: expected {expected_batches_from_session}, got {actual_batches_from_session}"
-                
-                # 4. session_positions - should match position within each session's cycle
-                for session_name in fast_dataloader.session_names:
-                    session_batch_count = session_batch_counts[session_name]
-                    session_dataloader = fast_dataloader.session_dataloaders[session_name]
-                    session_len = len(session_dataloader)
-                    
-                    # NOTE: The position doesn't reset until after trying to get the next batch
-                    if epoch_step > len(fast_dataloader):
-                        session_batch_count = session_batch_count % max_batches_per_session
-                    if session_batch_count > 0 and session_batch_count % session_len == 0:
-                        expected_session_position = session_len
-                    else:
-                        expected_session_position = session_batch_count % session_len
-                    actual_session_position = fast_dataloader.session_positions[session_name]
-                    assert expected_session_position == actual_session_position, \
-                        f"Session {session_name}: expected position {expected_session_position}, got {actual_session_position}"
-                
-                # 5. active_sessions - should contain all sessions in balanced mode
-                assert len(fast_dataloader.active_sessions) == len(fast_dataloader.session_names)
-                assert fast_dataloader.active_sessions == set(fast_dataloader.session_names)
-                
-                # SessionSpecificSampler trackers (for each session):
-                for session_name, session_dataloader in fast_dataloader.session_dataloaders.items():
-                    session_sampler = session_dataloader.batch_sampler
-                    session_batch_count = session_batch_counts[session_name]
-                    session_len = len(session_dataloader)
-                    
-                    # 1. position - should match the current position within session
-                    if epoch_step > len(fast_dataloader):
-                        session_batch_count = session_batch_count % max_batches_per_session
-                    # NOTE: The position doesn't reset until after trying to get the next batch
-                    if session_batch_count > 0 and session_batch_count % session_len == 0:
-                        expected_sampler_position = session_len
-                    else:
-                        expected_sampler_position = session_batch_count % session_len
-                    actual_sampler_position = session_sampler.position
-                    assert expected_sampler_position == actual_sampler_position, \
-                        f"Session {session_name} sampler: expected position {expected_sampler_position}, got {actual_sampler_position}"
-                
-                # SessionBatchSampler trackers:
-                batch_sampler = fast_dataloader.batch_sampler
-                
-                # 1. consumed_sessions - should track sessions used in current cycle
-                # Length should be between 0-3 (resets after each full cycle)
-                consumed_count = len(batch_sampler.consumed_sessions)
-                assert 0 <= consumed_count <= 3, \
-                    f"consumed_sessions count {consumed_count} should be between 0-3"
-                
-                # The consumed sessions should match the sessions we've seen in current cycle
-                current_cycle_position = original_epoch_step % 3
-                if current_cycle_position == 0:
-                    # Just completed a cycle, should have all 3 sessions or be empty (if just reset)
-                    assert consumed_count in [0, 3], \
-                        f"At cycle boundary, consumed_sessions should be 0 or 3, got {consumed_count}"
-                else:
-                    # In middle of cycle, should match current position
-                    assert consumed_count == current_cycle_position, \
-                        f"In cycle position {current_cycle_position}, consumed_sessions should be {current_cycle_position}, got {consumed_count}"
-                
-                # Cross-validation: session_positions should match sampler positions
-                for session_name in fast_dataloader.session_names:
-                    session_dataloader = fast_dataloader.session_dataloaders[session_name]
-                    sampler_position = session_dataloader.batch_sampler.position
-                    fast_dl_position = fast_dataloader.session_positions[session_name]
-                    assert sampler_position == fast_dl_position, \
-                        f"Session {session_name}: sampler position {sampler_position} != dataloader position {fast_dl_position}"
-
-            # =============================================== 
-            # END OF EPOCH VALIDATION
-            # ===============================================
-            
-            # Validate correct number of batches seen after epoch completion
-            total_batches_seen = sum(session_batch_counts.values())
-            expected_total_batches = synced_len
-            assert total_batches_seen == expected_total_batches, \
-                f"Expected {expected_total_batches} total batches, but saw {total_batches_seen}"
-            
-            # In balanced mode, each session should have been seen the same number of times
-            # across the synced epoch length
-            max_batches_per_session = fast_dataloader.max_batches_per_session
-            expected_cycles = synced_len // 3  # 3 sessions per cycle
-            expected_remainder = synced_len % 3  # remaining batches after complete cycles
-            
-            # For complete cycles, each session should appear exactly 'expected_cycles' times
-            for session_name in fast_dataloader.session_names:
-                actual_count = session_batch_counts[session_name]
-                
-                # Each session appears once per cycle, plus potentially once more if in remainder
-                min_expected = expected_cycles
-                max_expected = expected_cycles + (1 if expected_remainder > 0 else 0)
-                
-                assert min_expected <= actual_count <= max_expected, \
-                    f"Session {session_name}: expected {min_expected}-{max_expected} batches, got {actual_count}"
-            
-            # The total should equal exactly synced_len
-            assert sum(session_batch_counts.values()) == synced_len, \
-                f"Total session batch counts {sum(session_batch_counts.values())} != synced_len {synced_len}"
-            
-            # Validate that we've covered the expected number of full dataloader epochs
-            # synced_len = 1.5 * len(fast_dataloader), so we should see 1 complete epoch + partial
-            full_epochs_expected = synced_len // len(fast_dataloader)
-            partial_epoch_batches = synced_len % len(fast_dataloader)
-            
-            print(f"Epoch completed: saw {total_batches_seen} batches "
-                  f"({full_epochs_expected} full epochs + {partial_epoch_batches} partial batches)")
-            
-            # Validate session distribution within each complete epoch cycle
-            if full_epochs_expected > 0:
-                # In balanced mode, each complete epoch should have exactly max_batches_per_session per session
-                for i in range(full_epochs_expected):
-                    epoch_start = i * len(fast_dataloader)
-                    epoch_end = min((i + 1) * len(fast_dataloader), synced_len)
-                    epoch_batches = epoch_end - epoch_start
-                    
-                    if epoch_batches == len(fast_dataloader):  # Complete epoch
-                        # Each session should appear exactly max_batches_per_session times
-                        for session_name in fast_dataloader.session_names:
-                            # Count batches for this session in this epoch
-                            session_count_in_epoch = 0
-                            # This is simplified - in practice we'd need to track per-epoch
-                            # but since we reset between epochs, we can validate the pattern
-                            if i == 0:  # First epoch (we can validate this one)
-                                expected_in_complete_epoch = max_batches_per_session
-                                # Note: This is a simplified check since we don't track per-epoch history
-                                # The main validation is that total counts are correct
-            
+                #  `SessionSpecificSampler.indices`
+                assert expected_sampler_indices == _get_sampler_attributes(
+                    fast_dataloader, _attr_name='indices'
+                )
+                #  `SessionSpecificSampler.prv_rng_state`
+                assert states_equal(expected_prv_rng_states, _get_sampler_attributes(
+                    fast_dataloader, _attr_name='prv_rng_state'
+                ))
+                #  `BatchSampler.consumed_sessions`
+                assert expected_consumed_sessions == fast_dataloader.batch_sampler.consumed_sessions
+                # Update epoch counters
+                epoch_step += 1
+                epoch_batches_per_session[key] += 1
+                epoch_batch_hashes_per_session[key].extend(
+                    [hash(x.flatten().tolist().__str__()) for x in batch['responses']]
+                )
+            # Validate after epoch counts
+            #  total batches
+            assert epoch_step == synced_len
+            max_batches = fast_dataloader.max_batches_per_session
+            for session_name, session_dl in fast_dataloader.session_dataloaders.items():
+                batch_counts = epoch_batches_per_session[session_name]
+                batch_hash_counts = Counter(epoch_batch_hashes_per_session[session_name])
+                #  batches per session
+                assert (
+                    int(1.5 * max_batches) <= batch_counts <= math.ceil(1.5 * max_batches)
+                )
+                max_samples = max_batches * session_dl.batch_sampler.batch_size
+                sess_len = len(session_dl) * session_dl.batch_sampler.batch_size
+                sess_min = int(max_samples / sess_len) + int(.5 * max_samples / sess_len)
+                sess_max = math.ceil(max_samples / sess_len) + math.ceil(.5 * max_samples / sess_len)
+                #  Appearances of each unique batch
+                assert all(sess_min <= count <= sess_max for count in batch_hash_counts.values() )
             # Reset dataloader
             fast_dataloader.reset_state()
             # Check that dataloader state was reset
