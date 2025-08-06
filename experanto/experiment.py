@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import logging
-import re
-from collections import namedtuple
-from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
 
-from .interpolators import Interpolator
 from .configs import DEFAULT_MODALITY_CONFIG
+from .interpolators import Interpolator
 
 log = logging.getLogger(__name__)
 
@@ -45,8 +42,17 @@ class Experiment:
                 log.info(f"Skipping {d.name} data... ")
                 continue
             log.info(f"Parsing {d.name} data... ")
-            dev = Interpolator.create(d, cache_data=self.cache_data, **self.modality_config[d.name]["interpolation"])
-            self.devices[d.name] = dev
+            dev = Interpolator.create(
+                d,
+                cache_data=self.cache_data,
+                **self.modality_config[d.name]["interpolation"],
+            )
+            if "responses_" in d.name:
+                log.info(f"Renamed {d.name} to responses")
+                device_name = "responses"
+            else:
+                device_name = d.name
+            self.devices[device_name] = dev
             self.start_time = dev.start_time
             self.end_time = dev.end_time
             log.info("Parsing finished")
@@ -62,7 +68,7 @@ class Experiment:
             for d, interp in self.devices.items():
                 values[d], valid[d] = interp.interpolate(times)
         elif isinstance(device, str):
-            assert device in self.devices, "Unknown device '{}'".format(device)
+            assert device in self.devices, f"Unknown device '{device}'"
             values, valid = self.devices[device].interpolate(times)
         return values, valid
 
