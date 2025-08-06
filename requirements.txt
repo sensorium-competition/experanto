@@ -1,5 +1,5 @@
-numpy>1.22.0
-opencv-python>=4.7.0
+numpy==1.26.4
+opencv-python==4.8.0.74
 scipy>=1.13.1
 jaxtyping>=0.2.30
 plotly>=5.22.0
