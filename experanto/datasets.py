@@ -273,6 +273,8 @@ class ChunkDataset(Dataset):
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
         seed: Optional[int] = None,
         safe_interval_threshold: float = 0.5,
+        shuffle_train_val_split: Optional[bool] = None,
+        validation_fraction: Optional[float] = None,
     ) -> None:
         """
         The full modality config is a nested dictionary.
@@ -328,6 +330,8 @@ class ChunkDataset(Dataset):
           interpolation:
             interpolation_mode: nearest_neighbor
         """
+        self.seed = seed
+
         self.root_folder = Path(root_folder)
         self.data_key = self.get_data_key_from_root_folder(root_folder)
 
@@ -376,8 +380,13 @@ class ChunkDataset(Dataset):
                 f"Threshold: {safe_interval_threshold:.4f}, "
                 f"Adjusted range: ({self.start_time:.4f}, {self.end_time:.4f})"
             )
-
         self._read_trials()
+        if shuffle_train_val_split and validation_fraction is not None:
+            if seed is None:
+                raise ValueError("A seed must be provided when shuffle_train_val_split is True.")
+            self.meta_conditions["tier"] = self.reshuffle_train_val(self.meta_conditions["tier"], validation_fraction)
+
+
         self.initialize_statistics()
         self._screen_sample_times = np.arange(
             self.start_time, self.end_time, 1.0 / self.sampling_rates["screen"]
@@ -394,7 +403,6 @@ class ChunkDataset(Dataset):
 
         self.transforms = self.initialize_transforms()
 
-        self.seed = seed
         self._rng = np.random.RandomState(seed) if seed is not None else np.random
 
     def _read_trials(self) -> None:
@@ -406,6 +414,39 @@ class ChunkDataset(Dataset):
         self.meta_conditions = {}
         for k in ["modality", "valid_trial", "tier"]:
             self.meta_conditions[k] = [t.get_meta(k) if t.get_meta(k) is not None else "blank" for t in self._trials]
+
+    def reshuffle_train_val(self, tiers, validation_fraction):
+        """
+        Reshuffles 'train' and 'validation' labels in a list.
+
+        Args:
+            tiers (list): The original list of tier labels.
+            validation_fraction (float): The desired fraction of items to be 'validation'.
+
+        Returns:
+            list: A new list with 'train'/'validation' labels reshuffled.
+        """
+        rng = np.random.RandomState(self.seed)
+        train_val_indices = [i for i, tier in enumerate(tiers) if tier in ('train', 'validation')]
+        if not train_val_indices:
+            return tiers[:]
+
+        total_count = len(train_val_indices)
+        num_val = round(total_count * validation_fraction)
+        num_train = total_count - num_val
+        new_labels = ['validation'] * num_val + ['train'] * num_train
+        rng.shuffle(new_labels)
+        shuffled_tiers = tiers[:]
+        for index, label in zip(train_val_indices, new_labels):
+            shuffled_tiers[index] = label
+
+        assert all(
+            tiers[i] == shuffled_tiers[i]
+            for i, tier in enumerate(tiers)
+            if tier not in ('train', 'validation')
+        ), "An item that was not 'train' or 'validation' was touched in train/val shuffling!"
+
+        return shuffled_tiers
 
     def initialize_statistics(self) -> None:
         """
