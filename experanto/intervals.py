@@ -28,7 +28,9 @@ class TimeInterval(typing.NamedTuple):
         return np.where((times >= self.start) & (times <= self.end))[0]
 
 
-def uniquefy_interval_array(interval_array: List[TimeInterval]) -> List[TimeInterval]:
+def uniquefy_interval_array(
+    interval_array: List[TimeInterval],
+) -> List[TimeInterval]:
     """
     Takes an array of TimeIntervals and returns a new array where no intervals overlap.
     If intervals overlap or are adjacent, they are merged into a single interval.
@@ -92,7 +94,6 @@ def find_intersection_between_two_interval_arrays(
 def find_intersection_across_arrays_of_intervals(
     intervals_array: List[List[TimeInterval]],
 ) -> TimeInterval:
-
     common_interval_array = intervals_array[0]
 
     for interval_array in intervals_array[1:]:
