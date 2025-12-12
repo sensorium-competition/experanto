@@ -9,6 +9,7 @@ import numpy as np
 
 from .configs import DEFAULT_MODALITY_CONFIG
 from .interpolators import Interpolator
+from typing import Union
 
 log = logging.getLogger(__name__)
 
@@ -59,24 +60,27 @@ class Experiment:
         return tuple(self.devices.keys())
 
     def interpolate(
-        self, times: slice, device: Interpolator = None, return_valid: bool = False
-    ) -> tuple[np.ndarray, np.ndarray]:
+        self, times: slice, device: Interpolator | None = None, return_valid: bool = False
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         if device is None:
             values = {}
             valid = {}
             for d, interp in self.devices.items():
-                values[d], valid[d] = interp.interpolate(
+                res = interp.interpolate(
                     times, return_valid=return_valid
                 )
+                if return_valid:
+                    vals, vlds = res
+                    values[d] = vals
+                    valid[d] = vlds
+                else:
+                    values[d] = res
         elif isinstance(device, str):
             assert device in self.devices, "Unknown device '{}'".format(device)
-            values, valid = self.devices[device].interpolate(
+            res = self.devices[device].interpolate(
                 times, return_valid=return_valid
             )
-        if return_valid:
-            return values, valid
-        else:
-            return values
+            return res
 
     def get_valid_range(self, device_name) -> tuple:
         return tuple(self.devices[device_name].valid_interval)

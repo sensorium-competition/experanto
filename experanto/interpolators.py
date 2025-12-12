@@ -14,7 +14,7 @@ import numpy.lib.format as fmt
 import yaml
 
 from .intervals import TimeInterval
-
+from typing import Union
 
 class Interpolator:
     def __init__(self, root_folder: str) -> None:
@@ -32,7 +32,7 @@ class Interpolator:
     @abstractmethod
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         ...
         # returns interpolated signal and boolean mask of valid samples
 
@@ -154,7 +154,7 @@ class SequenceInterpolator(Interpolator):
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
 
@@ -258,7 +258,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
 
@@ -445,7 +445,7 @@ class ScreenInterpolator(Interpolator):
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
         valid_times += 1e-4  # add small offset to avoid numerical issues
@@ -512,7 +512,7 @@ class TimeIntervalInterpolator(Interpolator):
                 for label, filename in self.meta_labels.items()
             }
 
-    def interpolate(self, times: np.ndarray, return_valid: bool = False) -> np.ndarray:
+    def interpolate(self, times: np.ndarray, return_valid: bool = False) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         """
         Interpolate time intervals for labeled events.
 
