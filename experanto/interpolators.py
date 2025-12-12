@@ -30,7 +30,7 @@ class Interpolator:
         return meta
 
     @abstractmethod
-    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(self, times: np.ndarray, return_valid: bool = False) -> tuple[np.ndarray, np.ndarray]:
         ...
         # returns interpolated signal and boolean mask of valid samples
 
@@ -150,7 +150,7 @@ class SequenceInterpolator(Interpolator):
         data = data * self._precision
         return data
 
-    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(self, times: np.ndarray, return_valid: bool = False) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
 
@@ -158,7 +158,7 @@ class SequenceInterpolator(Interpolator):
             warnings.warn(
                 "Sequence interpolation returns empty array, no valid times queried"
             )
-            return np.empty((0, self._data.shape[1])), valid
+            return (np.empty((0, self._data.shape[1])), valid) if return_valid else np.empty((0, self._data.shape[1]))
 
         idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
             int
@@ -167,7 +167,7 @@ class SequenceInterpolator(Interpolator):
         if self.interpolation_mode == "nearest_neighbor":
             data = self._data[idx_lower]
 
-            return data, valid
+            return (data, valid) if return_valid else data
 
         elif self.interpolation_mode == "linear":
             idx_upper = idx_lower + 1
@@ -205,7 +205,7 @@ class SequenceInterpolator(Interpolator):
                 # Replace NaNs with the column means directly
                 np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
 
-            return interpolated, valid
+            return (interpolated, valid) if return_valid else interpolated
 
         else:
             raise NotImplementedError(
@@ -248,7 +248,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             + (np.min(self._phase_shifts) if len(self._phase_shifts) > 0 else 0),
         )
 
-    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(self, times: np.ndarray, return_valid: bool = False) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
 
@@ -256,8 +256,8 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             warnings.warn(
                 "Sequence interpolation returns empty array, no valid times queried"
             )
-            return np.empty((0, self._data.shape[1])), valid
-
+            return (np.empty((0, self._data.shape[1])), valid) if return_valid else np.empty((0, self._data.shape[1]))
+            
         idx_lower = np.floor(
             (
                 valid_times[:, np.newaxis]
@@ -269,7 +269,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
         if self.interpolation_mode == "nearest_neighbor":
             data = np.take_along_axis(self._data, idx_lower, axis=0)
-            return data, valid
+            return (data, valid) if return_valid else data
 
         elif self.interpolation_mode == "linear":
             idx_upper = idx_lower + 1
@@ -308,7 +308,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
                 # Replace NaNs with the column means directly
                 np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
 
-            return interpolated, valid
+            return (interpolated, valid) if return_valid else interpolated
 
         else:
             raise NotImplementedError(
@@ -429,7 +429,7 @@ class ScreenInterpolator(Interpolator):
                 )
             )
 
-    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(self, times: np.ndarray, return_valid: bool = False) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
         valid_times += 1e-4  # add small offset to avoid numerical issues
@@ -467,7 +467,7 @@ class ScreenInterpolator(Interpolator):
                 out[idx_for_this_file] = data[
                     idx[idx_for_this_file] - self._first_frame_idx[u_idx]
                 ]
-        return out, valid
+        return (out, valid) if return_valid else out
 
     def rescale_frame(self, frame: np.array) -> np.array:
         """
@@ -496,7 +496,7 @@ class TimeIntervalInterpolator(Interpolator):
                 for label, filename in self.meta_labels.items()
             }
 
-    def interpolate(self, times: np.ndarray) -> np.ndarray:
+    def interpolate(self, times: np.ndarray, return_valid: bool = False) -> np.ndarray:
         """
         Interpolate time intervals for labeled events.
 
@@ -567,7 +567,7 @@ class TimeIntervalInterpolator(Interpolator):
                 mask = (valid_times >= start) & (valid_times < end)
                 out[mask, i] = True
 
-        return out
+        return (out, valid) if return_valid else out
 
 
 class ScreenTrial:

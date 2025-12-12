@@ -4,7 +4,6 @@ import functools
 import importlib
 import json
 import os
-from collections import namedtuple
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -52,7 +51,6 @@ class SimpleChunkedDataset(Dataset):
         self._sample_times = np.arange(
             self.start_time, self.end_time, 1.0 / self.sampling_rate
         )
-        self.DataPoint = namedtuple("DataPoint", self.device_names)
 
     def __len__(self):
         return int(len(self._sample_times) / self.chunk_size)
@@ -60,7 +58,7 @@ class SimpleChunkedDataset(Dataset):
     def __getitem__(self, idx):
         s = idx * self.chunk_size
         times = self._sample_times[s : s + self.chunk_size]
-        data, _ = self._experiment.interpolate(times)
+        data = self._experiment.interpolate(times, return_valid=False)
         phase_shifts = self._experiment.devices["responses"]._phase_shifts
         timestamps_neurons = (times - times.min())[:, None] + phase_shifts[None, :]
         data["timestamps"] = timestamps_neurons
@@ -123,7 +121,7 @@ class ChunkDataset(Dataset):
           chunk_size: null
           offset: 0.1
           transforms:
-            standardize: true
+            normalize_variance_only: true # old standardize: true
           interpolation:
             interpolation_mode: nearest_neighbor
         eye_tracker:
@@ -265,8 +263,8 @@ class ChunkDataset(Dataset):
                 if not isinstance(mode, str):
                     means = np.array(mode.get("means", means))
                     stds = np.array(mode.get("stds", stds))
-                if mode == "standardize":
-                    # If modality should only be standarized, set means to 0.
+                if mode == "normalize_variance_only":
+                    # If modality should only be adjusted by variance (old "standardize"), set means to 0.
                     means = np.zeros_like(means)
                 elif mode == "recompute_responses":
                     means = np.zeros_like(means)
@@ -633,7 +631,7 @@ class ChunkDataset(Dataset):
             # scale everything back to truncated values
             times = times.astype(np.float64) / self.scale_precision
 
-            data, _ = self._experiment.interpolate(times, device=device_name)
+            data = self._experiment.interpolate(times, device=device_name, return_valid=False)
             out[device_name] = self.transforms[device_name](data).squeeze(
                 0
             )  # remove dim0 for response/eye_tracker/treadmill

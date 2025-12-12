@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import re
-from collections import namedtuple
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -59,16 +58,19 @@ class Experiment:
     def device_names(self):
         return tuple(self.devices.keys())
 
-    def interpolate(self, times: slice, device=None) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(self, times: slice, device: Interpolator = None, return_valid: bool = False) -> tuple[np.ndarray, np.ndarray]:
         if device is None:
             values = {}
             valid = {}
             for d, interp in self.devices.items():
-                values[d], valid[d] = interp.interpolate(times)
+                values[d], valid[d] = interp.interpolate(times, return_valid=return_valid)
         elif isinstance(device, str):
             assert device in self.devices, "Unknown device '{}'".format(device)
-            values, valid = self.devices[device].interpolate(times)
-        return values, valid
+            values, valid = self.devices[device].interpolate(times, return_valid=return_valid)
+        if return_valid:
+            return values, valid
+        else:
+            return values
 
     def get_valid_range(self, device_name) -> tuple:
         return tuple(self.devices[device_name].valid_interval)
