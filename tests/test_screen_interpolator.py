@@ -55,7 +55,7 @@ def test_nearest_neighbor_interpolation(duration, fps, image_frame_count, num_vi
         expected_indices = np.round((times - timestamps[0]) * fps).astype(int)
         expected_frames = raw_array[expected_indices]
 
-        interp, valid = interp_obj.interpolate(times=times)
+        interp, valid = interp_obj.interpolate(times=times, return_valid=True)
 
         assert times.shape == valid.shape, "All interpolated frames should be valid"
         assert np.allclose(
