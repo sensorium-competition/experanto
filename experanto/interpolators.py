@@ -7,6 +7,7 @@ import typing
 import warnings
 from abc import abstractmethod
 from pathlib import Path
+from typing import Union
 
 import cv2
 import numpy as np
@@ -14,7 +15,7 @@ import numpy.lib.format as fmt
 import yaml
 
 from .intervals import TimeInterval
-from typing import Union
+
 
 class Interpolator:
     def __init__(self, root_folder: str) -> None:
@@ -512,7 +513,9 @@ class TimeIntervalInterpolator(Interpolator):
                 for label, filename in self.meta_labels.items()
             }
 
-    def interpolate(self, times: np.ndarray, return_valid: bool = False) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
+    def interpolate(
+        self, times: np.ndarray, return_valid: bool = False
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         """
         Interpolate time intervals for labeled events.
 

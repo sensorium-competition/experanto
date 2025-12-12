@@ -4,12 +4,12 @@ import logging
 import re
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Union
 
 import numpy as np
 
 from .configs import DEFAULT_MODALITY_CONFIG
 from .interpolators import Interpolator
-from typing import Union
 
 log = logging.getLogger(__name__)
 
@@ -60,15 +60,16 @@ class Experiment:
         return tuple(self.devices.keys())
 
     def interpolate(
-        self, times: slice, device: Interpolator | None = None, return_valid: bool = False
+        self,
+        times: slice,
+        device: Interpolator | None = None,
+        return_valid: bool = False,
     ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         if device is None:
             values = {}
             valid = {}
             for d, interp in self.devices.items():
-                res = interp.interpolate(
-                    times, return_valid=return_valid
-                )
+                res = interp.interpolate(times, return_valid=return_valid)
                 if return_valid:
                     vals, vlds = res
                     values[d] = vals
@@ -77,9 +78,7 @@ class Experiment:
                     values[d] = res
         elif isinstance(device, str):
             assert device in self.devices, "Unknown device '{}'".format(device)
-            res = self.devices[device].interpolate(
-                times, return_valid=return_valid
-            )
+            res = self.devices[device].interpolate(times, return_valid=return_valid)
             return res
 
     def get_valid_range(self, device_name) -> tuple:
