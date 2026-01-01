@@ -58,9 +58,11 @@ class Interpolator:
                 return SequenceInterpolator(root_folder, cache_data, **kwargs)
         elif modality == "screen":
             return ScreenInterpolator(root_folder, cache_data, **kwargs)
+        elif modality == "time_interval":
+            return TimeIntervalInterpolator(root_folder, cache_data, **kwargs)
         else:
             raise ValueError(
-                f"There is no interpolator for {modality}. Please use 'sequence' or 'screen' as modality."
+                f"There is no interpolator for {modality}. Please use 'sequence', 'screen' or 'time_interval' as modality."
             )
 
     def valid_times(self, times: np.ndarray) -> np.ndarray:
@@ -451,7 +453,6 @@ class ScreenInterpolator(Interpolator):
             if ((len(data.shape) == 2) or (data.shape[-1] == 3)) and (
                 len(data.shape) < 4
             ):
-
                 data = np.expand_dims(data, axis=0)
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
             if self.rescale:
@@ -476,6 +477,97 @@ class ScreenInterpolator(Interpolator):
         return cv2.resize(frame, self._image_size, interpolation=cv2.INTER_AREA).astype(
             np.float32
         )
+
+
+class TimeIntervalInterpolator(Interpolator):
+    def __init__(self, root_folder: str, cache_data: bool = False, **kwargs):
+        super().__init__(root_folder)
+        self.cache_data = cache_data
+
+        meta = self.load_meta()
+        self.meta_labels = meta["labels"]
+        self.start_time = meta["start_time"]
+        self.end_time = meta["end_time"]
+        self.valid_interval = TimeInterval(self.start_time, self.end_time)
+
+        if self.cache_data:
+            self.labeled_intervals = {
+                label: np.load(self.root_folder / filename)
+                for label, filename in self.meta_labels.items()
+            }
+
+    def interpolate(self, times: np.ndarray) -> np.ndarray:
+        """
+        Interpolate time intervals for labeled events.
+
+        Given a set of time points and a set of labeled intervals (defined in the
+        `meta.yml` file), this method returns a boolean array indicating, for each
+        time point, whether it falls within any interval for each label.
+
+        The method uses half-open intervals [start, end), where a timestamp t is
+        considered to fall within an interval if start <= t < end. This means the
+        start time is inclusive and the end time is exclusive.
+
+        Parameters
+        ----------
+        times : np.ndarray
+            Array of time points to be checked against the labeled intervals.
+
+        Returns
+        -------
+        out : np.ndarray of bool, shape (len(valid_times), n_labels)
+            Boolean array where each row corresponds to a valid time point and each
+            column corresponds to a label. `out[i, j]` is True if the i-th valid
+            time falls within any interval for the j-th label, and False otherwise.
+
+        Notes
+        -----
+        - The labels and their corresponding intervals are defined in the `meta.yml`
+          file under the `labels` key. Each label points to a `.npy` file containing
+          an array of shape (n, 2), where each row is a [start, end) time interval.
+        - Typical labels might include 'train', 'validation', 'test', 'saccade',
+          'gaze', or 'target'.
+        - Only time points within the valid interval (as defined by start_time and
+          end_time in meta.yml) are considered; others are filtered out.
+        - Intervals where start > end are considered invalid and will trigger a
+          warning.
+        """
+        valid = self.valid_times(times)
+        valid_times = times[valid]
+
+        n_labels = len(self.meta_labels)
+        n_times = len(valid_times)
+
+        if n_times == 0:
+            warnings.warn(
+                "TimeIntervalInterpolator returns an empty array, no valid times queried."
+            )
+            return np.empty((0, n_labels), dtype=bool)
+
+        out = np.zeros((n_times, n_labels), dtype=bool)
+        for i, (label, filename) in enumerate(self.meta_labels.items()):
+            if self.cache_data:
+                intervals = self.labeled_intervals[label]
+            else:
+                intervals = np.load(self.root_folder / filename, allow_pickle=True)
+
+            if len(intervals) == 0:
+                warnings.warn(
+                    f"TimeIntervalInterpolator found no intervals for label: {label}"
+                )
+                continue
+
+            for start, end in intervals:
+                if start > end:
+                    warnings.warn(
+                        f"Invalid interval found for label: {label}, interval: ({start}, {end})"
+                    )
+                    continue
+                # Half-open interval [start, end): inclusive start, exclusive end
+                mask = (valid_times >= start) & (valid_times < end)
+                out[mask, i] = True
+
+        return out
 
 
 class ScreenTrial:
@@ -548,7 +640,6 @@ class VideoTrial(ScreenTrial):
 
 class BlankTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
-
         self.interleave_value = meta_data.get("interleave_value")
 
         super().__init__(
@@ -567,7 +658,6 @@ class BlankTrial(ScreenTrial):
 
 class InvalidTrial(ScreenTrial):
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
-
         self.interleave_value = meta_data.get("interleave_value")
 
         super().__init__(
