@@ -158,7 +158,7 @@ class SequenceInterpolator(Interpolator):
             warnings.warn(
                 "Sequence interpolation returns empty array, no valid times queried"
             )
-            return np.empty((0, self._data.shape[1])), valid
+            return np.empty((0, self._data.shape[1]))
 
         idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
             int
@@ -167,7 +167,7 @@ class SequenceInterpolator(Interpolator):
         if self.interpolation_mode == "nearest_neighbor":
             data = self._data[idx_lower]
 
-            return data, valid
+            return data
 
         elif self.interpolation_mode == "linear":
             idx_upper = idx_lower + 1
@@ -205,7 +205,7 @@ class SequenceInterpolator(Interpolator):
                 # Replace NaNs with the column means directly
                 np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
 
-            return interpolated, valid
+            return interpolated
 
         else:
             raise NotImplementedError(
@@ -256,7 +256,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             warnings.warn(
                 "Sequence interpolation returns empty array, no valid times queried"
             )
-            return np.empty((0, self._data.shape[1])), valid
+            return np.empty((0, self._data.shape[1]))
 
         idx_lower = np.floor(
             (
@@ -269,7 +269,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
         if self.interpolation_mode == "nearest_neighbor":
             data = np.take_along_axis(self._data, idx_lower, axis=0)
-            return data, valid
+            return data
 
         elif self.interpolation_mode == "linear":
             idx_upper = idx_lower + 1
@@ -308,7 +308,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
                 # Replace NaNs with the column means directly
                 np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
 
-            return interpolated, valid
+            return interpolated
 
         else:
             raise NotImplementedError(
@@ -467,7 +467,7 @@ class ScreenInterpolator(Interpolator):
                 out[idx_for_this_file] = data[
                     idx[idx_for_this_file] - self._first_frame_idx[u_idx]
                 ]
-        return out, valid
+        return out
 
     def rescale_frame(self, frame: np.array) -> np.array:
         """

@@ -69,13 +69,12 @@ class Experiment:
     ) -> tuple[np.ndarray, np.ndarray]:
         if device is None:
             values = {}
-            valid = {}
             for d, interp in self.devices.items():
-                values[d], valid[d] = interp.interpolate(times)
+                values[d] = interp.interpolate(times)
         elif isinstance(device, str):
             assert device in self.devices, "Unknown device '{}'".format(device)
-            values, valid = self.devices[device].interpolate(times)
-        return values, valid
+            values = self.devices[device].interpolate(times)
+        return values
 
     def get_valid_range(self, device_name) -> tuple:
         return tuple(self.devices[device_name].valid_interval)
@@ -134,7 +133,7 @@ class Experiment:
             # Scale everything back to truncated values
             times = times.astype(np.float64) / self.scale_precision
 
-            data, _ = self.interpolate(times, device=device)
+            data = self.interpolate(times, device=device)
             out[device] = data
         return out
 
@@ -198,7 +197,7 @@ class Experiment:
             # Scale everything back to truncated values
             times = times.astype(np.float64) / self.scale_precision
 
-            data, _ = self.interpolate(times, device=device)
+            data = self.interpolate(times, device=device)
             out[device] = data
             timestamps[device] = times
         return out, timestamps
