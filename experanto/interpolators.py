@@ -13,6 +13,8 @@ import cv2
 import numpy as np
 import numpy.lib.format as fmt
 import yaml
+from numba import njit, prange
+from scipy.ndimage import gaussian_filter1d
 
 from .intervals import TimeInterval
 
@@ -63,6 +65,8 @@ class Interpolator:
             return ScreenInterpolator(root_folder, cache_data, **kwargs)
         elif modality == "time_interval":
             return TimeIntervalInterpolator(root_folder, cache_data, **kwargs)
+        elif modality == "spikes":
+            return SpikesInterpolator(root_folder, cache_data, **kwargs)
         else:
             raise ValueError(
                 f"There is no interpolator for {modality}. Please use 'sequence', 'screen', 'time_interval' as modality or provide a custom interpolator."
@@ -693,3 +697,123 @@ class InvalidTrial(ScreenTrial):
     def get_data_(self) -> np.ndarray:
         """Override base implementation to generate blank data"""
         return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
+
+# 'parallel=True' allows it to use all CPU cores.
+@njit(parallel=True, fastmath=True)
+def fast_count_spikes(all_spikes, indices, window_starts, window_ends, out_counts):
+    """
+    all_spikes: 1D array
+    indices: 1D array - start/end of each neuron in all_spikes
+    window_starts: 1D array - start times for the query
+    window_ends: 1D array
+    out_counts: 2D array
+    """
+    n_batch = len(window_starts)
+    n_neurons = len(indices) - 1
+    
+    # We parallelize the OUTER loop (the batch). 
+    # Or we can parallelize the NEURON loop. 
+    # Since N_Neurons (38k) > Batch (e.g. 128), parallelizing neurons is better.
+    
+    for i in prange(n_neurons):
+        # 1. Get the slice for this neuron
+        # (This is zero-copy in Numba)
+        idx_start = indices[i]
+        idx_end = indices[i+1]
+        neuron_spikes = all_spikes[idx_start:idx_end]
+        
+        # 2. Check all time windows for this neuron
+        # Since spikes are sorted, we use binary search
+        for b in range(n_batch):
+            t0 = window_starts[b]
+            t1 = window_ends[b]
+            
+            # Binary Search
+            # np.searchsorted is supported natively in Numba
+            # It finds where t0 and t1 would fit in the sorted array
+            c_start = np.searchsorted(neuron_spikes, t0)
+            c_end = np.searchsorted(neuron_spikes, t1)
+            
+            out_counts[b, i] = c_end - c_start
+
+class SpikesInterpolator(Interpolator):
+    def __init__(
+            self, 
+            root_folder: str,
+            cache_data: bool = False,
+            interpolation_window: float = 0.3,
+            interpolation_align: str = "center",
+            smoothing_sigma: float = 0.0,
+            load_to_ram: bool = False,
+            ):
+        super().__init__(root_folder)
+
+        meta = self.load_meta()
+
+        self.start_time = meta.get("start_time", 0)
+        self.end_time = meta.get("end_time", np.inf)
+        self.valid_interval = TimeInterval(self.start_time, self.end_time)
+
+        self.cache_trials = cache_data
+        self.interpolation_window = interpolation_window
+        self.interpolation_align = interpolation_align
+        self.smoothing_sigma = smoothing_sigma
+
+        # Use self.root_folder, defined in the base class
+        self.dat_path = self.root_folder / "spikes.npy"
+        
+        # Ensure indices are typed correctly for Numba
+        self.indices = np.array(meta["spike_indices"]).astype(np.int64)
+        self.n_signals = len(self.indices) - 1
+
+        if load_to_ram:
+            print("Loading spikes to RAM...")
+            self.spikes = np.fromfile(self.dat_path, dtype='float64')
+        else:
+            self.spikes = np.memmap(self.dat_path, dtype='float64', mode='r')
+
+    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        # 1. Filter for valid times
+        valid = self.valid_times(times)
+        valid_times = times[valid]
+        
+        # Handle edge case where no times are valid
+        if len(valid_times) == 0:
+            return np.empty((0, self.n_signals)), valid
+
+        # valid_times += 1e-4
+
+        # 2. Prepare boundaries
+        if self.interpolation_align == "center":
+            starts = valid_times - self.interpolation_window / 2
+            ends   = valid_times + self.interpolation_window / 2
+        elif self.interpolation_align == "left":
+            starts = valid_times
+            ends   = valid_times + self.interpolation_window
+        elif self.interpolation_align == "right":
+            starts = valid_times - self.interpolation_window
+            ends   = valid_times
+        else:
+            raise ValueError(f"Unknown alignment mode: {self.interpolation_align}")
+
+        # 3. Prepare Output
+        # SIZE FIX: Only allocate for the VALID batch size
+        batch_size = len(valid_times)
+        counts = np.zeros((batch_size, self.n_signals), dtype=np.float64)
+        
+        # 4. Call Numba Engine
+        fast_count_spikes(self.spikes, self.indices, starts, ends, counts)
+
+        # 5. Apply Smoothing (Gaussian Filter)
+        if self.smoothing_sigma > 0:
+            # We assume 'times' is a sorted, equidistant sequence.
+            # If batch_size is 1, smoothing is impossible/no-op.
+            if batch_size > 1:
+                # Apply Gaussian filter along the time axis (axis 0)
+                # Note: sigma is in units of array indices (time steps).
+                # If your times are 30Hz (33ms) and you want 100ms smoothing,
+                # sigma should be ~3.
+                counts = gaussian_filter1d(counts, sigma=self.smoothing_sigma, axis=0)
+        
+        # SIGNATURE FIX: Return both data and the mask
+        return counts, valid
