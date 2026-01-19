@@ -817,3 +817,11 @@ class SpikesInterpolator(Interpolator):
         
         # SIGNATURE FIX: Return both data and the mask
         return counts, valid
+    
+    def close(self):
+        super().close()
+        # Trigger cleanup of memmap
+        if hasattr(self, 'spikes') and isinstance(self.spikes, np.memmap):
+            if hasattr(self.spikes, "_mmap") and self.spikes._mmap is not None:
+                self.spikes._mmap.close()
+            del self.spikes
