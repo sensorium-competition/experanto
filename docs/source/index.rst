@@ -26,7 +26,7 @@ Issues with the package can be submited at our `GitHub Issues page <https://gith
 
 .. toctree::
    :maxdepth: 2
-   :caption: API Reference
+   :caption: Reference
 
    api
    configuration
