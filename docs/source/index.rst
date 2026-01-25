@@ -29,4 +29,5 @@ Issues with the package can be submited at our `GitHub Issues page <https://gith
    :caption: API Reference
 
    api
+   configuration
 

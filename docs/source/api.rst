@@ -94,10 +94,3 @@ Filters
    :nosignatures:
 
    experanto.filters.common_filters.nan_filter
-
-Configuration
--------------
-
-.. automodule:: experanto.configs
-   :members:
-   :undoc-members:
