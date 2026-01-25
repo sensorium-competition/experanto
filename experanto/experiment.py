@@ -15,18 +15,58 @@ log = logging.getLogger(__name__)
 
 
 class Experiment:
+    """High-level interface for loading and querying neuroscience experiments.
+
+    An Experiment represents a single recording session containing multiple
+    modalities (e.g., visual stimuli, neural responses, behavioral data).
+    Each modality is loaded as an Interpolator, allowing data to be queried
+    at arbitrary time points.
+
+    Parameters
+    ----------
+    root_folder : str
+        Path to the experiment directory. Should contain subdirectories
+        for each modality (e.g., ``screen/``, ``responses/``, ``eye_tracker/``).
+    modality_config : dict, optional
+        Configuration dictionary specifying interpolation and processing
+        settings for each modality. See :mod:`experanto.configs` for the
+        default configuration structure.
+    cache_data : bool, default=False
+        If True, loads all trial data into memory for faster access.
+        Useful for smaller datasets or when memory is not a constraint.
+
+    Attributes
+    ----------
+    devices : dict
+        Dictionary mapping device names to their :class:`Interpolator` instances.
+    device_names : tuple
+        Names of all loaded modalities.
+    start_time : float
+        Earliest valid timestamp across all devices.
+    end_time : float
+        Latest valid timestamp across all devices.
+
+    See Also
+    --------
+    ChunkDataset : Higher-level interface for ML training.
+    Interpolator : Base class for modality-specific interpolators.
+
+    Examples
+    --------
+    >>> from experanto.experiment import Experiment
+    >>> exp = Experiment('/path/to/experiment')
+    >>> exp.device_names
+    ('screen', 'responses', 'eye_tracker')
+    >>> times = np.linspace(0, 10, 100)
+    >>> data, valid = exp.interpolate(times, device='responses')
+    """
+
     def __init__(
         self,
         root_folder: str,
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
         cache_data: bool = False,
     ) -> None:
-        """
-        root_folder: path to the data folder
-        interp_config: dict for configuring interpolators, like
-            interp_config = {"screen": {...}, {"eye_tracker": {...}, }
-        cache_data: if True, loads and keeps all trial data in memory
-        """
         self.root_folder = Path(root_folder)
         self.devices = dict()
         self.start_time = np.inf
@@ -57,9 +97,43 @@ class Experiment:
 
     @property
     def device_names(self):
+        """tuple: Names of all loaded modalities (e.g., 'screen', 'responses')."""
         return tuple(self.devices.keys())
 
     def interpolate(self, times: slice, device=None) -> tuple[np.ndarray, np.ndarray]:
+        """Interpolate data from one or all devices at specified time points.
+
+        Parameters
+        ----------
+        times : array_like
+            1D array of time points (in seconds) at which to interpolate.
+        device : str, optional
+            Name of a specific device to interpolate. If None, interpolates
+            all devices and returns dictionaries.
+
+        Returns
+        -------
+        values : numpy.ndarray or dict
+            If ``device`` is specified, returns the interpolated data array.
+            Otherwise, returns a dict mapping device names to their data arrays.
+        valid : numpy.ndarray or dict
+            Boolean mask(s) indicating which time points were valid.
+            Same structure as ``values``.
+
+        Examples
+        --------
+        Interpolate a single device:
+
+        >>> data, valid = exp.interpolate(times, device='responses')
+        >>> data.shape
+        (100, 500)  # 100 time points, 500 neurons
+
+        Interpolate all devices:
+
+        >>> data, valid = exp.interpolate(times)
+        >>> data.keys()
+        dict_keys(['screen', 'responses', 'eye_tracker'])
+        """
         if device is None:
             values = {}
             valid = {}
@@ -70,5 +144,18 @@ class Experiment:
             values, valid = self.devices[device].interpolate(times)
         return values, valid
 
-    def get_valid_range(self, device_name) -> tuple:
+    def get_valid_range(self, device_name: str) -> tuple:
+        """Get the valid time range for a specific device.
+
+        Parameters
+        ----------
+        device_name : str
+            Name of the device (e.g., 'screen', 'responses').
+
+        Returns
+        -------
+        tuple
+            A tuple ``(start_time, end_time)`` representing the valid
+            time interval in seconds.
+        """
         return tuple(self.devices[device_name].valid_interval)

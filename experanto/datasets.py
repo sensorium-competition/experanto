@@ -72,6 +72,112 @@ class SimpleChunkedDataset(Dataset):
 
 
 class ChunkDataset(Dataset):
+    """PyTorch Dataset for chunked neuroscience experiment data.
+
+    This dataset loads an experiment and provides temporally-chunked samples
+    suitable for training neural networks. Each sample contains synchronized
+    data from all modalities (screen, responses, eye_tracker, treadmill)
+    at a given time window.
+
+    The dataset handles:
+    - Per-modality sampling rates and chunk sizes
+    - Time offset alignment between modalities
+    - Data normalization and transforms
+    - Filtering based on trial conditions and data quality
+    - Reproducible random sampling with seeds
+
+    Parameters
+    ----------
+    root_folder : str
+        Path to the experiment directory containing modality subfolders.
+    global_sampling_rate : float, optional
+        Sampling rate (Hz) applied to all modalities. If None, uses
+        per-modality rates from ``modality_config``.
+    global_chunk_size : int, optional
+        Number of samples per chunk for all modalities. If None, uses
+        per-modality sizes from ``modality_config``.
+    add_behavior_as_channels : bool, default=False
+        If True, concatenates behavioral data as additional image channels.
+        Deprecated: use separate modality outputs instead.
+    replace_nans_with_means : bool, default=False
+        If True, replaces NaN values with column means.
+    cache_data : bool, default=False
+        If True, loads all data into memory for faster access.
+    out_keys : iterable, optional
+        Which modalities to include in output. Defaults to all modalities
+        plus 'timestamps'.
+    normalize_timestamps : bool, default=True
+        If True, normalizes timestamps relative to recording start.
+    modality_config : dict
+        Configuration for each modality including sampling rates, transforms,
+        filters, and interpolation settings. See Notes for structure.
+    seed : int, optional
+        Random seed for reproducible shuffling of valid time points.
+    safe_interval_threshold : float, default=0.5
+        Safety margin (in seconds) to exclude from edges of valid intervals.
+    interpolate_precision : int, default=5
+        Number of decimal places for time precision. Prevents floating-point
+        accumulation errors during time calculations.
+
+    Attributes
+    ----------
+    data_key : str
+        Unique identifier for this dataset, extracted from metadata.
+    device_names : tuple
+        Names of loaded modalities.
+    start_time : float
+        Start of valid time range (after applying safety threshold).
+    end_time : float
+        End of valid time range (after applying safety threshold).
+
+    See Also
+    --------
+    Experiment : Lower-level interface for data access.
+    get_multisession_dataloader : Load multiple datasets.
+    experanto.configs : Default configuration values.
+
+    Notes
+    -----
+    The ``modality_config`` is a nested dictionary with per-modality settings:
+
+    .. code-block:: yaml
+
+        screen:
+          sampling_rate: 30
+          chunk_size: 60
+          offset: 0
+          valid_condition:
+            tier: train
+          transforms:
+            normalization: normalize
+          interpolation:
+            rescale: true
+        responses:
+          sampling_rate: 8
+          chunk_size: 16
+          offset: 0.1
+          interpolation:
+            interpolation_mode: nearest_neighbor
+
+    Examples
+    --------
+    >>> from experanto.datasets import ChunkDataset
+    >>> from experanto.configs import DEFAULT_MODALITY_CONFIG
+    >>> dataset = ChunkDataset(
+    ...     '/path/to/experiment',
+    ...     global_sampling_rate=30,
+    ...     global_chunk_size=60,
+    ...     modality_config=DEFAULT_MODALITY_CONFIG,
+    ... )
+    >>> len(dataset)
+    1000
+    >>> sample = dataset[0]
+    >>> sample['screen'].shape
+    torch.Size([1, 60, 144, 256])
+    >>> sample['responses'].shape
+    torch.Size([16, 500])
+    """
+
     def __init__(
         self,
         root_folder: str,
@@ -87,62 +193,6 @@ class ChunkDataset(Dataset):
         safe_interval_threshold: float = 0.5,
         interpolate_precision: int = 5,
     ) -> None:
-        """
-        interpolate_precision: number of digits after the dot to keep, without it we might get different numbers from interpolation
-
-        The full modality config is a nested dictionary.
-        The following is an example of a modality config for a screen, responses, eye_tracker, and treadmill:
-
-        screen:
-          sampling_rate: null
-          chunk_size: null
-          valid_condition:
-            tier: test
-            stim_type: stimulus.Frame
-          offset: 0
-          sample_stride: 4
-          include_blanks: false
-          transforms:
-            ToTensor:
-              _target_: torchvision.transforms.ToTensor
-            Normalize:
-              _target_: torchvision.transforms.Normalize
-              mean: 80.0
-              std: 60.0
-            Resize:
-              _target_: torchvision.transforms.Resize
-              size:
-              - 144
-              - 256
-            CenterCrop:
-              _target_: torchvision.transforms.CenterCrop
-              size: 144
-          interpolation: {}
-        responses:
-          sampling_rate: null
-          chunk_size: null
-          offset: 0.1
-          transforms:
-            standardize: true
-          interpolation:
-            interpolation_mode: nearest_neighbor
-        eye_tracker:
-          sampling_rate: null
-          chunk_size: null
-          offset: 0
-          transforms:
-            normalize: true
-          interpolation:
-            interpolation_mode: nearest_neighbor
-        treadmill:
-          sampling_rate: null
-          chunk_size: null
-          offset: 0
-          transforms:
-            normalize: true
-          interpolation:
-            interpolation_mode: nearest_neighbor
-        """
         self.root_folder = Path(root_folder)
         self.data_key = self.get_data_key_from_root_folder(root_folder)
         self.interpolate_precision = interpolate_precision
@@ -613,7 +663,28 @@ class ChunkDataset(Dataset):
     def __len__(self):
         return len(self._valid_screen_times)
 
-    def __getitem__(self, idx) -> dict:
+    def __getitem__(self, idx: int) -> dict:
+        """Return a single data sample at the given index.
+
+        Parameters
+        ----------
+        idx : int
+            Index of the sample to retrieve.
+
+        Returns
+        -------
+        dict
+            Dictionary containing data for each modality in ``out_keys``:
+
+            - ``'screen'``: torch.Tensor of shape ``(C, T, H, W)``
+            - ``'responses'``: torch.Tensor of shape ``(T, N_neurons)``
+            - ``'eye_tracker'``: torch.Tensor of shape ``(T, N_features)``
+            - ``'treadmill'``: torch.Tensor of shape ``(T, N_features)``
+            - ``'timestamps'``: dict mapping modality names to time arrays
+
+            Where ``T`` is the chunk size (may differ per modality),
+            ``C`` is channels, ``H`` is height, ``W`` is width.
+        """
         out = {}
         timestamps = {}
         s = self._valid_screen_times[idx]
