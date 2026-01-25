@@ -17,10 +17,16 @@ Issues with the package can be submited at our `GitHub Issues page <https://gith
 .. toctree::
    :maxdepth: 1
    :caption: Tutorials
-        
+
    concepts/demo_data
    concepts/demo_experiment
    concepts/demo_configs
    concepts/demo_dataset
    concepts/demo_multisession
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API Reference
+
+   api
 
