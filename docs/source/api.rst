@@ -1,7 +1,7 @@
-API Reference
-=============
+Classes & Functions
+===================
 
-This section contains the API reference for experanto.
+This section documents all public classes and functions in experanto.
 
 Core Classes
 ------------
