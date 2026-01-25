@@ -1,88 +1,103 @@
 API Reference
 =============
 
-This page contains the API reference for experanto.
+This section contains the API reference for experanto.
 
-Experiment
-----------
+Core Classes
+------------
 
-.. automodule:: experanto.experiment
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autosummary::
+   :toctree: generated
+   :template: custom-class-template.rst
+   :nosignatures:
 
-Datasets
---------
-
-.. automodule:: experanto.datasets
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Dataloaders
------------
-
-.. automodule:: experanto.dataloaders
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   experanto.experiment.Experiment
+   experanto.datasets.ChunkDataset
 
 Interpolators
 -------------
 
-.. automodule:: experanto.interpolators
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autosummary::
+   :toctree: generated
+   :template: custom-class-template.rst
+   :nosignatures:
 
-Intervals
+   experanto.interpolators.Interpolator
+   experanto.interpolators.SequenceInterpolator
+   experanto.interpolators.PhaseShiftedSequenceInterpolator
+   experanto.interpolators.ScreenInterpolator
+   experanto.interpolators.TimeIntervalInterpolator
+   experanto.interpolators.ScreenTrial
+   experanto.interpolators.ImageTrial
+   experanto.interpolators.VideoTrial
+   experanto.interpolators.BlankTrial
+   experanto.interpolators.InvalidTrial
+
+Time Intervals
+--------------
+
+.. autosummary::
+   :toctree: generated
+   :template: custom-class-template.rst
+   :nosignatures:
+
+   experanto.intervals.TimeInterval
+
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   experanto.intervals.uniquefy_interval_array
+   experanto.intervals.find_intersection_between_two_interval_arrays
+   experanto.intervals.find_intersection_across_arrays_of_intervals
+   experanto.intervals.find_union_across_arrays_of_intervals
+   experanto.intervals.find_complement_of_interval_array
+   experanto.intervals.get_stats_for_valid_interval
+
+Dataloaders
+-----------
+
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   experanto.dataloaders.get_multisession_dataloader
+   experanto.dataloaders.get_multisession_concat_dataloader
+
+Utilities
 ---------
 
-.. automodule:: experanto.intervals
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autosummary::
+   :toctree: generated
+   :template: custom-class-template.rst
+   :nosignatures:
 
-Configs
--------
+   experanto.utils.LongCycler
+   experanto.utils.ShortCycler
+   experanto.utils.FastSessionDataLoader
+   experanto.utils.MultiEpochsDataLoader
+   experanto.utils.SessionConcatDataset
+   experanto.utils.SessionBatchSampler
+   experanto.utils.SessionSpecificSampler
 
-.. automodule:: experanto.configs
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
 
-Utils
------
-
-.. automodule:: experanto.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   experanto.utils.add_behavior_as_channels
 
 Filters
 -------
 
-.. automodule:: experanto.filters
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
 
-.. automodule:: experanto.filters.common_filters
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   experanto.filters.common_filters.nan_filter
 
-.. automodule:: experanto.filters.gaze_filters
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Configuration
+-------------
 
-.. automodule:: experanto.filters.responses_filters
+.. automodule:: experanto.configs
    :members:
    :undoc-members:
-   :show-inheritance:
-
-.. automodule:: experanto.filters.treadmill_filters
-   :members:
-   :undoc-members:
-   :show-inheritance:

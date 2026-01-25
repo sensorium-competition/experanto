@@ -22,11 +22,19 @@ release = "0.1"
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
     "sphinx.ext.mathjax",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
 ]
+
+# -- Autosummary settings ----------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/extensions/autosummary.html
+
+autosummary_generate = True
+autosummary_generate_overwrite = True
+autosummary_imported_members = False
 
 templates_path = ["_templates"]
 exclude_patterns = []
