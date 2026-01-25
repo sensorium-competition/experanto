@@ -97,7 +97,6 @@ class Experiment:
 
     @property
     def device_names(self):
-        """tuple: Names of all loaded modalities (e.g., 'screen', 'responses')."""
         return tuple(self.devices.keys())
 
     def interpolate(self, times: slice, device=None) -> tuple[np.ndarray, np.ndarray]:

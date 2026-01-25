@@ -35,21 +35,20 @@ def replace_nan_with_batch_mean(data: np.array) -> np.array:
 
 
 def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
-    """
-    Adds behavioral data as additional channels to screen data.
+    """Add behavioral data as additional channels to screen data.
 
-    Input:
-    data = {
-        'screen': torch.Tensor: (c, t, h, w)
-        'eye_tracker': torch.Tensor: (t, c_eye) or (t, h, w)
-        'treadmill': torch.Tensor: (t, c_tread) or (t, h, w)
-    }
+    Parameters
+    ----------
+    data : dict
+        Dictionary with keys 'screen', 'eye_tracker', 'treadmill'.
+        Screen shape: ``(C, T, H, W)``.
+        Behavior shapes: ``(T, C_behavior)`` or ``(T, H, W)``.
 
-    Output:
-    data = {
-        'screen': torch.Tensor: (c+behavior_channels, t, h, w) - contiguous
-        ...
-    }
+    Returns
+    -------
+    dict
+        Modified dictionary with behavior concatenated to screen channels.
+        Screen shape becomes ``(C + behavior_channels, T, H, W)``.
     """
     screen = data["screen"]  # Already contiguous, shape (c, t, h, w)
     c, t, h, w = screen.shape
