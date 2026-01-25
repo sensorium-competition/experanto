@@ -42,8 +42,6 @@ class Experiment:
     ----------
     devices : dict
         Dictionary mapping device names to their :class:`Interpolator` instances.
-    device_names : tuple
-        Names of all loaded modalities.
     start_time : float
         Earliest valid timestamp across all devices.
     end_time : float
