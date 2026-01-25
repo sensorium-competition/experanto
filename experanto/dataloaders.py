@@ -191,6 +191,4 @@ def get_multisession_concat_dataloader(
         dataloader_config = dict(configs[0].get("dataloader", {}))
 
     # Create the dataloader with our simplified implementation
-    return FastSessionDataLoader(
-        dataset=concat_dataset, seed=seed, **dataloader_config
-    )
+    return FastSessionDataLoader(dataset=concat_dataset, seed=seed, **dataloader_config)

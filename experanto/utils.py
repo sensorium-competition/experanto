@@ -60,12 +60,8 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
         c_eye = eye_tracker.shape[1]
         # Reshape to (c_eye, t, h, w)
         eye_tracker = eye_tracker.transpose(0, 1)  # (c_eye, t)
-        eye_tracker = eye_tracker.unsqueeze(-1).unsqueeze(
-            -1
-        )  # (c_eye, t, 1, 1)
-        eye_tracker = eye_tracker.expand(
-            -1, -1, h, w
-        ).contiguous()  # (c_eye, t, h, w)
+        eye_tracker = eye_tracker.unsqueeze(-1).unsqueeze(-1)  # (c_eye, t, 1, 1)
+        eye_tracker = eye_tracker.expand(-1, -1, h, w).contiguous()  # (c_eye, t, h, w)
     else:  # (t, h, w)
         # Reshape to (1, t, h, w)
         eye_tracker = eye_tracker.unsqueeze(0).contiguous()  # (1, t, h, w)
@@ -76,9 +72,7 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
         # Reshape to (c_tread, t, h, w)
         treadmill = treadmill.transpose(0, 1)  # (c_tread, t)
         treadmill = treadmill.unsqueeze(-1).unsqueeze(-1)  # (c_tread, t, 1, 1)
-        treadmill = treadmill.expand(
-            -1, -1, h, w
-        ).contiguous()  # (c_tread, t, h, w)
+        treadmill = treadmill.expand(-1, -1, h, w).contiguous()  # (c_tread, t, h, w)
     else:  # (t, h, w)
         # Reshape to (1, t, h, w)
         treadmill = treadmill.unsqueeze(0).contiguous()  # (1, t, h, w)
@@ -184,9 +178,7 @@ class LongCycler:
 
     def __init__(self, loaders):
         self.loaders = loaders
-        self.max_batches = max(
-            [len(loader) for loader in self.loaders.values()]
-        )
+        self.max_batches = max([len(loader) for loader in self.loaders.values()])
 
     def __iter__(self):
         cycles = [cycle(loader) for loader in self.loaders.values()]
@@ -220,9 +212,7 @@ class ShortCycler:
 
     def __init__(self, loaders):
         self.loaders = loaders
-        self.min_batches = min(
-            [len(loader) for loader in self.loaders.values()]
-        )
+        self.min_batches = min([len(loader) for loader in self.loaders.values()])
 
     def __iter__(self):
         cycles = [cycle(loader) for loader in self.loaders.values()]
@@ -330,8 +320,7 @@ class SessionConcatDataset(Dataset):
     def get_sessions_count(self):
         """Get number of sessions and count of samples per session."""
         return {
-            name: end - start
-            for name, (start, end) in self.session_indices.items()
+            name: end - start for name, (start, end) in self.session_indices.items()
         }
 
 
@@ -341,9 +330,7 @@ class SessionBatchSampler(Sampler):
     appears exactly once before repeating any session.
     """
 
-    def __init__(
-        self, dataset, batch_size, drop_last=False, shuffle=False, seed=None
-    ):
+    def __init__(self, dataset, batch_size, drop_last=False, shuffle=False, seed=None):
         """Initialize session batch sampler.
 
         Parameters
@@ -368,9 +355,7 @@ class SessionBatchSampler(Sampler):
 
         # Use its own RNG instance based on the provided seed
         self.rng = (
-            np.random.RandomState(seed)
-            if seed is not None
-            else np.random.RandomState()
+            np.random.RandomState(seed) if seed is not None else np.random.RandomState()
         )
         self.prv_rng_state = None
 
@@ -517,9 +502,7 @@ class FastSessionDataLoader:
 
         # Compute maximum batches per session (for epoch tracking)
         self.max_batches_per_session = (
-            max(self.batches_per_session.values())
-            if self.batches_per_session
-            else 0
+            max(self.batches_per_session.values()) if self.batches_per_session else 0
         )
 
         # Prepare session data loaders to avoid recreating them for each batch
@@ -605,9 +588,7 @@ class FastSessionDataLoader:
 
         # Restore RNG state for the batch sampler
         batch_sampler_state = state.get("batch_sampler_state")
-        if batch_sampler_state is not None and hasattr(
-            self.batch_sampler, "set_state"
-        ):
+        if batch_sampler_state is not None and hasattr(self.batch_sampler, "set_state"):
             self.batch_sampler.set_state(batch_sampler_state)
 
         # Restore batches_from_session state
@@ -673,18 +654,14 @@ class FastSessionDataLoader:
             # Reset sampler position
             sampler = dataloader.batch_sampler
             if hasattr(sampler, "set_position"):
-                sampler.set_position(
-                    self.session_positions.get(session_name, 0)
-                )
+                sampler.set_position(self.session_positions.get(session_name, 0))
 
             # Create iterator
             session_iterators[session_name] = iter(dataloader)
 
         # Continue until we've gone through one full epoch
         # (i.e., until the longest session is exhausted)
-        while (
-            active_sessions and position_in_epoch < self.max_batches_per_session
-        ):
+        while active_sessions and position_in_epoch < self.max_batches_per_session:
             # Create a cycle order of sessions
             cycle_order = self.batch_sampler.get_session_cycle()
 
@@ -695,9 +672,9 @@ class FastSessionDataLoader:
                     continue
 
                 # Skip if we've already processed all batches for this session in the current epoch
-                if batches_from_session[
-                    session_name
-                ] >= self.batches_per_session.get(session_name, 0):
+                if batches_from_session[session_name] >= self.batches_per_session.get(
+                    session_name, 0
+                ):
                     active_sessions.remove(session_name)
                     continue
 
@@ -713,9 +690,7 @@ class FastSessionDataLoader:
                     # Update state tracking
                     self.current_batch += 1
                     self.session_positions[session_name] += 1
-                    batches_from_session[session_name] += (
-                        1  # Update local dictionary
-                    )
+                    batches_from_session[session_name] += 1  # Update local dictionary
 
                     # Yield session name and batch
                     yield session_name, batch
@@ -748,9 +723,7 @@ class SessionSpecificSampler(Sampler):
     generates batches from the session's indices.
     """
 
-    def __init__(
-        self, indices, batch_size, drop_last=False, shuffle=False, seed=None
-    ):
+    def __init__(self, indices, batch_size, drop_last=False, shuffle=False, seed=None):
         """Initialize session-specific sampler.
 
         Parameters
@@ -773,9 +746,7 @@ class SessionSpecificSampler(Sampler):
         self.shuffle = shuffle
         self.prv_rng_state = None
         self.rng = (
-            np.random.RandomState(seed)
-            if seed is not None
-            else np.random.RandomState()
+            np.random.RandomState(seed) if seed is not None else np.random.RandomState()
         )
 
         # Calculate number of batches
@@ -793,9 +764,7 @@ class SessionSpecificSampler(Sampler):
 
     def set_position(self, position):
         """Set the current batch position."""
-        self.position = (
-            position % self.num_batches if self.num_batches > 0 else 0
-        )
+        self.position = position % self.num_batches if self.num_batches > 0 else 0
 
     def get_state(self):
         """Return the state of the sampler (including RNG state)."""
