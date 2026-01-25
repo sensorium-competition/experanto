@@ -344,15 +344,21 @@ class SessionBatchSampler(Sampler):
     def __init__(
         self, dataset, batch_size, drop_last=False, shuffle=False, seed=None
     ):
-        """
-        Initialize session batch sampler.
+        """Initialize session batch sampler.
 
-        Args:
-            dataset: The SessionConcatDataset to sample from
-            batch_size: Number of samples per batch
-            drop_last: Whether to drop the last batch if it's smaller than batch_size
-            shuffle: Whether to shuffle samples within each session
-            seed: Random seed for reproducibility
+        Parameters
+        ----------
+        dataset : SessionConcatDataset
+            The dataset to sample from.
+        batch_size : int
+            Number of samples per batch.
+        drop_last : bool, optional
+            Whether to drop the last batch if smaller than batch_size.
+            Default is False.
+        shuffle : bool, optional
+            Whether to shuffle samples within each session. Default is False.
+        seed : int, optional
+            Random seed for reproducibility.
         """
         self.dataset = dataset
         self.batch_size = batch_size
@@ -745,15 +751,21 @@ class SessionSpecificSampler(Sampler):
     def __init__(
         self, indices, batch_size, drop_last=False, shuffle=False, seed=None
     ):
-        """
-        Initialize session-specific sampler.
+        """Initialize session-specific sampler.
 
-        Args:
-            indices: List of dataset indices belonging to this session
-            batch_size: Number of samples per batch
-            drop_last: Whether to drop the last batch if smaller than batch_size
-            shuffle: Whether to shuffle indices
-            seed: Random seed for reproducibility
+        Parameters
+        ----------
+        indices : list
+            Dataset indices belonging to this session.
+        batch_size : int
+            Number of samples per batch.
+        drop_last : bool, optional
+            Whether to drop the last batch if smaller than batch_size.
+            Default is False.
+        shuffle : bool, optional
+            Whether to shuffle indices. Default is False.
+        seed : int, optional
+            Random seed for reproducibility.
         """
         self.indices = list(indices)  # Make a copy to avoid modification issues
         self.batch_size = batch_size

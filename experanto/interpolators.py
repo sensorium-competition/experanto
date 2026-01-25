@@ -651,9 +651,17 @@ class ScreenInterpolator(Interpolator):
         return out, valid
 
     def rescale_frame(self, frame: np.array) -> np.array:
-        """
-        Changes the resolution of the image to this size.
-        Returns: Rescaled image
+        """Rescale frame to the configured image size.
+
+        Parameters
+        ----------
+        frame : np.ndarray
+            Input image frame.
+
+        Returns
+        -------
+        np.ndarray
+            Rescaled image as float32.
         """
         return cv2.resize(
             frame, self._image_size, interpolation=cv2.INTER_AREA
