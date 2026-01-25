@@ -1,6 +1,6 @@
 # Experanto
 
-A Python package for interpolating recordings and stimuli in neuroscience experiments. Experanto provides a unified interface to load experimental data from multiple sessions and create efficient PyTorch dataloaders for machine learning applications.
+Experanto is a Python package designed for interpolating recordings and stimuli in neuroscience experiments. It enables users to load single or multiple experiments and create efficient dataloaders for machine learning applications.
 
 ## Features
 
@@ -18,15 +18,20 @@ cd experanto
 pip install -e .
 ```
 
-### Optional Dependencies
+### Note
 
-For running the example notebooks:
+To replicate the `generate_sample` example, use the following command (see [allen_exporter](https://github.com/sensorium-competition/allen-exporter)):
 
 ```bash
-# Allen Brain Observatory data export
 pip install -e /path/to/allen_exporter
 ```
-See [allen_exporter](https://github.com/sensorium-competition/allen-exporter)
+
+To replicate the `sensorium_example` (see [sensorium_2023](https://github.com/ecker-lab/sensorium_2023)), install neuralpredictors (see [neuralpredictors](https://github.com/sinzlab/neuralpredictors)) as well:
+
+```bash
+pip install -e /path/to/neuralpredictors
+pip install -e /path/to/sensorium_2023
+```
 
 ## Quick Start
 
@@ -47,24 +52,6 @@ data = exp.interpolate(times)
 
 # Or from a specific device
 responses = exp.interpolate(times, device_name="responses")
-```
-
-### Creating a DataLoader
-
-```python
-from experanto.dataloaders import get_multisession_dataloader
-
-# Create a dataloader from multiple experiment paths
-dataloader = get_multisession_dataloader(
-    paths=["/path/to/exp1", "/path/to/exp2"],
-    batch_size=32,
-    config_path="configs/default.yaml"
-)
-
-for batch in dataloader:
-    screen = batch["screen"]       # Visual stimuli
-    responses = batch["responses"] # Neural responses
-    # ... train your model
 ```
 
 ### Configuration
@@ -106,16 +93,3 @@ Contributions are welcome! Please open an issue or submit a pull request on [Git
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## Citation
-
-If you use Experanto in your research, please cite:
-
-```bibtex
-@software{experanto,
-  title = {Experanto: A Python Package for Neuroscience Data Interpolation},
-  author = {Sinzlab},
-  url = {https://github.com/sensorium-competition/experanto},
-  year = {2025}
-}
-```
