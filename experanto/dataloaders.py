@@ -28,15 +28,15 @@ def get_multisession_dataloader(
 ) -> DataLoader:
     """Create a multi-session dataloader from multiple experiment paths.
 
-    Creates a :class:`ChunkDataset` for each path and wraps them in a
-    :class:`LongCycler` that yields ``(session_key, batch)`` pairs.
+    By default, creates a :class:`ChunkDataset` for each path and wraps them in
+    a :class:`LongCycler` that yields ``(session_key, batch)`` pairs.
     The cycler continues until the longest session is exhausted.
 
     Parameters
     ----------
     paths : list of str
         Paths to experiment directories.
-    configs : dict, DictConfig, or list, optional
+    configs : dict, DictConfig,  list, optional
         Configuration for each dataset. If a single config is provided,
         it will be applied to all datasets. If a list is provided, it
         should match the length of ``paths``. Each config should have
@@ -159,7 +159,6 @@ def get_multisession_concat_dataloader(
 
     start_time = time.time()
     for i, (path, cfg) in enumerate(zip(paths, configs)):
-
         # Create dataset with deterministic seed
         path_hash = hash(path) % 10000
         dataset_seed = seed + path_hash if seed is not None else None
@@ -192,4 +191,6 @@ def get_multisession_concat_dataloader(
         dataloader_config = dict(configs[0].get("dataloader", {}))
 
     # Create the dataloader with our simplified implementation
-    return FastSessionDataLoader(dataset=concat_dataset, seed=seed, **dataloader_config)
+    return FastSessionDataLoader(
+        dataset=concat_dataset, seed=seed, **dataloader_config
+    )
