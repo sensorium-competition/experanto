@@ -285,10 +285,10 @@ class ChunkDataset(Dataset):
             ]
 
     def initialize_statistics(self) -> None:
-        """
-        Initializes the statistics for each device based on the modality config.
-        :return:
-            instantiates self._statistics with the mean and std for each device
+        """Initialize normalization statistics for each device.
+
+        Loads mean and standard deviation values from each device's meta folder
+        and stores them in ``self._statistics`` for use during data transforms.
         """
         self._statistics = {}
         for device_name in self.device_names:
@@ -349,10 +349,7 @@ class ChunkDataset(Dataset):
             return torch.from_numpy(x)
 
     def initialize_transforms(self):
-        """
-        Initializes the transforms for each device based on the modality config.
-        :return:
-        """
+        """Initialize data transforms for each device based on modality config."""
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
@@ -498,15 +495,22 @@ class ChunkDataset(Dataset):
         valid_conditions_sum_of_product: List[dict],
         filter_for_valid_intervals: bool = True,
     ) -> np.ndarray:
-        """Creates a boolean mask indicating which screen samples satisfy the given conditions.
+        """Create a boolean mask for screen samples satisfying given conditions.
 
-        Args:
-            satisfy_for_next: Number of consecutive samples that must satisfy conditions
-            valid_conditions_sum_of_product: List of condition dictionaries combined with OR logic,
-                where conditions within each dictionary use AND logic
+        Parameters
+        ----------
+        satisfy_for_next : int
+            Number of consecutive samples that must satisfy conditions.
+        valid_conditions_sum_of_product : list of dict
+            Condition dictionaries combined with OR logic, where conditions
+            within each dictionary use AND logic.
+        filter_for_valid_intervals : bool, default=True
+            Whether to apply interval-based filtering.
 
-        Returns:
-            Boolean array matching screen sample times, True where conditions are met
+        Returns
+        -------
+        numpy.ndarray
+            Boolean array matching screen sample times, True where conditions are met.
         """
         all_conditions = self.get_condition_mask_from_meta_conditions(
             valid_conditions_sum_of_product
@@ -557,12 +561,20 @@ class ChunkDataset(Dataset):
     def get_full_valid_sample_times(
         self, filter_for_valid_intervals: bool = True
     ) -> Iterable:
-        """
-        iterates through all sample times and checks if they could be used as
-        start times, eg if the next `self.chunk_sizes["screen"]` points are still valid
-        based on the previous meta condition filtering
-        :returns:
-            valid_times: np.array of valid starting points
+        """Get all valid chunk starting times based on meta conditions.
+
+        Iterates through sample times and checks if they can be used as chunk
+        start times (i.e., the next ``chunk_size`` points are all valid).
+
+        Parameters
+        ----------
+        filter_for_valid_intervals : bool, default=True
+            Whether to apply interval-based filtering.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of valid starting time points.
         """
 
         # Calculate all possible end indices
