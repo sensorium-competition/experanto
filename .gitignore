@@ -163,5 +163,3 @@ cython_debug/
 
 *.sif
 *.bak
-TODO_AND_ISSUES.md
-docs/source/generated/
