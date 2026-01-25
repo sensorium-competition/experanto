@@ -1,7 +1,7 @@
-Classes & Functions
-===================
+Classes and functions
+=====================
 
-This section documents all public classes and functions in experanto.
+This section documents all public classes and functions in Experanto.
 
 Core Classes
 ------------
