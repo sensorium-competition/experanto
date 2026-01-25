@@ -152,9 +152,28 @@ class Exhauster:
 
 
 class LongCycler:
-    """
-    Cycles through trainloaders until the loader with largest size is exhausted.
-        Needed for dataloaders of unequal size (as in the monkey data).
+    """Cycle through multiple dataloaders until the longest is exhausted.
+
+    Useful for training with multiple sessions of unequal size. Cycles through
+    all loaders, yielding ``(session_key, batch)`` pairs. Shorter loaders are
+    recycled until the longest loader completes one full epoch.
+
+    Parameters
+    ----------
+    loaders : dict
+        Dictionary mapping session keys to DataLoader instances.
+
+    Attributes
+    ----------
+    max_batches : int
+        Number of batches in the longest loader.
+
+    Examples
+    --------
+    >>> loaders = {'session_1': loader1, 'session_2': loader2}
+    >>> cycler = LongCycler(loaders)
+    >>> for session_key, batch in cycler:
+    ...     print(f"Processing {session_key}")
     """
 
     def __init__(self, loaders):
@@ -175,9 +194,20 @@ class LongCycler:
 
 
 class ShortCycler:
-    """
-    Cycles through trainloaders until the loader with smallest size is exhausted.
-        Needed for dataloaders of unequal size (as in the monkey data).
+    """Cycle through multiple dataloaders until the shortest is exhausted.
+
+    Similar to :class:`LongCycler`, but stops when the smallest loader
+    completes one epoch. No recycling occurs.
+
+    Parameters
+    ----------
+    loaders : dict
+        Dictionary mapping session keys to DataLoader instances.
+
+    Attributes
+    ----------
+    min_batches : int
+        Number of batches in the shortest loader.
     """
 
     def __init__(self, loaders):
@@ -386,12 +416,44 @@ class SessionBatchSampler(Sampler):
 
 
 class FastSessionDataLoader:
-    """
-    An optimized dataloader that ensures:
-    1. Each session appears exactly once before repeating
-    2. The epoch ends when the longest session is exhausted
-    3. Perfect alignment between sessions and batches is maintained
-    4. State is properly tracked and can be restored
+    """Optimized multi-session dataloader with state tracking.
+
+    Provides efficient data loading across multiple sessions with guarantees:
+
+    - Each session appears exactly once before repeating
+    - Epoch ends when the longest session is exhausted
+    - State can be saved and restored for resumable training
+
+    Parameters
+    ----------
+    dataset : SessionConcatDataset
+        Concatenated dataset with session tracking.
+    batch_size : int, default=1
+        Number of samples per batch.
+    shuffle : bool, default=False
+        Whether to shuffle samples within each session.
+    num_workers : int, default=0
+        Number of worker processes for data loading.
+    pin_memory : bool, default=False
+        Whether to pin memory for GPU transfer.
+    drop_last : bool, default=False
+        Whether to drop incomplete batches.
+    seed : int, optional
+        Random seed for reproducibility.
+    **kwargs
+        Additional arguments passed to underlying DataLoaders.
+
+    Attributes
+    ----------
+    session_names : list
+        Names of all sessions in the dataset.
+    batches_per_session : dict
+        Number of batches in each session.
+
+    See Also
+    --------
+    SessionConcatDataset : Dataset that tracks session membership.
+    LongCycler : Simpler alternative without state tracking.
     """
 
     def __init__(
@@ -405,18 +467,6 @@ class FastSessionDataLoader:
         seed=None,
         **kwargs,
     ):
-        """
-        Initialize optimized session dataloader.
-
-        Args:
-            dataset: The SessionConcatDataset to load from
-            batch_size: Number of samples per batch
-            shuffle: Whether to shuffle indices within sessions
-            num_workers: Number of worker processes for data loading
-            pin_memory: Whether to pin memory in GPU
-            drop_last: Whether to drop the last batch if smaller than batch_size
-            seed: Random seed for reproducibility
-        """
         # Store dataset and parameters
         self.dataset = dataset
         self.batch_size = batch_size
