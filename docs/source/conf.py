@@ -60,6 +60,22 @@ autodoc_default_options = {
 autodoc_typehints = "description"
 autodoc_typehints_description_target = "documented"
 
+# Mock heavy imports that aren't needed for documentation generation
+autodoc_mock_imports = [
+    "torch",
+    "torchvision",
+    "numpy",
+    "scipy",
+    "cv2",
+    "pandas",
+    "hydra",
+    "omegaconf",
+    "jaxtyping",
+    "plotly",
+    "optree",
+    "rootutils",
+]
+
 # -- Intersphinx settings (cross-references to external docs) ----------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/intersphinx.html
 
