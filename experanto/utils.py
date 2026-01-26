@@ -152,8 +152,10 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
                 print(f"Batch {i+1}: {batch_times[-1]:.4f}s")
 
         avg_time = sum(batch_times) / len(batch_times)
-        std_time = (sum((t - avg_time) ** 2 for t in batch_times) / len(batch_times)) ** 0.5
-        return {'avg_time': avg_time, 'std_time': std_time, 'batch_times': batch_times}
+        std_time = (
+            sum((t - avg_time) ** 2 for t in batch_times) / len(batch_times)
+        ) ** 0.5
+        return {"avg_time": avg_time, "std_time": std_time, "batch_times": batch_times}
 
 
 # borrowed with <3 from
