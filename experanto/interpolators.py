@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 import numpy.lib.format as fmt
 import yaml
-from torchcodec.decoders import VideoDecoder
+from torchcodec.decoders import VideoDecoder, set_cuda_backend
 
 from .intervals import TimeInterval
 
@@ -330,6 +330,8 @@ class ScreenInterpolator(Interpolator):
         image_names: bool = False,
         rescale: bool = False,
         rescale_size: typing.Optional[tuple(int, int)] = None,
+        device: str = "cpu",
+        number_threads_decoding: int = 1,
         normalize: bool = False,
         **kwargs,
     ) -> None:
@@ -344,6 +346,8 @@ class ScreenInterpolator(Interpolator):
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
         self.rescale = rescale
         self.image_names = image_names
+        self.device = device
+        self.number_threads_decoding = number_threads_decoding
         self.number_channels = number_channels
         self.cache_trials = cache_data  # Store the cache preference
         self._parse_trials()
@@ -428,28 +432,51 @@ class ScreenInterpolator(Interpolator):
     def _parse_trials(self) -> None:
         self.trials = []
         metadatas, keys = self.read_combined_meta()
+        
+        # 1. Create a dictionary to cache shared decoders
+        shared_decoders = {}
 
         for key, metadata in zip(keys, metadatas):
-            format = metadata.get("file_format")
-
-            if format is None:
-                format = ".npy"
+            file_format = metadata.get("file_format", ".npy")
 
             if self.image_names:
                 image_name = metadata.get("image_name")
-                data_file_name = self.root_folder / "data" / f"{image_name}{format}"
+                data_file_name = self.root_folder / "data" / f"{image_name}{file_format}"
             else:
-                data_file_name = self.root_folder / "data" / f"{key}{format}"
-            encoded = metadata.get("encoded")
-            # Pass the cache_trials parameter when creating trials
+                data_file_name = self.root_folder / "data" / f"{key}{file_format}"
+            
+            # 2. Logic to handle shared video decoders
+            decoder_to_use = None
+            if file_format in [".mp4", ".avi", ".mov"]: # Add your video formats here
+                if data_file_name not in shared_decoders:
+                    # Initialize the decoder only once per unique file
+                    # Assuming ScreenTrial.create or a helper can return just a decoder
+                    if self.device == "cuda":
+                        with set_cuda_backend("beta"):
+                            shared_decoders[data_file_name] = self._initialize_decoder(data_file_name)
+                    else:
+                        shared_decoders[data_file_name] = self._initialize_decoder(data_file_name)
+                
+                decoder_to_use = shared_decoders[data_file_name]
+
+            # 3. Pass the shared decoder into the trial creation
             self.trials.append(
                 ScreenTrial.create(
                     data_file_name,
                     metadata,
                     cache_data=self.cache_trials,
-                    encoded=encoded,
+                    encoded=metadata.get("encoded"),
+                    shared_decoder=decoder_to_use
                 )
             )
+
+    def _initialize_decoder(self, data_file_name):
+        decoder = VideoDecoder(
+            str(data_file_name),
+            num_ffmpeg_threads=self.number_threads_decoding,
+            device=self.device,
+        )
+        return decoder
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         valid = self.valid_times(times)
@@ -473,25 +500,26 @@ class ScreenInterpolator(Interpolator):
         )
 
         for u_idx in unique_file_idx:
-            data = self.trials[u_idx].get_data()
+            current_trial = self.trials[u_idx]
+            idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
+            frame_indices = idx[idx_for_this_file] - self._first_frame_idx[u_idx]
+
+            if isinstance(current_trial, EncodedVideoTrial):
+                data = current_trial.get_data(frame_indices=frame_indices)
+
+            else:
+                data = current_trial.get_data()
+                data = data[frame_indices]
+
             data = self.format_data(
                 data
             )  # add channels for proper handeling. Handels missing time / channels dimensions.
-            idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
 
             if self.rescale:
-                orig_size = data[idx[idx_for_this_file] - self._first_frame_idx[u_idx]]
-                out[idx_for_this_file] = np.stack(
-                    [
-                        self.rescale_frame(frame.astype(np.float32))
-                        for frame in orig_size
-                    ]
-                )
+                out[idx_for_this_file] = self.rescale_frames(data)
 
             else:
-                out[idx_for_this_file] = data[
-                    idx[idx_for_this_file] - self._first_frame_idx[u_idx]
-                ]
+                out[idx_for_this_file] = data
 
         out = out.transpose(
             0, 3, 1, 2
@@ -562,20 +590,25 @@ class ScreenInterpolator(Interpolator):
 
         return data
 
-    def rescale_frame(self, frame: np.array) -> np.array:
-        """
-        Changes the resolution of the image to this size.
-        Returns: Rescaled image
-        """
-        resized = cv2.resize(
-            frame, np.flip(self._image_size), interpolation=cv2.INTER_AREA
-        ).astype(np.float32)
+    def rescale_frames(self, data: np.ndarray) -> np.ndarray:
+        data = data.astype(np.float32, copy=False)
 
-        # If input has shape (H, W, 1), output looses channel dim and becomes (H, W). Hence we have to add it back
-        if resized.ndim == 2:
-            resized = resized[:, :, np.newaxis]
-
-        return resized
+        return np.stack(
+            [
+                cv2.resize(
+                    frame,
+                    np.flip(self._image_size),
+                    interpolation=cv2.INTER_AREA,
+                )[:, :, np.newaxis] if frame.shape[2] == 1 else
+                cv2.resize(
+                    frame,
+                    np.flip(self._image_size),
+                    interpolation=cv2.INTER_AREA,
+                )
+                for frame in data
+            ],
+            axis=0,
+        )
 
 
 class TimeIntervalInterpolator(Interpolator):
@@ -787,14 +820,22 @@ class ScreenTrial:
         meta_data: dict,
         cache_data: bool = False,
         encoded: bool = False,
+        shared_decoder: VideoDecoder = None,
     ) -> "ScreenTrial":
         modality = meta_data.get("modality")
-
         class_name = modality.lower().capitalize() + "Trial"
+
         if encoded and modality in ("image", "video"):
             class_name = "Encoded" + class_name
+
         assert class_name in globals(), f"Unknown modality: {modality}"
-        return globals()[class_name](data_file_name, meta_data, cache_data=cache_data)
+        cls = globals()[class_name]
+
+        # Pass shared_decoder only for EncodedVideoTrials
+        if cls is EncodedVideoTrial:
+            return cls(data_file_name, meta_data, shared_decoder=shared_decoder, cache_data=cache_data)
+        else:
+            return cls(data_file_name, meta_data, cache_data=cache_data)
 
     def get_data_(self) -> np.array:
         """Base implementation for loading/generating data"""
@@ -852,7 +893,7 @@ class VideoTrial(ScreenTrial):
 
 
 class EncodedVideoTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(self, data_file_name, meta_data, shared_decoder=None, cache_data: bool = False) -> None:
         super().__init__(
             data_file_name,
             meta_data,
@@ -861,17 +902,28 @@ class EncodedVideoTrial(ScreenTrial):
             meta_data.get("num_frames"),
             cache_data=cache_data,
         )
-        self.video_decoder = VideoDecoder(self.data_file_name)
+        self.video_decoder = shared_decoder
+        if self.video_decoder is None:
+            raise ValueError("EncodedVideoTrial requires a shared_decoder to be provided.")
+    
+    def get_data(self, frame_indices) -> np.array:
+        """Overwrite Wrapper to accept Frame Indices"""
+        if self._cached_data is not None:
+            return self._cached_data
+        return self.get_data_(frame_indices)
 
-    def get_data_(self) -> np.array:
+    def get_data_(self, frame_indices) -> np.array:
         """Override base implementation to load compressed videos"""
-        full_video_bgr = np.transpose(
-            self.video_decoder[:].numpy(), (0, 2, 3, 1)
-        )  # Important! this loads entire video right now. This is unnecessary but works with interpolation loop. Will improve if we decide on it
-        full_video_rgb = np.array(
-            [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in full_video_bgr]
-        )
-        return full_video_rgb
+        frames = self.video_decoder.get_frames_at(frame_indices).data  # T,C,H,W (BGR), CPU or GPU
+        # BGR → RGB
+        frames = frames[:, [2, 1, 0], ...]
+        # Reorder dimensions
+        frames = frames.permute(0, 2, 3, 1).contiguous() # T,H,W,C
+        # Since Cuda context cannot be forked we keep entire interpolation on CPU
+        if frames.is_cuda:
+            frames = frames.cpu()
+
+        return frames.numpy()
 
 
 class BlankTrial(ScreenTrial):
