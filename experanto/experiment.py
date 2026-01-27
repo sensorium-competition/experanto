@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import logging
 import re
+import warnings
 from collections import namedtuple
 from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
+from hydra.utils import instantiate
+from omegaconf import DictConfig
 
 from .configs import DEFAULT_MODALITY_CONFIG
 from .interpolators import Interpolator
@@ -45,11 +48,35 @@ class Experiment:
                 log.info(f"Skipping {d.name} data... ")
                 continue
             log.info(f"Parsing {d.name} data... ")
-            dev = Interpolator.create(
-                d,
-                cache_data=self.cache_data,
-                **self.modality_config[d.name]["interpolation"],
-            )
+
+            # Get interpolation config for this device
+            interp_conf = self.modality_config[d.name]["interpolation"]
+
+            if (
+                isinstance(interp_conf, (dict, DictConfig))
+                and "_target_" in interp_conf
+            ):
+                # Custom interpolator (Hydra instantiates it)
+                dev = instantiate(
+                    interp_conf, root_folder=d, cache_data=self.cache_data
+                )
+                # Check if instantiated object is proper Interpolator
+                if not isinstance(dev, Interpolator):
+                    raise ValueError(
+                        "Please provide an Interpolator which inherits from experantos Interpolator class."
+                    )
+
+            elif isinstance(interp_conf, Interpolator):
+                # Already instantiated Interpolator
+                dev = interp_conf
+
+            else:
+                # Default back to original logic
+                warnings.warn(
+                    "Falling back to original Interpolator creation logic.", UserWarning
+                )
+                dev = Interpolator.create(d, cache_data=self.cache_data, **interp_conf)
+
             self.devices[d.name] = dev
             self.start_time = dev.start_time
             self.end_time = dev.end_time
