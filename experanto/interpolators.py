@@ -432,7 +432,7 @@ class ScreenInterpolator(Interpolator):
     def _parse_trials(self) -> None:
         self.trials = []
         metadatas, keys = self.read_combined_meta()
-        
+
         # 1. Create a dictionary to cache shared decoders
         shared_decoders = {}
 
@@ -441,22 +441,28 @@ class ScreenInterpolator(Interpolator):
 
             if self.image_names:
                 image_name = metadata.get("image_name")
-                data_file_name = self.root_folder / "data" / f"{image_name}{file_format}"
+                data_file_name = (
+                    self.root_folder / "data" / f"{image_name}{file_format}"
+                )
             else:
                 data_file_name = self.root_folder / "data" / f"{key}{file_format}"
-            
+
             # 2. Logic to handle shared video decoders
             decoder_to_use = None
-            if file_format in [".mp4", ".avi", ".mov"]: # Add your video formats here
+            if file_format in [".mp4", ".avi", ".mov"]:  # Add your video formats here
                 if data_file_name not in shared_decoders:
                     # Initialize the decoder only once per unique file
                     # Assuming ScreenTrial.create or a helper can return just a decoder
                     if self.device == "cuda":
                         with set_cuda_backend("beta"):
-                            shared_decoders[data_file_name] = self._initialize_decoder(data_file_name)
+                            shared_decoders[data_file_name] = self._initialize_decoder(
+                                data_file_name
+                            )
                     else:
-                        shared_decoders[data_file_name] = self._initialize_decoder(data_file_name)
-                
+                        shared_decoders[data_file_name] = self._initialize_decoder(
+                            data_file_name
+                        )
+
                 decoder_to_use = shared_decoders[data_file_name]
 
             # 3. Pass the shared decoder into the trial creation
@@ -466,7 +472,7 @@ class ScreenInterpolator(Interpolator):
                     metadata,
                     cache_data=self.cache_trials,
                     encoded=metadata.get("encoded"),
-                    shared_decoder=decoder_to_use
+                    shared_decoder=decoder_to_use,
                 )
             )
 
@@ -595,15 +601,18 @@ class ScreenInterpolator(Interpolator):
 
         return np.stack(
             [
-                cv2.resize(
-                    frame,
-                    np.flip(self._image_size),
-                    interpolation=cv2.INTER_AREA,
-                )[:, :, np.newaxis] if frame.shape[2] == 1 else
-                cv2.resize(
-                    frame,
-                    np.flip(self._image_size),
-                    interpolation=cv2.INTER_AREA,
+                (
+                    cv2.resize(
+                        frame,
+                        np.flip(self._image_size),
+                        interpolation=cv2.INTER_AREA,
+                    )[:, :, np.newaxis]
+                    if frame.shape[2] == 1
+                    else cv2.resize(
+                        frame,
+                        np.flip(self._image_size),
+                        interpolation=cv2.INTER_AREA,
+                    )
                 )
                 for frame in data
             ],
@@ -833,7 +842,12 @@ class ScreenTrial:
 
         # Pass shared_decoder only for EncodedVideoTrials
         if cls is EncodedVideoTrial:
-            return cls(data_file_name, meta_data, shared_decoder=shared_decoder, cache_data=cache_data)
+            return cls(
+                data_file_name,
+                meta_data,
+                shared_decoder=shared_decoder,
+                cache_data=cache_data,
+            )
         else:
             return cls(data_file_name, meta_data, cache_data=cache_data)
 
@@ -893,7 +907,9 @@ class VideoTrial(ScreenTrial):
 
 
 class EncodedVideoTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data, shared_decoder=None, cache_data: bool = False) -> None:
+    def __init__(
+        self, data_file_name, meta_data, shared_decoder=None, cache_data: bool = False
+    ) -> None:
         super().__init__(
             data_file_name,
             meta_data,
@@ -904,8 +920,10 @@ class EncodedVideoTrial(ScreenTrial):
         )
         self.video_decoder = shared_decoder
         if self.video_decoder is None:
-            raise ValueError("EncodedVideoTrial requires a shared_decoder to be provided.")
-    
+            raise ValueError(
+                "EncodedVideoTrial requires a shared_decoder to be provided."
+            )
+
     def get_data(self, frame_indices) -> np.array:
         """Overwrite Wrapper to accept Frame Indices"""
         if self._cached_data is not None:
@@ -914,11 +932,13 @@ class EncodedVideoTrial(ScreenTrial):
 
     def get_data_(self, frame_indices) -> np.array:
         """Override base implementation to load compressed videos"""
-        frames = self.video_decoder.get_frames_at(frame_indices).data  # T,C,H,W (BGR), CPU or GPU
+        frames = self.video_decoder.get_frames_at(
+            frame_indices
+        ).data  # T,C,H,W (BGR), CPU or GPU
         # BGR → RGB
         frames = frames[:, [2, 1, 0], ...]
         # Reorder dimensions
-        frames = frames.permute(0, 2, 3, 1).contiguous() # T,H,W,C
+        frames = frames.permute(0, 2, 3, 1).contiguous()  # T,H,W,C
         # Since Cuda context cannot be forked we keep entire interpolation on CPU
         if frames.is_cuda:
             frames = frames.cpu()
