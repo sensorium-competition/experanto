@@ -512,15 +512,18 @@ class ScreenInterpolator(Interpolator):
 
             if isinstance(current_trial, EncodedVideoTrial):
                 data = current_trial.get_data(frame_indices=frame_indices)
-
-            else:
-                data = current_trial.get_data()
-                data = data[frame_indices]
-
-            data = self.format_data(
+                data = self.format_data(
                 data
             )  # add channels for proper handeling. Handels missing time / channels dimensions.
+                
+            else:
+                data = current_trial.get_data()
+                data = self.format_data(
+                    data
+                )  # add channels for proper handeling. Handels missing time / channels dimensions.
+                data = data[frame_indices]
 
+            print(data.shape)
             if self.rescale:
                 out[idx_for_this_file] = self.rescale_frames(data)
 
