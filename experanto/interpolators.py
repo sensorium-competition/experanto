@@ -513,9 +513,9 @@ class ScreenInterpolator(Interpolator):
             if isinstance(current_trial, EncodedVideoTrial):
                 data = current_trial.get_data(frame_indices=frame_indices)
                 data = self.format_data(
-                data
-            )  # add channels for proper handeling. Handels missing time / channels dimensions.
-                
+                    data
+                )  # add channels for proper handeling. Handels missing time / channels dimensions.
+
             else:
                 data = current_trial.get_data()
                 data = self.format_data(

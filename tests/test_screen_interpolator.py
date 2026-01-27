@@ -67,7 +67,9 @@ def test_nearest_neighbor_interpolation(
         # Find the location of the maximum error
         idx_max = np.unravel_index(np.argmax(abs_diff), abs_diff.shape)
         print(f"Location of max diff: {idx_max} (Time, Channel, Y, X)")
-        print(f"Value at that location: Interp={interp[idx_max]:.6f}, Expected={expected_frames[idx_max]:.6f}")
+        print(
+            f"Value at that location: Interp={interp[idx_max]:.6f}, Expected={expected_frames[idx_max]:.6f}"
+        )
 
         # Print a small 3x3 patch of the first frame's first channel
         print(f"\n[RAW PATCH COMPARISON - First Frame, Channel 0, Top-Left 3x3]")
@@ -78,7 +80,11 @@ def test_nearest_neighbor_interpolation(
 
         # Check if it's a simple scaling/normalization issue
         if max_diff > 0:
-            ratio = interp[idx_max] / expected_frames[idx_max] if expected_frames[idx_max] != 0 else 0
+            ratio = (
+                interp[idx_max] / expected_frames[idx_max]
+                if expected_frames[idx_max] != 0
+                else 0
+            )
             print(f"\n[RATIO CHECK] Interp/Expected ratio: {ratio:.6f}")
 
         if expected_frames.max() > 1:
