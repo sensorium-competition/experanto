@@ -523,7 +523,6 @@ class ScreenInterpolator(Interpolator):
                 )  # add channels for proper handeling. Handels missing time / channels dimensions.
                 data = data[frame_indices]
 
-            print(data.shape)
             if self.rescale:
                 out[idx_for_this_file] = self.rescale_frames(data)
 

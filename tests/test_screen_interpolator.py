@@ -55,38 +55,6 @@ def test_nearest_neighbor_interpolation(
 
         interp = interp_obj.interpolate(times=times)
 
-        # --- DETAILED VALUE COMPARISON ---
-        abs_diff = np.abs(interp - expected_frames)
-        max_diff = np.max(abs_diff)
-        mean_diff = np.mean(abs_diff)
-
-        print(f"\n[VALUE CHECK]")
-        print(f"Max Absolute Difference: {max_diff:.6f}")
-        print(f"Mean Absolute Difference: {mean_diff:.6f}")
-
-        # Find the location of the maximum error
-        idx_max = np.unravel_index(np.argmax(abs_diff), abs_diff.shape)
-        print(f"Location of max diff: {idx_max} (Time, Channel, Y, X)")
-        print(
-            f"Value at that location: Interp={interp[idx_max]:.6f}, Expected={expected_frames[idx_max]:.6f}"
-        )
-
-        # Print a small 3x3 patch of the first frame's first channel
-        print(f"\n[RAW PATCH COMPARISON - First Frame, Channel 0, Top-Left 3x3]")
-        print("INTERP PATCH:")
-        print(interp[0, 0, :3, :3])
-        print("\nEXPECTED PATCH:")
-        print(expected_frames[0, 0, :3, :3])
-
-        # Check if it's a simple scaling/normalization issue
-        if max_diff > 0:
-            ratio = (
-                interp[idx_max] / expected_frames[idx_max]
-                if expected_frames[idx_max] != 0
-                else 0
-            )
-            print(f"\n[RATIO CHECK] Interp/Expected ratio: {ratio:.6f}")
-
         if expected_frames.max() > 1:
             # convert back to float. For export into mp4 int values are necessary
             expected_frames = expected_frames.astype(np.float32) / 255.0
