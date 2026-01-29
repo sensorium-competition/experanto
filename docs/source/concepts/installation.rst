@@ -11,5 +11,5 @@ The package works on top of `jupyter/datascience-notebooks`, but the minimum req
 
 to install the package, clone it into a local repository and run::
 
-	pip -e install /path_to_folder/experanto
+	pip install -e /path/to/folder/experanto
 
