@@ -43,7 +43,7 @@ def create_screen_data(
                 file_ext = ".jpg"
             else:
                 # Save as numpy array (original behavior)
-                np.save(data_dir / f"{i:05d}.npy", frames[i].astype(np.float32))
+                np.save(data_dir / f"{i:05d}.npy", frames[i].astype(np.uint8))
                 file_ext = ".npy"
 
             with open(meta_dir / f"{i:05d}.yml", "w") as f:

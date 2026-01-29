@@ -329,7 +329,7 @@ class ScreenInterpolator(Interpolator):
         number_channels: int = 1,
         image_names: bool = False,
         rescale: bool = False,
-        rescale_size: typing.Optional[tuple(int, int)] = None,
+        rescale_size: typing.Optional[tuple[int, int]] = None,
         device: str = "cpu",
         number_threads_decoding: int = 1,
         normalize: bool = False,
@@ -514,13 +514,13 @@ class ScreenInterpolator(Interpolator):
                 data = current_trial.get_data(frame_indices=frame_indices)
                 data = self.format_data(
                     data
-                )  # add channels for proper handeling. Handels missing time / channels dimensions.
+                )  # add channels for proper handling. Handles missing time / channels dimensions.
 
             else:
                 data = current_trial.get_data()
                 data = self.format_data(
                     data
-                )  # add channels for proper handeling. Handels missing time / channels dimensions.
+                )  # add channels for proper handling. Handles missing time / channels dimensions.
                 data = data[frame_indices]
 
             if self.rescale:
@@ -531,20 +531,19 @@ class ScreenInterpolator(Interpolator):
 
         out = out.transpose(
             0, 3, 1, 2
-        )  # transform into (C, T, H, W) after finishing with Cv2 operations
+        )  # transform into (T, C, H, W) after finishing with Cv2 operation
         return out
 
     def format_data(self, data: np.array) -> np.array:
         # Make sure all data has shape (T, H, W, C)
         if len(data.shape) == 2:
-            # (H, W) → add time=1 and channels=3
+            # (H, W) → add time at dim 0 and channels at dim 3
             data = data[np.newaxis, :, :, np.newaxis]  # (1, H, W, 1)
 
         elif len(data.shape) == 3:
             # Could be either (H, W, C) or (T, H, W)
-            if data.shape[2] in range(
-                1, 5 or data.shape[2] == self.number_channels
-            ):  # This checks if last column is within 1 to 4, to decide if it is width or channels dim.
+            # check if last dim is channels
+            if data.shape[2] in range(1, 5) or data.shape[2] == self.number_channels:
                 # Assume (H, W, C)
                 data = data[np.newaxis, :, :, :]  # (1, H, W, C)
 
@@ -568,33 +567,32 @@ class ScreenInterpolator(Interpolator):
         elif data.shape[3] < self.number_channels and data.shape[3] == 1:
             data = np.repeat(data, self.number_channels, axis=3)
 
-        # Downsample multichannel images to greyscale
-        elif self.number_channels == 1 and data.shape[3] != self.number_channels:
-            # Sample a subset to check for stacked grayscale
-            sample = data[
-                ::10, ::20, ::20, :
-            ]  # sample every 10th frame and check if channels are equal. What is the best way to do this? np.all way to expensive
-            if np.allclose(sample[..., 0], sample[..., 1], atol=1e-3) and np.allclose(
-                sample[..., 1], sample[..., 2], atol=1e-3
-            ):
-                data = data[..., 0][
-                    ..., np.newaxis
-                ]  # Keep shape consistent (T, H, W, 1)
-            elif data.shape[3] == 3:
-                data = np.array(
-                    [cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY) for frame in data]
-                )
-                data = data[:, :, :, np.newaxis]
+        elif self.number_channels == 1 and data.shape[-1] != 1:
+            # 1. Take a very small random sample to check for stacked grayscale
+            # We use a flat view to avoid indexing issues between images and videos
+            flat_view = data.reshape(-1, data.shape[-1])
+            num_pixels = flat_view.shape[0]
+            sample_idx = np.random.randint(0, num_pixels, size=min(num_pixels, 1000))
+            sample = flat_view[sample_idx]
+
+            # 2. Check if it's "fake" color (stacked grayscale)
+            is_stacked_gray = np.allclose(sample[:, 0], sample[:, 1], atol=1e-3) and \
+                            np.allclose(sample[:, 1], sample[:, 2], atol=1e-3)
+
+            if is_stacked_gray:
+                # Just slice the first channel if it's stacked grayscale
+                data = data[..., 0:1]
+            elif not is_stacked_gray:
+                # 3. Actual conversion using vectorized math (faster than cv2 loop for 4D)
+                if data.shape[-1] == 3:
+                    weights = np.array([0.299, 0.587, 0.114], dtype=np.float32)
+                    # Dot product reduces (T, H, W, 3) to (T, H, W)
+                    data = (data[..., :3] @ weights).astype(data.dtype)[..., np.newaxis]
 
             else:
                 raise ValueError(
-                    f"Cannot reduce channels from : {data.shape[3]} to {self.number_channels}."
+                    f"Cannot broadcast data with : {data.shape[3]} channels into {self.number_channels} channels."
                 )
-
-        else:
-            raise ValueError(
-                f"Cannot broadcast data with : {data.shape[3]} channels into {self.number_channels} channels."
-            )
 
         return data
 
@@ -620,97 +618,6 @@ class ScreenInterpolator(Interpolator):
             ],
             axis=0,
         )
-
-
-class TimeIntervalInterpolator(Interpolator):
-    def __init__(self, root_folder: str, cache_data: bool = False, **kwargs):
-        super().__init__(root_folder)
-        self.cache_data = cache_data
-
-        meta = self.load_meta()
-        self.meta_labels = meta["labels"]
-        self.start_time = meta["start_time"]
-        self.end_time = meta["end_time"]
-        self.valid_interval = TimeInterval(self.start_time, self.end_time)
-
-        if self.cache_data:
-            self.labeled_intervals = {
-                label: np.load(self.root_folder / filename)
-                for label, filename in self.meta_labels.items()
-            }
-
-    def interpolate(self, times: np.ndarray) -> np.ndarray:
-        """
-        Interpolate time intervals for labeled events.
-
-        Given a set of time points and a set of labeled intervals (defined in the
-        `meta.yml` file), this method returns a boolean array indicating, for each
-        time point, whether it falls within any interval for each label.
-
-        The method uses half-open intervals [start, end), where a timestamp t is
-        considered to fall within an interval if start <= t < end. This means the
-        start time is inclusive and the end time is exclusive.
-
-        Parameters
-        ----------
-        times : np.ndarray
-            Array of time points to be checked against the labeled intervals.
-
-        Returns
-        -------
-        out : np.ndarray of bool, shape (len(valid_times), n_labels)
-            Boolean array where each row corresponds to a valid time point and each
-            column corresponds to a label. `out[i, j]` is True if the i-th valid
-            time falls within any interval for the j-th label, and False otherwise.
-
-        Notes
-        -----
-        - The labels and their corresponding intervals are defined in the `meta.yml`
-          file under the `labels` key. Each label points to a `.npy` file containing
-          an array of shape (n, 2), where each row is a [start, end) time interval.
-        - Typical labels might include 'train', 'validation', 'test', 'saccade',
-          'gaze', or 'target'.
-        - Only time points within the valid interval (as defined by start_time and
-          end_time in meta.yml) are considered; others are filtered out.
-        - Intervals where start > end are considered invalid and will trigger a
-          warning.
-        """
-        valid = self.valid_times(times)
-        valid_times = times[valid]
-
-        n_labels = len(self.meta_labels)
-        n_times = len(valid_times)
-
-        if n_times == 0:
-            warnings.warn(
-                "TimeIntervalInterpolator returns an empty array, no valid times queried."
-            )
-            return np.empty((0, n_labels), dtype=bool)
-
-        out = np.zeros((n_times, n_labels), dtype=bool)
-        for i, (label, filename) in enumerate(self.meta_labels.items()):
-            if self.cache_data:
-                intervals = self.labeled_intervals[label]
-            else:
-                intervals = np.load(self.root_folder / filename, allow_pickle=True)
-
-            if len(intervals) == 0:
-                warnings.warn(
-                    f"TimeIntervalInterpolator found no intervals for label: {label}"
-                )
-                continue
-
-            for start, end in intervals:
-                if start > end:
-                    warnings.warn(
-                        f"Invalid interval found for label: {label}, interval: ({start}, {end})"
-                    )
-                    continue
-                # Half-open interval [start, end): inclusive start, exclusive end
-                mask = (valid_times >= start) & (valid_times < end)
-                out[mask, i] = True
-
-        return out
 
 
 class TimeIntervalInterpolator(Interpolator):
@@ -853,16 +760,16 @@ class ScreenTrial:
         else:
             return cls(data_file_name, meta_data, cache_data=cache_data)
 
-    def get_data_(self) -> np.array:
+    def get_data_(self, *args, **kwargs) -> np.array:
         """Base implementation for loading/generating data"""
         return np.load(self.data_file_name)
 
-    def get_data(self) -> np.array:
+    def get_data(self, *args, **kwargs) -> np.array:
         """Wrapper that handles caching"""
         if self._cached_data is not None:
             return self._cached_data
-        return self.get_data_()
-
+        return self.get_data_(*args, **kwargs)
+    
     def get_meta(self, property: str):
         return self._meta_data.get(property)
 
@@ -892,7 +799,11 @@ class EncodedImageTrial(ScreenTrial):
 
     def get_data_(self) -> np.array:
         """Override base implementation to load compressed images"""
-        img = cv2.imread(self.data_file_name)
+        img = cv2.imread(str(self.data_file_name)) # returns BGR
+        if img is None:
+            raise ValueError(f"Could not read image file: {self.data_file_name}")
+        # Convert BGR to RGB
+        img = img[:, :, [2, 1, 0]]
         return img
 
 
@@ -929,11 +840,16 @@ class EncodedVideoTrial(ScreenTrial):
     def get_data(self, frame_indices) -> np.array:
         """Overwrite Wrapper to accept Frame Indices"""
         if self._cached_data is not None:
-            return self._cached_data
+            # We index here since cached data contains all frames and EncodedVideoTrial is not indexed in main loop
+            return self._cached_data[frame_indices]
         return self.get_data_(frame_indices)
 
-    def get_data_(self, frame_indices) -> np.array:
+    def get_data_(self, frame_indices=None) -> np.array:
         """Override base implementation to load compressed videos"""
+        # Frame_indices is only ever None for caching purposes, we then decode entire video and cache it
+        if frame_indices is None:
+            frame_indices = np.arange(self.num_frames)
+
         frames = self.video_decoder.get_frames_at(
             frame_indices
         ).data  # T,C,H,W (BGR), CPU or GPU

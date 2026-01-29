@@ -361,9 +361,8 @@ def test_interpolation_with_phase_shifts_for_invalid_times(
 
         times = np.array([-5.0, -0.1, 0.1, 4.9, 4.9999999, 5.0, 5.0000001, 5.1, 10.0])
         interp = seq_interp.interpolate(times=times)
-        data_generated = (
-            int(np.floor(end_time * sampling_rate)) > 0
-        )  # necessary for small end times where no data is generated
+        # If end_time * sampling_rate < 1.0, no frames are generated and interpolation should return an empty array.
+        data_generated = end_time * sampling_rate >= 1.0
         expected_valid = (times >= np.min(phase_shifts)) & (
             times <= end_time + np.max(phase_shifts)
         )
@@ -373,7 +372,7 @@ def test_interpolation_with_phase_shifts_for_invalid_times(
             assert interp.shape == (
                 0,
                 n_signals,
-            ), f"Expected inter.shape == (0, {n_signals}), got {interp.shape}"
+            ), f"Expected interp.shape == (0, {n_signals}), got {interp.shape}"
 
         else:
             assert interp.shape == (

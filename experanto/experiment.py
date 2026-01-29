@@ -86,7 +86,7 @@ class Experiment:
     def device_names(self):
         return tuple(self.devices.keys())
 
-    def interpolate(self, times: slice, device=None) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(self, times: slice, device=None) -> np.ndarray:
         if device is None:
             values = {}
             for d, interp in self.devices.items():
