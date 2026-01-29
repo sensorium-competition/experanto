@@ -129,8 +129,8 @@ Dataset options
    Override chunk size for all modalities. Set to ``null`` to use per-modality sizes.
 
 ``add_behavior_as_channels``
-   If ``True``, concatenate behavioral data (eye tracker, treadmill) as additional
-   channels to the screen data.
+   If ``True``, concatenate behavioral data (e.g., eye tracker, treadmill) as
+   additional channels to the screen data.
 
 ``replace_nans_with_means``
    If ``True``, replace NaN values with the mean of non-NaN values.
@@ -147,7 +147,7 @@ Dataset options
 Modality options
 """"""""""""""""
 
-Each modality (screen, responses, eye_tracker, treadmill) supports:
+Each modality (e.g., screen, responses, eye_tracker, treadmill) supports:
 
 ``keep_nans``
    Whether to keep NaN values in the output.
