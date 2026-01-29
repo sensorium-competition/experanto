@@ -114,3 +114,81 @@ You can change parameters programmatically:
     cfg.dataset.modality_config.screen.include_blanks = True
     cfg.dataset.modality_config.screen.valid_condition = {"tier": "train"}
     cfg.dataloader.num_workers = 8
+
+
+Configuration options
+^^^^^^^^^^^^^^^^^^^^^
+
+Dataset options
+"""""""""""""""
+
+``global_sampling_rate``
+   Override sampling rate for all modalities. Set to ``null`` to use per-modality rates.
+
+``global_chunk_size``
+   Override chunk size for all modalities. Set to ``null`` to use per-modality sizes.
+
+``add_behavior_as_channels``
+   If ``True``, concatenate behavioral data (eye tracker, treadmill) as additional
+   channels to the screen data.
+
+``replace_nans_with_means``
+   If ``True``, replace NaN values with the mean of non-NaN values.
+
+``cache_data``
+   If ``True``, cache interpolated data in memory for faster access.
+
+``out_keys``
+   List of modality keys to include in the output dictionary.
+
+``normalize_timestamps``
+   If ``True``, normalize timestamps to start from 0.
+
+Modality options
+""""""""""""""""
+
+Each modality (screen, responses, eye_tracker, treadmill) supports:
+
+``keep_nans``
+   Whether to keep NaN values in the output.
+
+``sampling_rate``
+   Sampling rate in Hz for this modality.
+
+``chunk_size``
+   Number of samples per chunk.
+
+``offset``
+   Time offset in seconds relative to the screen timestamps.
+
+``transforms``
+   Dictionary of transforms to apply. Supports ``"normalize"`` (0-1 scaling)
+   and ``"standardize"`` (z-score normalization).
+
+``interpolation``
+   Interpolation settings including ``interpolation_mode`` (``"linear"`` or
+   ``"nearest_neighbor"``).
+
+``filters``
+   Dictionary of filter functions to apply to the data.
+
+Dataloader options
+""""""""""""""""""
+
+``batch_size``
+   Number of samples per batch.
+
+``shuffle``
+   Whether to shuffle samples.
+
+``num_workers``
+   Number of worker processes for data loading.
+
+``pin_memory``
+   If ``True``, pin memory for faster GPU transfer.
+
+``drop_last``
+   If ``True``, drop the last incomplete batch.
+
+``prefetch_factor``
+   Number of batches to prefetch per worker.
