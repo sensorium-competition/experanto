@@ -576,8 +576,9 @@ class ScreenInterpolator(Interpolator):
             sample = flat_view[sample_idx]
 
             # 2. Check if it's "fake" color (stacked grayscale)
-            is_stacked_gray = np.allclose(sample[:, 0], sample[:, 1], atol=1e-3) and \
-                            np.allclose(sample[:, 1], sample[:, 2], atol=1e-3)
+            is_stacked_gray = np.allclose(
+                sample[:, 0], sample[:, 1], atol=1e-3
+            ) and np.allclose(sample[:, 1], sample[:, 2], atol=1e-3)
 
             if is_stacked_gray:
                 # Just slice the first channel if it's stacked grayscale
@@ -769,7 +770,7 @@ class ScreenTrial:
         if self._cached_data is not None:
             return self._cached_data
         return self.get_data_(*args, **kwargs)
-    
+
     def get_meta(self, property: str):
         return self._meta_data.get(property)
 
@@ -799,7 +800,7 @@ class EncodedImageTrial(ScreenTrial):
 
     def get_data_(self) -> np.array:
         """Override base implementation to load compressed images"""
-        img = cv2.imread(str(self.data_file_name)) # returns BGR
+        img = cv2.imread(str(self.data_file_name))  # returns BGR
         if img is None:
             raise ValueError(f"Could not read image file: {self.data_file_name}")
         # Convert BGR to RGB
