@@ -20,8 +20,8 @@ class Interpolator:
     """Abstract base class for time series interpolation.
 
     Interpolators load data from a modality folder and provide methods to
-    query values at arbitrary time points. Each modality (screen, responses,
-    eye_tracker, treadmill) has a specialized interpolator subclass.
+    query values at arbitrary time points. Each modality (e.g., screen,
+    responses, eye_tracker, treadmill) has a specialized interpolator subclass.
 
     Parameters
     ----------
@@ -87,7 +87,9 @@ class Interpolator:
         self.close()
 
     @staticmethod
-    def create(root_folder: str, cache_data: bool = False, **kwargs) -> "Interpolator":
+    def create(
+        root_folder: str, cache_data: bool = False, **kwargs
+    ) -> "Interpolator":
         """Factory method to create the appropriate interpolator for a modality.
 
         Reads the ``meta.yml`` file in the folder to determine the modality type
@@ -208,7 +210,9 @@ class SequenceInterpolator(Interpolator):
         self.time_delta = 1.0 / self.sampling_rate
         self.start_time = meta["start_time"]
         self.end_time = meta["end_time"]
-        self.is_mem_mapped = meta["is_mem_mapped"] if "is_mem_mapped" in meta else False
+        self.is_mem_mapped = (
+            meta["is_mem_mapped"] if "is_mem_mapped" in meta else False
+        )
         # Valid interval can be different to start time and end time.
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
 
@@ -235,12 +239,12 @@ class SequenceInterpolator(Interpolator):
     def normalize_init(self):
         self.mean = np.load(self.root_folder / "meta/means.npy")
         self.std = np.load(self.root_folder / "meta/stds.npy")
-        assert (
-            self.mean.shape[0] == self.n_signals
-        ), f"mean shape does not match: {self.mean.shape} vs {self._data.shape}"
-        assert (
-            self.std.shape[0] == self.n_signals
-        ), f"std shape does not match: {self.std.shape} vs {self._data.shape}"
+        assert self.mean.shape[0] == self.n_signals, (
+            f"mean shape does not match: {self.mean.shape} vs {self._data.shape}"
+        )
+        assert self.std.shape[0] == self.n_signals, (
+            f"std shape does not match: {self.std.shape} vs {self._data.shape}"
+        )
         self.mean = self.mean.T
         self.std = self.std.T
         if self.normalize_std_threshold:
@@ -267,9 +271,9 @@ class SequenceInterpolator(Interpolator):
             )
             return np.empty((0, self._data.shape[1])), valid
 
-        idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
-            int
-        )
+        idx_lower = np.floor(
+            (valid_times - self.start_time) / self.time_delta
+        ).astype(int)
 
         if self.interpolation_mode == "nearest_neighbor":
             data = self._data[idx_lower]
@@ -304,13 +308,16 @@ class SequenceInterpolator(Interpolator):
             data_upper = self._data[idx_upper]
 
             interpolated = (
-                lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+                lower_signal_ratio * data_lower
+                + upper_signal_ratio * data_upper
             )
 
             if not self.keep_nans:
                 neuron_means = np.nanmean(interpolated, axis=0)
                 # Replace NaNs with the column means directly
-                np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
+                np.copyto(
+                    interpolated, neuron_means, where=np.isnan(interpolated)
+                )
 
             return interpolated, valid
 
@@ -369,9 +376,13 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
         self._phase_shifts = np.load(self.root_folder / "meta/phase_shifts.npy")
         self.valid_interval = TimeInterval(
             self.start_time
-            + (np.max(self._phase_shifts) if len(self._phase_shifts) > 0 else 0),
+            + (
+                np.max(self._phase_shifts) if len(self._phase_shifts) > 0 else 0
+            ),
             self.end_time
-            + (np.min(self._phase_shifts) if len(self._phase_shifts) > 0 else 0),
+            + (
+                np.min(self._phase_shifts) if len(self._phase_shifts) > 0 else 0
+            ),
         )
 
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -413,7 +424,9 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             times_upper = idx_upper * self.time_delta
             denom = times_upper - times_lower
 
-            time_dim = valid_times[:, np.newaxis] - self._phase_shifts[np.newaxis, :]
+            time_dim = (
+                valid_times[:, np.newaxis] - self._phase_shifts[np.newaxis, :]
+            )
 
             lower_numerator = times_upper - time_dim
             upper_numerator = time_dim - times_lower
@@ -426,13 +439,16 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             data_upper = self._data[idx_upper, cols]
 
             interpolated = (
-                lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
+                lower_signal_ratio * data_lower
+                + upper_signal_ratio * data_upper
             )
 
             if not self.keep_nans:
                 neuron_means = np.nanmean(interpolated, axis=0)
                 # Replace NaNs with the column means directly
-                np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
+                np.copyto(
+                    interpolated, neuron_means, where=np.isnan(interpolated)
+                )
 
             return interpolated, valid
 
@@ -522,12 +538,12 @@ class ScreenInterpolator(Interpolator):
         if self.rescale:
             self.mean = self.rescale_frame(self.mean.T).T
             self.std = self.rescale_frame(self.std.T).T
-        assert (
-            self.mean.shape == self._image_size
-        ), f"mean size is different: {self.mean.shape} vs {self._image_size}"
-        assert (
-            self.std.shape == self._image_size
-        ), f"std size is different: {self.std.shape} vs {self._image_size}"
+        assert self.mean.shape == self._image_size, (
+            f"mean size is different: {self.mean.shape} vs {self._image_size}"
+        )
+        assert self.std.shape == self._image_size, (
+            f"std size is different: {self.std.shape} vs {self._image_size}"
+        )
 
     def normalize_data(self, data):
         return (data - self.mean) / self.std
@@ -597,14 +613,16 @@ class ScreenInterpolator(Interpolator):
         idx = (
             np.searchsorted(self.timestamps, valid_times) - 1
         )  # convert times to frame indices
-        assert np.all(
-            (idx >= 0) & (idx < len(self.timestamps))
-        ), "All times must be within the valid range"
+        assert np.all((idx >= 0) & (idx < len(self.timestamps))), (
+            "All times must be within the valid range"
+        )
         data_file_idx = self._data_file_idx[idx]
 
         # Go through files, load them and extract all frames
         unique_file_idx = np.unique(data_file_idx)
-        out = np.zeros([len(valid_times)] + list(self._image_size), dtype=np.float32)
+        out = np.zeros(
+            [len(valid_times)] + list(self._image_size), dtype=np.float32
+        )
         for u_idx in unique_file_idx:
             data = self.trials[u_idx].get_data()
             # TODO: establish convention of dimensons for time/channels. Then we can remove this
@@ -615,10 +633,14 @@ class ScreenInterpolator(Interpolator):
                 data = np.expand_dims(data, axis=0)
             idx_for_this_file = np.where(self._data_file_idx[idx] == u_idx)
             if self.rescale:
-                orig_size = data[idx[idx_for_this_file] - self._first_frame_idx[u_idx]]
+                orig_size = data[
+                    idx[idx_for_this_file] - self._first_frame_idx[u_idx]
+                ]
                 out[idx_for_this_file] = np.stack(
                     [
-                        self.rescale_frame(np.asarray(frame, dtype=np.float32).T).T
+                        self.rescale_frame(
+                            np.asarray(frame, dtype=np.float32).T
+                        ).T
                         for frame in orig_size
                     ]
                 )
@@ -641,9 +663,9 @@ class ScreenInterpolator(Interpolator):
         np.ndarray
             Rescaled image as float32.
         """
-        return cv2.resize(frame, self._image_size, interpolation=cv2.INTER_AREA).astype(
-            np.float32
-        )
+        return cv2.resize(
+            frame, self._image_size, interpolation=cv2.INTER_AREA
+        ).astype(np.float32)
 
 
 class TimeIntervalInterpolator(Interpolator):
@@ -716,7 +738,9 @@ class TimeIntervalInterpolator(Interpolator):
             if self.cache_data:
                 intervals = self.labeled_intervals[label]
             else:
-                intervals = np.load(self.root_folder / filename, allow_pickle=True)
+                intervals = np.load(
+                    self.root_folder / filename, allow_pickle=True
+                )
 
             if len(intervals) == 0:
                 warnings.warn(
@@ -786,7 +810,9 @@ class ScreenTrial:
         modality = meta_data.get("modality")
         class_name = modality.lower().capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"
-        return globals()[class_name](data_file_name, meta_data, cache_data=cache_data)
+        return globals()[class_name](
+            data_file_name, meta_data, cache_data=cache_data
+        )
 
     def get_data_(self) -> np.array:
         """Base implementation for loading/generating data"""
@@ -805,7 +831,9 @@ class ScreenTrial:
 class ImageTrial(ScreenTrial):
     """Trial containing a single static image."""
 
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(
+        self, data_file_name, meta_data, cache_data: bool = False
+    ) -> None:
         super().__init__(
             data_file_name,
             meta_data,
@@ -819,7 +847,9 @@ class ImageTrial(ScreenTrial):
 class VideoTrial(ScreenTrial):
     """Trial containing a multi-frame video sequence."""
 
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(
+        self, data_file_name, meta_data, cache_data: bool = False
+    ) -> None:
         super().__init__(
             data_file_name,
             meta_data,
@@ -833,7 +863,9 @@ class VideoTrial(ScreenTrial):
 class BlankTrial(ScreenTrial):
     """Trial containing a blank/gray screen (inter-stimulus interval)."""
 
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(
+        self, data_file_name, meta_data, cache_data: bool = False
+    ) -> None:
         self.interleave_value = meta_data.get("interleave_value")
 
         super().__init__(
@@ -847,13 +879,17 @@ class BlankTrial(ScreenTrial):
 
     def get_data_(self) -> np.array:
         """Override base implementation to generate blank data"""
-        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
+        return np.full(
+            (1,) + self.image_size, self.interleave_value, dtype=np.float32
+        )
 
 
 class InvalidTrial(ScreenTrial):
     """Placeholder for invalid or corrupted trials."""
 
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(
+        self, data_file_name, meta_data, cache_data: bool = False
+    ) -> None:
         self.interleave_value = meta_data.get("interleave_value")
 
         super().__init__(
@@ -867,4 +903,6 @@ class InvalidTrial(ScreenTrial):
 
     def get_data_(self) -> np.array:
         """Override base implementation to generate blank data"""
-        return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
+        return np.full(
+            (1,) + self.image_size, self.interleave_value, dtype=np.float32
+        )

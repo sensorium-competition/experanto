@@ -38,7 +38,7 @@ pip install -e /path/to/sensorium_2023
 ### Loading an Experiment
 
 ```python
-from experanto import Experiment
+from experanto.experiment import Experiment
 
 # Load a single experiment
 exp = Experiment("/path/to/experiment")
@@ -47,11 +47,11 @@ exp = Experiment("/path/to/experiment")
 import numpy as np
 times = np.linspace(0, 10, 100)  # 100 time points over 10 seconds
 
-# Get interpolated data from all devices
-data = exp.interpolate(times)
+# Get interpolated data and a boolean mask with valid time points from all devices
+data, valid = exp.interpolate(times)
 
 # Or from a specific device
-responses = exp.interpolate(times, device_name="responses")
+responses, valid = exp.interpolate(times, device="responses")
 ```
 
 ### Configuration

@@ -111,9 +111,12 @@ class Experiment:
             else:
                 # Default back to original logic
                 warnings.warn(
-                    "Falling back to original Interpolator creation logic.", UserWarning
+                    "Falling back to original Interpolator creation logic.",
+                    UserWarning,
                 )
-                dev = Interpolator.create(d, cache_data=self.cache_data, **interp_conf)
+                dev = Interpolator.create(
+                    d, cache_data=self.cache_data, **interp_conf
+                )
 
             self.devices[d.name] = dev
             self.start_time = dev.start_time
@@ -124,7 +127,9 @@ class Experiment:
     def device_names(self):
         return tuple(self.devices.keys())
 
-    def interpolate(self, times: slice, device=None) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(
+        self, times: np.ndarray, device=None
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Interpolate data from one or all devices at specified time points.
 
         Parameters
