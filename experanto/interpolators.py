@@ -19,9 +19,9 @@ from .intervals import TimeInterval
 class Interpolator:
     """Abstract base class for time series interpolation.
 
-    Interpolators load data from a modality folder and provide methods to
-    query values at arbitrary time points. Each modality (e.g., screen,
-    responses, eye_tracker, treadmill) has a specialized interpolator subclass.
+    Interpolators load data from a modality folder and map time points to
+    data values. Each modality (e.g., screen, responses, eye_tracker,
+    treadmill) has a specialized interpolator subclass.
 
     Parameters
     ----------
@@ -43,6 +43,7 @@ class Interpolator:
     --------
     SequenceInterpolator : For 1D time series data (responses, behaviors).
     ScreenInterpolator : For visual stimuli (images, videos).
+    TimeIntervalInterpolator : For labeled time intervals (e.g., train/test splits).
     Experiment : High-level interface that manages multiple interpolators.
     """
 
@@ -60,21 +61,7 @@ class Interpolator:
 
     @abstractmethod
     def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Interpolate data at the specified time points.
-
-        Parameters
-        ----------
-        times : numpy.ndarray
-            1D array of time points (in seconds) at which to interpolate.
-
-        Returns
-        -------
-        data : numpy.ndarray
-            Interpolated values. Shape depends on the modality.
-        valid : numpy.ndarray
-            Boolean mask indicating which input times were within the
-            valid interval.
-        """
+        """Map an array of time points to interpolated data values."""
         ...
 
     def __contains__(self, times: np.ndarray):
@@ -669,6 +656,48 @@ class ScreenInterpolator(Interpolator):
 
 
 class TimeIntervalInterpolator(Interpolator):
+    """Interpolator for labeled time intervals.
+
+    Maps time points to boolean membership in labeled intervals. Given a
+    set of time points, returns a boolean array indicating whether each
+    point falls within any interval for each label.
+
+    Labels and their intervals are defined in the ``meta.yml`` file under
+    the ``labels`` key. Each label points to a ``.npy`` file containing an
+    array of shape ``(n, 2)``, where each row is a ``[start, end)``
+    half-open time interval. Typical labels include ``'train'``,
+    ``'validation'``, ``'test'``, ``'saccade'``, ``'gaze'``, or
+    ``'target'``.
+
+    The half-open convention means a timestamp *t* is considered inside an
+    interval when ``start <= t < end``. Intervals where ``start > end``
+    are treated as invalid and trigger a warning.
+
+    Parameters
+    ----------
+    root_folder : str
+        Path to the modality directory containing ``meta.yml`` and the
+        ``.npy`` interval files referenced by its ``labels`` mapping.
+    cache_data : bool, default=False
+        If True, loads all interval arrays into memory at init time.
+    **kwargs
+        Additional keyword arguments (ignored).
+
+    Attributes
+    ----------
+    meta_labels : dict
+        Mapping from label names to ``.npy`` filenames.
+
+    Notes
+    -----
+    - Only time points within the valid interval (as defined by
+      ``start_time`` and ``end_time`` in ``meta.yml``) are considered;
+      others are filtered out.
+    - The ``interpolate`` method returns an array of shape
+      ``(n_valid_times, n_labels)`` where ``out[i, j]`` is True if the
+      *i*-th valid time falls within any interval for the *j*-th label.
+    """
+
     def __init__(self, root_folder: str, cache_data: bool = False, **kwargs):
         super().__init__(root_folder)
         self.cache_data = cache_data
@@ -686,41 +715,7 @@ class TimeIntervalInterpolator(Interpolator):
             }
 
     def interpolate(self, times: np.ndarray) -> np.ndarray:
-        """
-        Interpolate time intervals for labeled events.
-
-        Given a set of time points and a set of labeled intervals (defined in the
-        `meta.yml` file), this method returns a boolean array indicating, for each
-        time point, whether it falls within any interval for each label.
-
-        The method uses half-open intervals [start, end), where a timestamp t is
-        considered to fall within an interval if start <= t < end. This means the
-        start time is inclusive and the end time is exclusive.
-
-        Parameters
-        ----------
-        times : np.ndarray
-            Array of time points to be checked against the labeled intervals.
-
-        Returns
-        -------
-        out : np.ndarray of bool, shape (len(valid_times), n_labels)
-            Boolean array where each row corresponds to a valid time point and each
-            column corresponds to a label. `out[i, j]` is True if the i-th valid
-            time falls within any interval for the j-th label, and False otherwise.
-
-        Notes
-        -----
-        - The labels and their corresponding intervals are defined in the `meta.yml`
-          file under the `labels` key. Each label points to a `.npy` file containing
-          an array of shape (n, 2), where each row is a [start, end) time interval.
-        - Typical labels might include 'train', 'validation', 'test', 'saccade',
-          'gaze', or 'target'.
-        - Only time points within the valid interval (as defined by start_time and
-          end_time in meta.yml) are considered; others are filtered out.
-        - Intervals where start > end are considered invalid and will trigger a
-          warning.
-        """
+        """Map time points to boolean label membership."""
         valid = self.valid_times(times)
         valid_times = times[valid]
 
