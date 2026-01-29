@@ -3,7 +3,7 @@
 Loading a single experiment
 ===========================
 
-To load an experiment, we use the **Experiment** class. This is particularly useful for testing whether the formatting and interpolation behave as expected before loading multiple experiments into dataset objects.
+To load an experiment, we use the :class:`~experanto.experiment.Experiment` class. This is particularly useful for testing whether the formatting and interpolation behave as expected before loading multiple experiments into dataset objects.
 
 Loading an experiment
 ---------------------
@@ -34,7 +34,7 @@ All compatible modalities for the loaded experiment can be checked using:
 
 Interpolating data
 ------------------
-Once the modalities are identified, we can interpolate their data. 
+Once the modalities are identified, we can interpolate their data using :meth:`~experanto.experiment.Experiment.interpolate`.
 The following example interpolates a 20-second window with 2 frames per second, resulting in 40 images:
 
 .. code-block:: python

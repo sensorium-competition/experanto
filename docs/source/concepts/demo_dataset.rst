@@ -4,7 +4,7 @@
 Loading a dataset object
 ========================
 
-Dataset objects organize experimental data (from **Experiment** class) for machine learning tasks, offering project-specific and configurable access for training and evaluation. They often serve as a source for creating **dataloaders**.
+Dataset objects organize experimental data (from the :class:`~experanto.experiment.Experiment` class) for machine learning tasks, offering project-specific and configurable access for training and evaluation. They often serve as a source for creating dataloaders (see :func:`~experanto.dataloaders.get_multisession_dataloader`).
 
 Key features of dataset objects
 -------------------------------
@@ -81,7 +81,7 @@ This will output something like:
 
 Defining dataloaders
 ---------------------
-Once the dataset is verified, we can define **DataLoader** objects for training or other purposes. This allows easy batch processing during training:
+Once the dataset is verified, we can define `DataLoader <https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader>`_ objects for training or other purposes. This allows easy batch processing during training:
 
 .. code-block:: python
 

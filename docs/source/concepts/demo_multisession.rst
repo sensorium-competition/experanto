@@ -1,14 +1,14 @@
 Loading multiple sessions
 =========================
 
-To load multiple sessions at once, you can use the ``get_multisession_dataloader`` function from ``experanto.dataloaders``.
+To load multiple sessions at once, you can use :func:`~experanto.dataloaders.get_multisession_dataloader`.
 
 This function takes:
 
 - A list of paths pointing to your experiment directories
 - A configuration dictionary, similar to the one used for loading a single dataset
 
-It returns a dictionary of ``MultiEpochsDataLoader`` objects, each corresponding to a session, loaded with the specified configurations.
+It returns a dictionary of :class:`~experanto.utils.MultiEpochsDataLoader` objects, each corresponding to a session, loaded with the specified configurations.
 
 Example
 -------
@@ -30,4 +30,4 @@ Example
     # Load first two sessions
     train_dl = get_multisession_dataloader(full_paths[:2], cfg)
 
-The returned ``train_dl`` is a dictionary containing two ``MultiEpochsDataLoader`` objects which can be used for training.
+The returned ``train_dl`` is a dictionary containing two :class:`~experanto.utils.MultiEpochsDataLoader` objects which can be used for training.
