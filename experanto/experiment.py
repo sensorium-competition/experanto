@@ -114,9 +114,7 @@ class Experiment:
                     "Falling back to original Interpolator creation logic.",
                     UserWarning,
                 )
-                dev = Interpolator.create(
-                    d, cache_data=self.cache_data, **interp_conf
-                )
+                dev = Interpolator.create(d, cache_data=self.cache_data, **interp_conf)
 
             self.devices[d.name] = dev
             self.start_time = dev.start_time
