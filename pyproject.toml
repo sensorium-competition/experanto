@@ -1,6 +1,6 @@
 [project]
 name = "experanto"
-version = "0.1"
+version = "0.1.0"
 description = "Python package to interpolate recordings and stimuli of neuroscience experiments"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -9,10 +9,10 @@ requires-python = ">=3.9"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["experanto*", "configs"]
+include = ["experanto*"]
 
 [tool.setuptools.package-data]
-"configs" = ["*.yaml"]
+experanto = ["../configs/*.yaml"]
 
 [project.urls]
 Homepage = "https://github.com/sensorium-competition/experanto"
@@ -23,7 +23,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.black]
 line-length = 88
-target-version = ["py312"]
+target-version = ["py39"]
 include = '\.pyi?$'
 exclude = '''
 /(
