@@ -175,20 +175,6 @@ Each modality (e.g., screen, responses, eye_tracker, treadmill) supports:
 Dataloader options
 """"""""""""""""""
 
-``batch_size``
-   Number of samples per batch.
-
-``shuffle``
-   Whether to shuffle samples.
-
-``num_workers``
-   Number of worker processes for data loading.
-
-``pin_memory``
-   If ``True``, pin memory for faster GPU transfer.
-
-``drop_last``
-   If ``True``, drop the last incomplete batch.
-
-``prefetch_factor``
-   Number of batches to prefetch per worker.
+All standard ``torch.utils.data.DataLoader`` options are supported. See the
+`PyTorch DataLoader documentation <https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader>`_
+for the full list of available parameters.
