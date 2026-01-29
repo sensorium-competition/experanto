@@ -38,49 +38,53 @@ jobs:
           pytest -v tests/
 
   lint-and-format:
-    name: Lint & Auto-format
-    runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'push' ||
-      (
-        github.event_name == 'pull_request' &&
-        github.repository != github.event.pull_request.head.repo.full_name
-      )
+      name: Lint & Auto-format
+      runs-on: ubuntu-latest
+      # IMPROVED LOGIC: 
+      # 1. Run on pushes to any branch EXCEPT main (to avoid protection issues)
+      # 2. Run on PRs only if they come from a FORK (where we can't push)
+      if: |
+        (github.event_name == 'push' && github.ref != 'refs/heads/main') ||
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+          with:
+            # Use a PAT if you want the 'auto-format' commit to trigger other CI tests
+            # Use GITHUB_TOKEN if you want it to be "silent"
+            token: ${{ secrets.GITHUB_TOKEN }}
+            ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12.8'
+        - name: Set up Python
+          uses: actions/setup-python@v5
+          with:
+            python-version: '3.12.8'
 
-      - name: Install tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install "black[jupyter]==25.1.0" isort==6.0.1
+        - name: Install tools
+          run: |
+            python -m pip install --upgrade pip
+            pip install "black[jupyter]==25.1.0" isort==6.0.1
 
-      - name: Run Black and Isort
-        run: |
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.repository }}" == "${{ github.event.repository.full_name }}" ]]; then
-            echo "Push event in same repo: Running black and isort with auto-format and commit"
-            black .
-            isort .
-            git config user.name "github-actions"
-            git config user.email "github-actions@github.com"
-            if ! git diff --quiet; then
-              git commit -am "style: auto-format with black and isort"
-              git push
+        - name: Run Black and Isort
+          run: |
+            if [[ "${{ github.event_name }}" == "push" ]]; then
+              echo "Standard Branch Push: Formatting and pushing back to ${{ github.ref_name }}"
+              black .
+              isort .
+              
+              git config user.name "github-actions"
+              git config user.email "github-actions@github.com"
+              
+              if ! git diff --quiet; then
+                git commit -am "style: auto-format with black and isort"
+                git push
+              else
+                echo "No changes."
+              fi
+
             else
-              echo "No formatting changes to commit."
+              echo "Forked PR: Check-only mode (No push)"
+              black --check . || { echo "Black failed"; exit 1; }
+              isort --check-only . || { echo "Isort failed"; exit 1; }
             fi
-
-          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "PR from fork: Running black and isort in check mode"
-            black --check . || { echo "Black formatting issues found. Run 'black .' to fix."; exit 1; }
-            isort --check-only . || { echo "isort import order issues found. Run 'isort .' to fix."; exit 1; }
-
-          else
-            echo "Not a forked PR and not a push. Skipping format."
-          fi
