@@ -31,12 +31,15 @@ def nan_filter(vicinity=0.05):
     """
 
     def implementation(device_: SequenceInterpolator):
+        # Requires a SequenceInterpolator since it relies on time_delta,
+        # which other interpolator types do not expose.
         time_delta = device_.time_delta
         start_time = device_.start_time
         end_time = device_.end_time
-        data = device_._data
+        data = device_._data  # (T, n_features)
 
-        nan_mask = np.any(np.isnan(data), axis=1)
+        nan_mask = np.isnan(data)  # (T, n_features)
+        nan_mask = np.any(nan_mask, axis=1)  # (T,)
         nan_indices = np.where(nan_mask)[0]
 
         invalid_intervals = []
