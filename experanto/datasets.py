@@ -537,10 +537,8 @@ class ChunkDataset(Dataset):
             additional_valid_conditions = {"tier": "blank"}
             valid_conditions.append(additional_valid_conditions)
 
-        sample_mask_from_meta_conditions = (
-            self.get_screen_sample_mask_from_meta_conditions(
-                chunk_size, valid_conditions, filter_for_valid_intervals  # type: ignore[arg-type]
-            )
+        sample_mask_from_meta_conditions = self.get_screen_sample_mask_from_meta_conditions(
+            chunk_size, valid_conditions, filter_for_valid_intervals  # type: ignore[arg-type]
         )
 
         final_mask = duration_mask & sample_mask_from_meta_conditions
