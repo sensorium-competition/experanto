@@ -81,9 +81,9 @@ def test_nearest_neighbor_interpolation_return_valid_false():
         assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
 
         interp, _ = interp_obj.interpolate(times=times, return_valid=True)
-        assert np.array_equal(result, interp), (
-            "Data from return_valid=False should match data from return_valid=True"
-        )
+        assert np.array_equal(
+            result, interp
+        ), "Data from return_valid=False should match data from return_valid=True"
 
 
 def test_nearest_neighbor_interpolation_default_return_valid():
@@ -104,6 +104,6 @@ def test_nearest_neighbor_interpolation_default_return_valid():
         assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
 
         interp, _ = interp_obj.interpolate(times=times, return_valid=True)
-        assert np.array_equal(result, interp), (
-            "Data from default (no return_valid) should match data from return_valid=True"
-        )
+        assert np.array_equal(
+            result, interp
+        ), "Data from default (no return_valid) should match data from return_valid=True"

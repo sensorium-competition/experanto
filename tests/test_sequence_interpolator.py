@@ -451,14 +451,15 @@ def test_nearest_neighbor_interpolation_return_valid_false():
 
         result = seq_interp.interpolate(times=times, return_valid=False)
         assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
-        assert result.shape == (DEFAULT_SEQUENCE_LENGTH, 10), (
-            f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
-        )
+        assert result.shape == (
+            DEFAULT_SEQUENCE_LENGTH,
+            10,
+        ), f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
 
         interp, _ = seq_interp.interpolate(times=times, return_valid=True)
-        assert np.array_equal(result, interp), (
-            "Data from return_valid=False should match data from return_valid=True"
-        )
+        assert np.array_equal(
+            result, interp
+        ), "Data from return_valid=False should match data from return_valid=True"
 
 
 def test_nearest_neighbor_interpolation_default_return_valid():
@@ -474,14 +475,15 @@ def test_nearest_neighbor_interpolation_default_return_valid():
 
         result = seq_interp.interpolate(times=times)
         assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
-        assert result.shape == (DEFAULT_SEQUENCE_LENGTH, 10), (
-            f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
-        )
+        assert result.shape == (
+            DEFAULT_SEQUENCE_LENGTH,
+            10,
+        ), f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
 
         interp, _ = seq_interp.interpolate(times=times, return_valid=True)
-        assert np.array_equal(result, interp), (
-            "Data from default (no return_valid) should match data from return_valid=True"
-        )
+        assert np.array_equal(
+            result, interp
+        ), "Data from default (no return_valid) should match data from return_valid=True"
 
 
 def test_linear_interpolation_return_valid_false():
@@ -500,14 +502,15 @@ def test_linear_interpolation_return_valid_false():
 
         result = seq_interp.interpolate(times=times, return_valid=False)
         assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
-        assert result.shape == (DEFAULT_SEQUENCE_LENGTH, 10), (
-            f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
-        )
+        assert result.shape == (
+            DEFAULT_SEQUENCE_LENGTH,
+            10,
+        ), f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
 
         interp, _ = seq_interp.interpolate(times=times, return_valid=True)
-        assert np.allclose(result, interp, equal_nan=True), (
-            "Data from return_valid=False should match data from return_valid=True"
-        )
+        assert np.allclose(
+            result, interp, equal_nan=True
+        ), "Data from return_valid=False should match data from return_valid=True"
 
 
 def test_linear_interpolation_default_return_valid():
@@ -526,14 +529,15 @@ def test_linear_interpolation_default_return_valid():
 
         result = seq_interp.interpolate(times=times)
         assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
-        assert result.shape == (DEFAULT_SEQUENCE_LENGTH, 10), (
-            f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
-        )
+        assert result.shape == (
+            DEFAULT_SEQUENCE_LENGTH,
+            10,
+        ), f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
 
         interp, _ = seq_interp.interpolate(times=times, return_valid=True)
-        assert np.allclose(result, interp, equal_nan=True), (
-            "Data from default (no return_valid) should match data from return_valid=True"
-        )
+        assert np.allclose(
+            result, interp, equal_nan=True
+        ), "Data from default (no return_valid) should match data from return_valid=True"
 
 
 def test_interpolation_mode_not_implemented():
