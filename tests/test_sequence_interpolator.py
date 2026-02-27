@@ -438,6 +438,104 @@ def test_interpolation_for_empty_times(interpolation_mode, phase_shifts):
         assert valid.shape[0] == 0, "No data expected"
 
 
+def test_nearest_neighbor_interpolation_return_valid_false():
+    with sequence_data_and_interpolator(
+        data_kwargs=dict(
+            n_signals=10,
+            use_mem_mapped=False,
+            t_end=5.0,
+            sampling_rate=10.0,
+        )
+    ) as (timestamps, data, _, seq_interp):
+        times = timestamps[:DEFAULT_SEQUENCE_LENGTH] + 1e-9
+
+        result = seq_interp.interpolate(times=times, return_valid=False)
+        assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
+        assert result.shape == (DEFAULT_SEQUENCE_LENGTH, 10), (
+            f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
+        )
+
+        interp, _ = seq_interp.interpolate(times=times, return_valid=True)
+        assert np.array_equal(result, interp), (
+            "Data from return_valid=False should match data from return_valid=True"
+        )
+
+
+def test_nearest_neighbor_interpolation_default_return_valid():
+    with sequence_data_and_interpolator(
+        data_kwargs=dict(
+            n_signals=10,
+            use_mem_mapped=False,
+            t_end=5.0,
+            sampling_rate=10.0,
+        )
+    ) as (timestamps, data, _, seq_interp):
+        times = timestamps[:DEFAULT_SEQUENCE_LENGTH] + 1e-9
+
+        result = seq_interp.interpolate(times=times)
+        assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
+        assert result.shape == (DEFAULT_SEQUENCE_LENGTH, 10), (
+            f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
+        )
+
+        interp, _ = seq_interp.interpolate(times=times, return_valid=True)
+        assert np.array_equal(result, interp), (
+            "Data from default (no return_valid) should match data from return_valid=True"
+        )
+
+
+def test_linear_interpolation_return_valid_false():
+    with sequence_data_and_interpolator(
+        data_kwargs=dict(
+            n_signals=10,
+            use_mem_mapped=False,
+            t_end=5.0,
+            sampling_rate=10.0,
+        )
+    ) as (timestamps, data, _, seq_interp):
+        seq_interp.interpolation_mode = "linear"
+
+        delta_t = 1.0 / 10.0
+        times = timestamps[1 : DEFAULT_SEQUENCE_LENGTH + 1] + 0.5 * delta_t
+
+        result = seq_interp.interpolate(times=times, return_valid=False)
+        assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
+        assert result.shape == (DEFAULT_SEQUENCE_LENGTH, 10), (
+            f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
+        )
+
+        interp, _ = seq_interp.interpolate(times=times, return_valid=True)
+        assert np.allclose(result, interp, equal_nan=True), (
+            "Data from return_valid=False should match data from return_valid=True"
+        )
+
+
+def test_linear_interpolation_default_return_valid():
+    with sequence_data_and_interpolator(
+        data_kwargs=dict(
+            n_signals=10,
+            use_mem_mapped=False,
+            t_end=5.0,
+            sampling_rate=10.0,
+        )
+    ) as (timestamps, data, _, seq_interp):
+        seq_interp.interpolation_mode = "linear"
+
+        delta_t = 1.0 / 10.0
+        times = timestamps[1 : DEFAULT_SEQUENCE_LENGTH + 1] + 0.5 * delta_t
+
+        result = seq_interp.interpolate(times=times)
+        assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
+        assert result.shape == (DEFAULT_SEQUENCE_LENGTH, 10), (
+            f"Expected shape ({DEFAULT_SEQUENCE_LENGTH}, 10), got {result.shape}"
+        )
+
+        interp, _ = seq_interp.interpolate(times=times, return_valid=True)
+        assert np.allclose(result, interp, equal_nan=True), (
+            "Data from default (no return_valid) should match data from return_valid=True"
+        )
+
+
 def test_interpolation_mode_not_implemented():
     with sequence_data_and_interpolator() as (_, _, _, seq_interp):
         seq_interp.interpolation_mode = "unsupported_mode"
