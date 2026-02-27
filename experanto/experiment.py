@@ -62,7 +62,7 @@ class Experiment:
     def interpolate(
         self,
         times: slice,
-        device: Interpolator | None = None,
+        device: Union[str, Interpolator, None] = None,
         return_valid: bool = False,
     ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         if device is None:
