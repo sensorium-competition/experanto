@@ -76,6 +76,10 @@ class Experiment:
                     valid[d] = vlds
                 else:
                     values[d] = res
+            if return_valid:
+                return values, valid
+            else:
+                return values
         elif isinstance(device, str):
             assert device in self.devices, "Unknown device '{}'".format(device)
             res = self.devices[device].interpolate(times, return_valid=return_valid)
