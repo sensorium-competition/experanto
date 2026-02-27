@@ -13,7 +13,6 @@ import warnings
 from collections import defaultdict
 from copy import deepcopy
 from functools import partial
-from itertools import cycle
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 # third-party libraries
@@ -26,7 +25,7 @@ from torch.utils.data import ConcatDataset, DataLoader, Dataset, Sampler
 from .intervals import TimeInterval
 
 
-def replace_nan_with_batch_mean(data: np.array) -> np.array:
+def replace_nan_with_batch_mean(data: np.ndarray) -> np.ndarray:
     row, col = np.where(np.isnan(data))
     for i, j in zip(row, col):
         new_value = np.nanmean(data[:, j])
@@ -111,13 +110,14 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
         self.shuffle_each_epoch = shuffle_each_epoch
 
     def __len__(self):
-        return len(self.batch_sampler.sampler)
+        assert isinstance(self.batch_sampler, _RepeatSampler)
+        return len(self.batch_sampler)
 
-    def __iter__(self):
+    def __iter__(self):  # type: ignore[override]
         if self.shuffle_each_epoch and hasattr(
             self.dataset, "shuffle_valid_screen_times"
         ):
-            self.dataset.shuffle_valid_screen_times()
+            self.dataset.shuffle_valid_screen_times()  # type: ignore[union-attr]
         for i in range(len(self)):
             yield next(self.iterator)
 
@@ -524,8 +524,8 @@ class FastSessionDataLoader:
 
         # Restore RNG state for the main dataloader
         dataloader_rng_state = state.get("dataloader_rng_state")
-        if dataloader_rng_state is not None and self.rng is not None:
-            self.rng.set_state(dataloader_rng_state)
+        if dataloader_rng_state is not None and hasattr(self, "rng") and self.rng is not None:  # type: ignore[attr-defined]
+            self.rng.set_state(dataloader_rng_state)  # type: ignore[attr-defined]
 
         # Restore RNG state for the batch sampler
         batch_sampler_state = state.get("batch_sampler_state")

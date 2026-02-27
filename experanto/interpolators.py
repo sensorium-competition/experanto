@@ -69,6 +69,7 @@ class Interpolator:
             )
 
     def valid_times(self, times: np.ndarray) -> np.ndarray:
+        assert self.valid_interval is not None
         return self.valid_interval.intersect(times)
 
     def close(self):
@@ -337,7 +338,7 @@ class ScreenInterpolator(Interpolator):
         root_folder: str,
         cache_data: bool = False,  # New parameter
         rescale: bool = False,
-        rescale_size: typing.Optional[tuple(int, int)] = None,
+        rescale_size: typing.Optional[tuple[int, int]] = None,
         normalize: bool = False,
         **kwargs,
     ) -> None:
@@ -415,7 +416,7 @@ class ScreenInterpolator(Interpolator):
         with open(output_path, "w") as file:
             json.dump(all_data, file)
 
-    def read_combined_meta(self) -> None:
+    def read_combined_meta(self) -> tuple[list, list]:
         if not (self.root_folder / "combined_meta.json").exists():
             print("Combining metadatas...")
             self._combine_metadatas()
@@ -486,7 +487,7 @@ class ScreenInterpolator(Interpolator):
                 ]
         return (out, valid) if return_valid else out
 
-    def rescale_frame(self, frame: np.array) -> np.array:
+    def rescale_frame(self, frame: np.ndarray) -> np.ndarray:
         """
         Changes the resolution of the image to this size.
         Returns: Rescaled image
@@ -592,7 +593,7 @@ class TimeIntervalInterpolator(Interpolator):
 class ScreenTrial:
     def __init__(
         self,
-        data_file_name: str,
+        data_file_name: Union[str, Path],
         meta_data: dict,
         image_size: tuple,
         first_frame_idx: int,
@@ -612,18 +613,19 @@ class ScreenTrial:
 
     @staticmethod
     def create(
-        data_file_name: str, meta_data: dict, cache_data: bool = False
+        data_file_name: Union[str, Path], meta_data: dict, cache_data: bool = False
     ) -> "ScreenTrial":
         modality = meta_data.get("modality")
+        assert modality is not None
         class_name = modality.lower().capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"
         return globals()[class_name](data_file_name, meta_data, cache_data=cache_data)
 
-    def get_data_(self) -> np.array:
+    def get_data_(self) -> np.ndarray:
         """Base implementation for loading/generating data"""
         return np.load(self.data_file_name)
 
-    def get_data(self) -> np.array:
+    def get_data(self) -> np.ndarray:
         """Wrapper that handles caching"""
         if self._cached_data is not None:
             return self._cached_data
@@ -670,7 +672,7 @@ class BlankTrial(ScreenTrial):
             cache_data=cache_data,
         )
 
-    def get_data_(self) -> np.array:
+    def get_data_(self) -> np.ndarray:
         """Override base implementation to generate blank data"""
         return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
 
@@ -688,6 +690,6 @@ class InvalidTrial(ScreenTrial):
             cache_data=cache_data,
         )
 
-    def get_data_(self) -> np.array:
+    def get_data_(self) -> np.ndarray:
         """Override base implementation to generate blank data"""
         return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
