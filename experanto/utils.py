@@ -110,7 +110,6 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
         self.shuffle_each_epoch = shuffle_each_epoch
 
     def __len__(self):
-        assert isinstance(self.batch_sampler, _RepeatSampler)
         return len(self.batch_sampler)
 
     def __iter__(self):  # type: ignore[override]
