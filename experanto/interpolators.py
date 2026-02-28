@@ -26,7 +26,7 @@ class Interpolator:
 
     def load_meta(self):
         with open(self.root_folder / "meta.yml") as f:
-            meta = yaml.load(f, Loader=yaml.SafeLoader)
+            meta = yaml.safe_load(f)
         return meta
 
     @abstractmethod
@@ -46,7 +46,7 @@ class Interpolator:
     @staticmethod
     def create(root_folder: str, cache_data: bool = False, **kwargs) -> "Interpolator":
         with open(Path(root_folder) / "meta.yml", "r") as file:
-            meta_data = yaml.load(file, Loader=yaml.SafeLoader)
+            meta_data = yaml.safe_load(file)
         modality = meta_data.get("modality")
 
         if modality == "sequence":

@@ -69,7 +69,7 @@ def create_time_interval_data(
         }
 
         with open(TIME_INTERVAL_ROOT / "meta.yml", "w") as f:
-            yaml.dump(meta, f)
+            yaml.safe_dump(meta, f)
 
         # Save interval files
         test_array = np.array(test_intervals, dtype=np.float64)
