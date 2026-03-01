@@ -7,7 +7,7 @@ Experanto is a Python package designed for interpolating recordings and stimuli 
 To install Experanto, clone locally and run:
 
 ```bash
-pip install -r requirements.txt
+pip install -r /path_to/experanto/requirements.txt
 pip install -e /path_to/experanto
 ```
 
