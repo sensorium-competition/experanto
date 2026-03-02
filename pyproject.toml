@@ -17,7 +17,6 @@ dependencies = [
     "opencv_python==4.11.0.86",
     "pytest==8.3.5",
     "PyYAML==6.0.2",
-    "setuptools==75.8.0",
     "torch==2.7.0",
     "torchvision==0.22.0"
 ]
