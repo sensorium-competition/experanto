@@ -180,6 +180,7 @@ def _load_mp4_frames(video_path: Path) -> list:
 
     return frames
 
+
 def test_nearest_neighbor_interpolation_return_valid_false():
     with create_screen_data(
         duration=10,

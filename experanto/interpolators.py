@@ -492,7 +492,6 @@ class ScreenInterpolator(Interpolator):
                 )
             )
 
-
     def _initialize_decoder(self, data_file_name):
         decoder = VideoDecoder(
             str(data_file_name),
@@ -500,7 +499,6 @@ class ScreenInterpolator(Interpolator):
             device=self.device,
         )
         return decoder
-
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False

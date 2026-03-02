@@ -378,7 +378,7 @@ def test_interpolation_with_phase_shifts_for_invalid_times(
             )[0]
             == valid
         ).all(), "Valid times does not match expected values"
-  
+
         # If end_time * sampling_rate < 1.0, no frames are generated and interpolation should return an empty array.
         data_generated = end_time * sampling_rate >= 1.0
         expected_valid = (times >= np.min(phase_shifts)) & (
