@@ -1,5 +1,5 @@
 import typing
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -13,7 +13,7 @@ class TimeInterval(typing.NamedTuple):
 
     def find_intersection_between_two_intervals(
         self, other_interval: "TimeInterval"
-    ) -> "TimeInterval":
+    ) -> Optional["TimeInterval"]:
         start = max(self.start, other_interval.start)
         end = min(self.end, other_interval.end)
         if start <= end:
@@ -93,7 +93,7 @@ def find_intersection_between_two_interval_arrays(
 
 def find_intersection_across_arrays_of_intervals(
     intervals_array: List[List[TimeInterval]],
-) -> TimeInterval:
+) -> List[TimeInterval]:
     common_interval_array = intervals_array[0]
 
     for interval_array in intervals_array[1:]:
@@ -106,7 +106,7 @@ def find_intersection_across_arrays_of_intervals(
 
 def find_union_across_arrays_of_intervals(
     intervals_array: List[List[TimeInterval]],
-) -> TimeInterval:
+) -> List[TimeInterval]:
     union_array = []
     for interval_array in intervals_array:
         union_array.extend(interval_array)
