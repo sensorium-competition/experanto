@@ -7,6 +7,7 @@ import typing
 import warnings
 from abc import abstractmethod
 from pathlib import Path
+from typing import Union
 
 import cv2
 import numpy as np
@@ -56,12 +57,14 @@ class Interpolator:
 
     def load_meta(self):
         with open(self.root_folder / "meta.yml") as f:
-            meta = yaml.load(f, Loader=yaml.SafeLoader)
+            meta = yaml.safe_load(f)
         return meta
 
     @abstractmethod
-    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Map an array of time points to interpolated data values."""
+    def interpolate(
+        self, times: np.ndarray, return_valid: bool = False
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
+    """Map an array of time points to interpolated data values."""
         ...
 
     def __contains__(self, times: np.ndarray):
@@ -100,7 +103,7 @@ class Interpolator:
             If the modality type is not supported.
         """
         with open(Path(root_folder) / "meta.yml", "r") as file:
-            meta_data = yaml.load(file, Loader=yaml.SafeLoader)
+            meta_data = yaml.safe_load(file)
         modality = meta_data.get("modality")
 
         if modality == "sequence":
@@ -120,6 +123,7 @@ class Interpolator:
             )
 
     def valid_times(self, times: np.ndarray) -> np.ndarray:
+        assert self.valid_interval is not None
         return self.valid_interval.intersect(times)
 
     def close(self):
@@ -244,7 +248,9 @@ class SequenceInterpolator(Interpolator):
         data = data * self._precision
         return data
 
-    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(
+        self, times: np.ndarray, return_valid: bool = False
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
 
@@ -252,7 +258,11 @@ class SequenceInterpolator(Interpolator):
             warnings.warn(
                 "Sequence interpolation returns empty array, no valid times queried"
             )
-            return np.empty((0, self._data.shape[1])), valid
+            return (
+                (np.empty((0, self._data.shape[1])), valid)
+                if return_valid
+                else np.empty((0, self._data.shape[1]))
+            )
 
         idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
             int
@@ -261,7 +271,7 @@ class SequenceInterpolator(Interpolator):
         if self.interpolation_mode == "nearest_neighbor":
             data = self._data[idx_lower]
 
-            return data, valid
+            return (data, valid) if return_valid else data
 
         elif self.interpolation_mode == "linear":
             idx_upper = idx_lower + 1
@@ -299,7 +309,7 @@ class SequenceInterpolator(Interpolator):
                 # Replace NaNs with the column means directly
                 np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
 
-            return interpolated, valid
+            return (interpolated, valid) if return_valid else interpolated
 
         else:
             raise NotImplementedError(
@@ -361,7 +371,9 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             + (np.min(self._phase_shifts) if len(self._phase_shifts) > 0 else 0),
         )
 
-    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(
+        self, times: np.ndarray, return_valid: bool = False
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
 
@@ -369,7 +381,11 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             warnings.warn(
                 "Sequence interpolation returns empty array, no valid times queried"
             )
-            return np.empty((0, self._data.shape[1])), valid
+            return (
+                (np.empty((0, self._data.shape[1])), valid)
+                if return_valid
+                else np.empty((0, self._data.shape[1]))
+            )
 
         idx_lower = np.floor(
             (
@@ -382,7 +398,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
         if self.interpolation_mode == "nearest_neighbor":
             data = np.take_along_axis(self._data, idx_lower, axis=0)
-            return data, valid
+            return (data, valid) if return_valid else data
 
         elif self.interpolation_mode == "linear":
             idx_upper = idx_lower + 1
@@ -421,7 +437,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
                 # Replace NaNs with the column means directly
                 np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
 
-            return interpolated, valid
+            return (interpolated, valid) if return_valid else interpolated
 
         else:
             raise NotImplementedError(
@@ -546,7 +562,7 @@ class ScreenInterpolator(Interpolator):
         with open(output_path, "w") as file:
             json.dump(all_data, file)
 
-    def read_combined_meta(self) -> None:
+    def read_combined_meta(self) -> tuple[list, list]:
         if not (self.root_folder / "combined_meta.json").exists():
             print("Combining metadatas...")
             self._combine_metadatas()
@@ -575,7 +591,9 @@ class ScreenInterpolator(Interpolator):
                 )
             )
 
-    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(
+        self, times: np.ndarray, return_valid: bool = False
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         valid = self.valid_times(times)
         valid_times = times[valid]
         valid_times += 1e-4  # add small offset to avoid numerical issues
@@ -613,9 +631,10 @@ class ScreenInterpolator(Interpolator):
                 out[idx_for_this_file] = data[
                     idx[idx_for_this_file] - self._first_frame_idx[u_idx]
                 ]
-        return out, valid
+        return (out, valid) if return_valid else out
 
-    def rescale_frame(self, frame: np.array) -> np.array:
+
+    def rescale_frame(self, frame: np.ndarray) -> np.ndarray:
         """Rescale frame to the configured image size.
 
         Parameters
@@ -692,8 +711,44 @@ class TimeIntervalInterpolator(Interpolator):
                 for label, filename in self.meta_labels.items()
             }
 
-    def interpolate(self, times: np.ndarray) -> np.ndarray:
-        """Map time points to boolean label membership."""
+    def interpolate(
+        self, times: np.ndarray, return_valid: bool = False
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
+        """
+        Interpolate time intervals for labeled events.
+
+        Given a set of time points and a set of labeled intervals (defined in the
+        `meta.yml` file), this method returns a boolean array indicating, for each
+        time point, whether it falls within any interval for each label.
+
+        The method uses half-open intervals [start, end), where a timestamp t is
+        considered to fall within an interval if start <= t < end. This means the
+        start time is inclusive and the end time is exclusive.
+
+        Parameters
+        ----------
+        times : np.ndarray
+            Array of time points to be checked against the labeled intervals.
+
+        Returns
+        -------
+        out : np.ndarray of bool, shape (len(valid_times), n_labels)
+            Boolean array where each row corresponds to a valid time point and each
+            column corresponds to a label. `out[i, j]` is True if the i-th valid
+            time falls within any interval for the j-th label, and False otherwise.
+
+        Notes
+        -----
+        - The labels and their corresponding intervals are defined in the `meta.yml`
+          file under the `labels` key. Each label points to a `.npy` file containing
+          an array of shape (n, 2), where each row is a [start, end) time interval.
+        - Typical labels might include 'train', 'validation', 'test', 'saccade',
+          'gaze', or 'target'.
+        - Only time points within the valid interval (as defined by start_time and
+          end_time in meta.yml) are considered; others are filtered out.
+        - Intervals where start > end are considered invalid and will trigger a
+          warning.
+        """
         valid = self.valid_times(times)
         valid_times = times[valid]
 
@@ -729,7 +784,7 @@ class TimeIntervalInterpolator(Interpolator):
                 mask = (valid_times >= start) & (valid_times < end)
                 out[mask, i] = True
 
-        return out
+        return (out, valid) if return_valid else out
 
 
 class ScreenTrial:
@@ -756,7 +811,7 @@ class ScreenTrial:
 
     def __init__(
         self,
-        data_file_name: str,
+        data_file_name: Union[str, Path],
         meta_data: dict,
         image_size: tuple,
         first_frame_idx: int,
@@ -776,18 +831,19 @@ class ScreenTrial:
 
     @staticmethod
     def create(
-        data_file_name: str, meta_data: dict, cache_data: bool = False
+        data_file_name: Union[str, Path], meta_data: dict, cache_data: bool = False
     ) -> "ScreenTrial":
         modality = meta_data.get("modality")
+        assert modality is not None
         class_name = modality.lower().capitalize() + "Trial"
         assert class_name in globals(), f"Unknown modality: {modality}"
         return globals()[class_name](data_file_name, meta_data, cache_data=cache_data)
 
-    def get_data_(self) -> np.array:
+    def get_data_(self) -> np.ndarray:
         """Base implementation for loading/generating data"""
         return np.load(self.data_file_name)
 
-    def get_data(self) -> np.array:
+    def get_data(self) -> np.ndarray:
         """Wrapper that handles caching"""
         if self._cached_data is not None:
             return self._cached_data
@@ -840,7 +896,7 @@ class BlankTrial(ScreenTrial):
             cache_data=cache_data,
         )
 
-    def get_data_(self) -> np.array:
+    def get_data_(self) -> np.ndarray:
         """Override base implementation to generate blank data"""
         return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
 
@@ -860,6 +916,6 @@ class InvalidTrial(ScreenTrial):
             cache_data=cache_data,
         )
 
-    def get_data_(self) -> np.array:
+    def get_data_(self) -> np.ndarray:
         """Override base implementation to generate blank data"""
         return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)

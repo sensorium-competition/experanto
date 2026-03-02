@@ -1,5 +1,5 @@
 import typing
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -31,7 +31,7 @@ class TimeInterval(typing.NamedTuple):
 
     def find_intersection_between_two_intervals(
         self, other_interval: "TimeInterval"
-    ) -> "TimeInterval":
+    ) -> Optional["TimeInterval"]:
         start = max(self.start, other_interval.start)
         end = min(self.end, other_interval.end)
         if start <= end:
