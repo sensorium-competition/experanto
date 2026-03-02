@@ -33,9 +33,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run pytest
+      - name: Run pytest with coverage
         run: |
-          pytest -v tests/
+          pytest -v --cov=experanto --cov-report=xml tests/
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   lint-and-format:
     name: Lint & Auto-format
@@ -84,3 +90,31 @@ jobs:
           else
             echo "Not a forked PR and not a push. Skipping format."
           fi
+
+  type-check:
+    name: Type Check (Pyright)
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'push' ||
+      (
+        github.event_name == 'pull_request' &&
+        github.repository != github.event.pull_request.head.repo.full_name
+      )
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.8'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pyright
+        run: |
+          pyright experanto/
