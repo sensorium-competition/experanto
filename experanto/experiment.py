@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 import re
-from collections import namedtuple
+import warnings
 from collections.abc import Sequence
 from pathlib import Path
 from typing import List, Optional, Union
 
 import numpy as np
+from hydra.utils import instantiate
+from omegaconf import DictConfig
 
 from .configs import DEFAULT_MODALITY_CONFIG
 from .interpolators import Interpolator
@@ -50,11 +52,35 @@ class Experiment:
                 log.info(f"Skipping {d.name} data... ")
                 continue
             log.info(f"Parsing {d.name} data... ")
-            dev = Interpolator.create(
-                d,
-                cache_data=self.cache_data,
-                **self.modality_config[d.name]["interpolation"],
-            )
+
+            # Get interpolation config for this device
+            interp_conf = self.modality_config[d.name]["interpolation"]
+
+            if (
+                isinstance(interp_conf, (dict, DictConfig))
+                and "_target_" in interp_conf
+            ):
+                # Custom interpolator (Hydra instantiates it)
+                dev = instantiate(
+                    interp_conf, root_folder=d, cache_data=self.cache_data
+                )
+                # Check if instantiated object is proper Interpolator
+                if not isinstance(dev, Interpolator):
+                    raise ValueError(
+                        "Please provide an Interpolator which inherits from experantos Interpolator class."
+                    )
+
+            elif isinstance(interp_conf, Interpolator):
+                # Already instantiated Interpolator
+                dev = interp_conf
+
+            else:
+                # Default back to original logic
+                warnings.warn(
+                    "Falling back to original Interpolator creation logic.", UserWarning
+                )
+                dev = Interpolator.create(d, cache_data=self.cache_data, **interp_conf)  # type: ignore[arg-type]
+
             self.devices[d.name] = dev
             self.start_time = dev.start_time
             self.end_time = dev.end_time
@@ -65,18 +91,33 @@ class Experiment:
         return tuple(self.devices.keys())
 
     def interpolate(
-        self, times: slice, device: str = None
-    ) -> tuple[np.ndarray, np.ndarray]:
+        self,
+        times: np.ndarray,
+        device: Union[str, Interpolator, None] = None,
+        return_valid: bool = False,
+    ) -> Union[tuple[dict, dict], dict, tuple[np.ndarray, np.ndarray], np.ndarray]:
         if device is None:
             values = {}
             for d, interp in self.devices.items():
-                values[d] = interp.interpolate(times)
+                res = interp.interpolate(times, return_valid=return_valid)
+                if return_valid:
+                    vals, vlds = res
+                    values[d] = vals
+                    valid[d] = vlds
+                else:
+                    values[d] = res
+            if return_valid:
+                return values, valid
+            else:
+                return values
         elif isinstance(device, str):
             assert device in self.devices, "Unknown device '{}'".format(device)
-            values = self.devices[device].interpolate(times)
-        return values
+            res = self.devices[device].interpolate(times, return_valid=return_valid)
+            return res
+        else:
+            raise ValueError(f"Unsupported device type: {type(device)}")
 
-    def get_valid_range(self, device_name) -> tuple:
+    def get_valid_range(self, device_name) -> tuple[float, float]:
         return tuple(self.devices[device_name].valid_interval)
 
     def get_data_for_interval(

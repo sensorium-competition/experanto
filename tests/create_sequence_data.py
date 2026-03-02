@@ -68,6 +68,8 @@ def _generate_sequence_data(
 
     return timestamps, data, shifts if shifts_per_signal else None
 
+        with open(SEQUENCE_ROOT / "meta.yml", "w") as f:
+            yaml.safe_dump(meta, f)
 
 @contextmanager
 def create_sequence_data(
