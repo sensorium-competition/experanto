@@ -30,7 +30,7 @@ dataset:
       chunk_size: 16
       offset: 0.0 # in seconds
       transforms:
-        normalization: "standardize"
+        normalization: "normalize_variance_only"
       interpolation:
         interpolation_mode: "nearest_neighbor"
       filters:

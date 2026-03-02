@@ -47,7 +47,7 @@ def create_screen_data(
                 file_ext = ".npy"
 
             with open(meta_dir / f"{i:05d}.yml", "w") as f:
-                yaml.dump(
+                yaml.safe_dump(
                     {
                         "first_frame_idx": i,
                         "image_size": list(frame_shape),
@@ -89,7 +89,7 @@ def create_screen_data(
                     file_ext = ".npy"
 
                 with open(meta_dir / f"{file_idx:05d}.yml", "w") as f:
-                    yaml.dump(
+                    yaml.safe_dump(
                         {
                             "first_frame_idx": start_vid + start,
                             "num_frames": len(chunk),
@@ -104,7 +104,7 @@ def create_screen_data(
                     )
 
         with open(SCREEN_ROOT / "meta.yml", "w") as f:
-            yaml.dump(
+            yaml.safe_dump(
                 {
                     "modality": "screen",
                     "frame_rate": fps,

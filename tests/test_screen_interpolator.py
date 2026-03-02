@@ -52,7 +52,9 @@ def test_nearest_neighbor_interpolation(
         expected_frames = expected_frames[:, np.newaxis, :, :]
         expected_frames = np.repeat(expected_frames, number_channels, axis=1)
 
-        interp = interp_obj.interpolate(times=times)
+        interp, valid = interp_obj.interpolate(times=times, return_valid=True)
+
+        assert times.shape == valid.shape, "All interpolated frames should be valid"
 
         if expected_frames.max() > 1:
             # convert back to float. For export into mp4 int values are necessary
@@ -177,3 +179,48 @@ def _load_mp4_frames(video_path: Path) -> list:
         cap.release()
 
     return frames
+
+def test_nearest_neighbor_interpolation_return_valid_false():
+    with create_screen_data(
+        duration=10,
+        frame_shape=(32, 32),
+        fps=10.0,
+        image_frame_count=10,
+        num_videos=1,
+    ) as timestamps:
+        interp_obj = Interpolator.create("tests/screen_data")
+        assert isinstance(interp_obj, ScreenInterpolator), "Expected ScreenInterpolator"
+
+        delta_t = 1.0 / 10.0
+        times = timestamps[:-1] + 0.4 * delta_t
+
+        result = interp_obj.interpolate(times=times, return_valid=False)
+        assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
+
+        interp, _ = interp_obj.interpolate(times=times, return_valid=True)
+        assert np.array_equal(
+            result, interp
+        ), "Data from return_valid=False should match data from return_valid=True"
+
+
+def test_nearest_neighbor_interpolation_default_return_valid():
+    with create_screen_data(
+        duration=10,
+        frame_shape=(32, 32),
+        fps=10.0,
+        image_frame_count=10,
+        num_videos=1,
+    ) as timestamps:
+        interp_obj = Interpolator.create("tests/screen_data")
+        assert isinstance(interp_obj, ScreenInterpolator), "Expected ScreenInterpolator"
+
+        delta_t = 1.0 / 10.0
+        times = timestamps[:-1] + 0.4 * delta_t
+
+        result = interp_obj.interpolate(times=times)
+        assert isinstance(result, np.ndarray), "Expected np.ndarray, not a tuple"
+
+        interp, _ = interp_obj.interpolate(times=times, return_valid=True)
+        assert np.array_equal(
+            result, interp
+        ), "Data from default (no return_valid) should match data from return_valid=True"
