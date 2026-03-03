@@ -824,6 +824,7 @@ class SpikesInterpolator(Interpolator):
         super().close()
         # Trigger cleanup of memmap
         if hasattr(self, "spikes") and isinstance(self.spikes, np.memmap):
-            if hasattr(self.spikes, "_mmap") and self.spikes._mmap is not None:
-                self.spikes._mmap.close()
+            _mmap_obj = getattr(self.spikes, "_mmap", None)
+            if _mmap_obj is not None:
+                _mmap_obj.close()
             del self.spikes
