@@ -7,7 +7,7 @@ import typing
 import warnings
 from abc import abstractmethod
 from pathlib import Path
-from typing import Union
+from typing import Union, cast
 
 import cv2
 import numpy as np
@@ -453,8 +453,8 @@ class ScreenInterpolator(Interpolator):
         valid_times += 1e-4  # add small offset to avoid numerical issues
 
         assert np.all(np.diff(valid_times) > 0), "Times must be sorted"
-        idx = (
-            np.searchsorted(self.timestamps, valid_times) - 1
+        idx = cast(
+            np.ndarray, np.searchsorted(self.timestamps, valid_times) - 1
         )  # convert times to frame indices
         assert np.all(
             (idx >= 0) & (idx < len(self.timestamps))
