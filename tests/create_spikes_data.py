@@ -27,9 +27,18 @@ def create_spikes_data(duration=100.0, n_neurons=50, rate=20.0):
 
         # Generate random sorted spikes for each neuron
         for _ in range(n_neurons):
-            n_spikes = int(duration * rate)
-            # Uniform distribution of spikes, sorted
-            spikes = np.sort(np.random.uniform(0, duration, n_spikes))
+            # Sample a distinct firing rate for this neuron
+            # (e.g., uniform distribution between 20% and 180% of the base rate)
+            neuron_rate = np.random.uniform(0.2 * rate, 1.8 * rate)
+            n_spikes = int(duration * neuron_rate)
+            
+            # Handle the edge case where a neuron might not fire at all
+            if n_spikes == 0:
+                spikes = np.array([], dtype=np.float64)
+            else:
+                # Uniform distribution of spikes, sorted
+                spikes = np.sort(np.random.uniform(0, duration, n_spikes))
+                
             all_spikes_list.append(spikes)
             indices.append(indices[-1] + len(spikes))
 
