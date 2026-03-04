@@ -746,7 +746,6 @@ class SpikesInterpolator(Interpolator):
         interpolation_window: float = 0.3,
         interpolation_align: str = "center",
         smoothing_sigma: float = 0.0,
-        load_to_ram: bool = False,
     ):
         super().__init__(root_folder)
 
@@ -756,10 +755,10 @@ class SpikesInterpolator(Interpolator):
         self.end_time = meta.get("end_time", np.inf)
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
 
-        self.cache_trials = cache_data
         self.interpolation_window = interpolation_window
         self.interpolation_align = interpolation_align
         self.smoothing_sigma = smoothing_sigma
+        self.cache_data = cache_data
 
         # Use self.root_folder, defined in the base class
         self.dat_path = self.root_folder / "spikes.npy"
@@ -768,7 +767,8 @@ class SpikesInterpolator(Interpolator):
         self.indices = np.array(meta["spike_indices"]).astype(np.int64)
         self.n_signals = len(self.indices) - 1
 
-        if load_to_ram:
+        # Use the unified cache_data flag for eager loading
+        if self.cache_data:
             print("Loading spikes to RAM...")
             self.spikes = np.fromfile(self.dat_path, dtype="float64")
         else:

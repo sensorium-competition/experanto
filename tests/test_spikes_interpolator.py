@@ -121,7 +121,7 @@ def test_spikes_load_to_ram():
     """
     with spikes_data_and_interpolator(
         data_kwargs={"duration": 5.0, "n_neurons": 2},
-        interp_kwargs={"load_to_ram": True},
+        interp_kwargs={"cache_data": True},
     ) as (gt_spikes, interp):
 
         assert isinstance(interp.spikes, np.ndarray)
