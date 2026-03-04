@@ -569,7 +569,7 @@ class TimeIntervalInterpolator(Interpolator):
             if self.cache_data:
                 intervals = self.labeled_intervals[label]
             else:
-                intervals = np.load(self.root_folder / filename, allow_pickle=True)
+                intervals = np.load(self.root_folder / filename)
 
             if len(intervals) == 0:
                 warnings.warn(
