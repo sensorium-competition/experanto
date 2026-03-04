@@ -50,7 +50,7 @@ def create_screen_data(
                 chunk = video_frames[start:end]
                 if len(chunk) == 0:
                     continue
-                video_array = chunk
+                video_array = np.stack(chunk, axis=0)
                 np.save(data_dir / f"{vid_idx+image_frame_count:05d}.npy", video_array)
                 with open(meta_dir / f"{vid_idx+image_frame_count:05d}.yml", "w") as f:
                     yaml.safe_dump(
