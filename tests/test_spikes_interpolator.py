@@ -27,7 +27,7 @@ def test_spikes_interpolation_accuracy(align):
         # Query random times within the duration (avoiding edges for simplicity)
         times = np.sort(np.random.uniform(window, duration - window, 20))
 
-        counts, valid = interp.interpolate(times)
+        counts, valid = interp.interpolate(times, return_valid=True)
 
         # 1. Check Shapes
         # Note: valid is an array of INDICES (integers), not a boolean mask.
@@ -76,7 +76,7 @@ def test_spikes_smoothing(sigma):
         # Create a dense grid of times to see smoothing effects
         times = np.linspace(1.0, 9.0, 100)
 
-        counts, _ = interp.interpolate(times)
+        counts = interp.interpolate(times)
 
         # Calculate raw counts manually
         raw_counts = np.zeros_like(counts)
@@ -108,14 +108,14 @@ def test_spikes_no_valid_times():
         # Times completely outside [0, 5.0]
         times = np.array([-10.0, -5.0, 10.0, 20.0])
 
-        counts, valid = interp.interpolate(times)
+        counts, valid = interp.interpolate(times, return_valid=True)
 
         # Should return empty result and valid indices array should be empty
         assert counts.shape == (0, 2)
         assert len(valid) == 0, "Expected zero valid indices for out-of-bounds times"
 
 
-def test_spikes_load_to_ram():
+def test_spikes_cache_data():
     """
     Verify that loading data to RAM (vs memmap) works correctly.
     """
@@ -128,8 +128,23 @@ def test_spikes_load_to_ram():
         assert not isinstance(interp.spikes, np.memmap)
 
         times = np.array([2.5])
-        counts, valid = interp.interpolate(times)
+        counts, valid = interp.interpolate(times, return_valid=True)
 
         assert len(valid) == 1, "Expected 1 valid index"
         assert valid[0] == 0, "Expected index 0 to be valid"
         assert counts.shape == (1, 2)
+
+
+def test_spikes_invalid_alignment():
+    """
+    Test behavior when an invalid alignment is provided.
+    """
+    with pytest.raises(
+        ValueError,
+        match="Unknown alignment mode: invalid, should be 'center', 'left' or 'right'",
+    ):
+        with spikes_data_and_interpolator(
+            data_kwargs={"duration": 5.0, "n_neurons": 2},
+            interp_kwargs={"interpolation_align": "invalid"},
+        ):
+            pass

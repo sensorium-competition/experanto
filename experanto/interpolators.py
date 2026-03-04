@@ -825,14 +825,16 @@ class SpikesInterpolator(Interpolator):
         else:
             self.spikes = np.memmap(self.dat_path, dtype="float64", mode="r")
 
-    def interpolate(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(
+        self, times: np.ndarray, return_valid: bool = False
+    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
         # 1. Filter for valid times
         valid = self.valid_times(times)
         valid_times = times[valid]
 
         # Handle edge case where no times are valid
         if len(valid_times) == 0:
-            return np.empty((0, self.n_signals)), valid
+            return (np.empty((0, self.n_signals)), valid) if return_valid else np.empty((0, self.n_signals))
 
         # 2. Prepare boundaries
         if self.interpolation_align == "center":
@@ -869,7 +871,7 @@ class SpikesInterpolator(Interpolator):
                 counts = gaussian_filter1d(counts, sigma=self.smoothing_sigma, axis=0)
 
         # SIGNATURE FIX: Return both data and the mask
-        return counts, valid
+        return (counts, valid) if return_valid else counts
 
     def close(self):
         super().close()
