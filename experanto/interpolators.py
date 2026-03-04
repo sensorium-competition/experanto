@@ -698,7 +698,7 @@ class InvalidTrial(ScreenTrial):
         """Override base implementation to generate blank data"""
         return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
 
-
+#  This decorator works on a Python function and does not know how to handle self, so it cannot be a member of a class, here SpikeInterpolator.
 # 'parallel=True' allows it to use all CPU cores.
 @njit(parallel=True, fastmath=True)
 def fast_count_spikes(all_spikes, indices, window_starts, window_ends, out_counts):
@@ -739,6 +739,49 @@ def fast_count_spikes(all_spikes, indices, window_starts, window_ends, out_count
 
 
 class SpikesInterpolator(Interpolator):
+    """
+    Interpolator for spike train data.
+    
+    This interpolator reads raw spike times and computes spike counts within 
+    specified time windows around queried timestamps.
+
+    Data Storage Format:
+    --------------------
+    The spike data must be stored in a flat 1D binary file named `spikes.npy` 
+    (dtype: float64) inside the `root_folder`.
+    
+    The array contains the actual continuous spike timings (e.g., in seconds). 
+    The timings must be **blocked by neuron**, and within each neuron's block, 
+    the spike times must be **sorted in ascending chronological order**.
+    
+    A `meta.yml` file in the same folder must provide a `spike_indices` list. 
+    This list defines the start and end indices for each neuron's block in 
+    the flat array. For example, if neuron 0 has 50 spikes and neuron 1 has 30 
+    spikes, `spike_indices` should be `[0, 50, 80]`.
+
+    Parameters:
+    -----------
+    root_folder : str
+        Path to the directory containing `spikes.npy` and `meta.yml`.
+    cache_data : bool, optional
+        If True, eagerly loads the entire spike array into RAM (`np.fromfile`) 
+        for faster access. If False, memory-maps the data from disk (`np.memmap`). 
+        Default is False.
+    interpolation_window : float, optional
+        The size of the time window used to count spikes, in the same time units 
+        as the spike data. Default is 0.3.
+    interpolation_align : str, optional
+        Alignment of the interpolation window relative to the queried time `t`.
+        - "center": window is [t - window/2, t + window/2)
+        - "left": window is [t, t + window)
+        - "right": window is [t - window, t)
+        Default is "center".
+    smoothing_sigma : float, optional
+        Standard deviation for a Gaussian filter applied to the resulting 
+        spike counts along the time axis. The unit is in number of time steps 
+        (array indices), not physical time. Set to 0.0 to disable smoothing. 
+        Default is 0.0.
+    """
     def __init__(
         self,
         root_folder: str,
@@ -766,6 +809,12 @@ class SpikesInterpolator(Interpolator):
         # Ensure indices are typed correctly for Numba
         self.indices = np.array(meta["spike_indices"]).astype(np.int64)
         self.n_signals = len(self.indices) - 1
+
+        # Check interpolation_align validity
+        if self.interpolation_align not in ["center", "left", "right"]:
+            raise ValueError(
+                f"Unknown alignment mode: {self.interpolation_align}, should be 'center', 'left' or 'right'"
+            )
 
         # Use the unified cache_data flag for eager loading
         if self.cache_data:
@@ -796,7 +845,7 @@ class SpikesInterpolator(Interpolator):
             starts = valid_times - self.interpolation_window
             ends = valid_times
         else:
-            raise ValueError(f"Unknown alignment mode: {self.interpolation_align}")
+            raise ValueError(f"Unknown alignment mode: {self.interpolation_align}, should be 'center', 'left' or 'right'")
 
         # 3. Prepare Output
         # SIZE FIX: Only allocate for the VALID batch size
