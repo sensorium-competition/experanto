@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 import re
 import warnings
-from collections import namedtuple
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Optional, Union
 
 import numpy as np
 from hydra.utils import instantiate
@@ -75,7 +75,7 @@ class Experiment:
                 warnings.warn(
                     "Falling back to original Interpolator creation logic.", UserWarning
                 )
-                dev = Interpolator.create(d, cache_data=self.cache_data, **interp_conf)
+                dev = Interpolator.create(d, cache_data=self.cache_data, **interp_conf)  # type: ignore[arg-type]
 
             self.devices[d.name] = dev
             self.start_time = dev.start_time
@@ -86,16 +86,33 @@ class Experiment:
     def device_names(self):
         return tuple(self.devices.keys())
 
-    def interpolate(self, times: slice, device=None) -> tuple[np.ndarray, np.ndarray]:
+    def interpolate(
+        self,
+        times: np.ndarray,
+        device: Union[str, Interpolator, None] = None,
+        return_valid: bool = False,
+    ) -> Union[tuple[dict, dict], dict, tuple[np.ndarray, np.ndarray], np.ndarray]:
         if device is None:
             values = {}
             valid = {}
             for d, interp in self.devices.items():
-                values[d], valid[d] = interp.interpolate(times)
+                res = interp.interpolate(times, return_valid=return_valid)
+                if return_valid:
+                    vals, vlds = res
+                    values[d] = vals
+                    valid[d] = vlds
+                else:
+                    values[d] = res
+            if return_valid:
+                return values, valid
+            else:
+                return values
         elif isinstance(device, str):
             assert device in self.devices, "Unknown device '{}'".format(device)
-            values, valid = self.devices[device].interpolate(times)
-        return values, valid
+            res = self.devices[device].interpolate(times, return_valid=return_valid)
+            return res
+        else:
+            raise ValueError(f"Unsupported device type: {type(device)}")
 
-    def get_valid_range(self, device_name) -> tuple:
+    def get_valid_range(self, device_name) -> tuple[float, float]:
         return tuple(self.devices[device_name].valid_interval)

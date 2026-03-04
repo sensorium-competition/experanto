@@ -23,7 +23,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest==8.3.5",
+    "pytest-cov>=7.0.0",
+    "pyright",
 ]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["experanto*", "configs"]
@@ -57,3 +60,8 @@ skip = [".ipynb_checkpoints"]
 profile = "black"
 line_length = 88
 known_first_party = ["experanto"]
+
+[tool.pyright]
+include = ["experanto"]
+typeCheckingMode = "basic"
+pythonVersion = "3.12"
