@@ -1,8 +1,9 @@
 import shutil
-import yaml
-from pathlib import Path
 from contextlib import contextmanager
+from pathlib import Path
+
 import numpy as np
+import yaml
 
 SEQUENCE_ROOT = Path("tests/sequence_data")
 

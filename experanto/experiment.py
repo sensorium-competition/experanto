@@ -77,7 +77,7 @@ class Experiment:
     def interpolate(
         self,
         times: np.ndarray,
-        device: Union[str, Interpolator, None] = None,
+        device: Union[str, None] = None,
         return_valid: bool = False,
     ) -> Union[tuple[dict, dict], dict, tuple[np.ndarray, np.ndarray], np.ndarray]:
         if device is None:
@@ -95,9 +95,6 @@ class Experiment:
             if device not in self.devices:
                 raise KeyError(f"Unknown device '{device}'")
             return self.devices[device].interpolate(times, return_valid=return_valid)
-
-        elif isinstance(device, Interpolator):
-            return device.interpolate(times, return_valid=return_valid)
 
         raise ValueError(f"Unsupported device type: {type(device)}")
 

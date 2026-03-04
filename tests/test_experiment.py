@@ -1,6 +1,7 @@
+from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
-from unittest.mock import MagicMock
 
 from experanto.experiment import Experiment
 from experanto.interpolators import Interpolator
