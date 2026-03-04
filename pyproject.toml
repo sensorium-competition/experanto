@@ -3,7 +3,7 @@ name = "experanto"
 version = "0.1"
 description = "Python package to interpolate recordings and stimuli of neuroscience experiments"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "scipy>=1.13.1",
     "jaxtyping>=0.2.30",
