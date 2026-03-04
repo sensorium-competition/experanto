@@ -101,3 +101,15 @@ def create_sequence_data(
     finally:
         if SEQUENCE_ROOT.exists():
             shutil.rmtree(SEQUENCE_ROOT)
+
+
+@contextmanager
+def sequence_data_and_interpolator(data_kwargs=None, interp_kwargs=None):
+    data_kwargs = data_kwargs or {}
+    interp_kwargs = interp_kwargs or {}
+    with create_sequence_data(**data_kwargs) as (timestamps, data, shifts):
+        # Restore the helper expected by the rest of the test suite
+        from experanto.interpolators import Interpolator
+
+        seq_interp = Interpolator.create(SEQUENCE_ROOT, **interp_kwargs)
+        yield timestamps, data, shifts, seq_interp

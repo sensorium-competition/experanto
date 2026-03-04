@@ -63,9 +63,6 @@ class Experiment:
                 dev = interp_conf
 
             else:
-                warnings.warn(
-                    "Falling back to original Interpolator creation logic.", UserWarning
-                )
                 dev = Interpolator.create(d, cache_data=self.cache_data, **interp_conf)
 
             self.devices[d.name] = dev
@@ -98,6 +95,9 @@ class Experiment:
             if device not in self.devices:
                 raise KeyError(f"Unknown device '{device}'")
             return self.devices[device].interpolate(times, return_valid=return_valid)
+
+        elif isinstance(device, Interpolator):
+            return device.interpolate(times, return_valid=return_valid)
 
         raise ValueError(f"Unsupported device type: {type(device)}")
 

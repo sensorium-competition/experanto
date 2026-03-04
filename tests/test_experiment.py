@@ -8,15 +8,20 @@ from experanto.interpolators import Interpolator
 from .create_experiment import create_experiment, get_default_config
 
 
+class TestInterpolator(Interpolator):
+    """Small concrete interpolator used for testing Experiment routing logic."""
+
+    def __init__(self):
+        self.start_time = 0.0
+        self.end_time = 100.0
+        self.valid_interval = (self.start_time, self.end_time)
+        self.interpolate = MagicMock(return_value=np.array([1, 2, 3]))
+
+
 @pytest.fixture
 def mock_interpolator():
-    """Shared mock to isolate Experiment logic from interpolation math."""
-    mock_interp = MagicMock(spec=Interpolator)
-    mock_interp.start_time = 0.0
-    mock_interp.end_time = 100.0
-    mock_interp.valid_interval = (0.0, 100.0)
-    mock_interp.interpolate.return_value = np.array([1, 2, 3])
-    return mock_interp
+    """Shared interpolator instance to isolate Experiment logic from interpolation math."""
+    return TestInterpolator()
 
 
 def test_experiment_initialization_and_device_loading(tmp_path, mock_interpolator):
