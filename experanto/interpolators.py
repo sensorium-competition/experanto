@@ -7,7 +7,7 @@ import typing
 import warnings
 from abc import abstractmethod
 from pathlib import Path
-from typing import Union, cast
+from typing import Any, Dict, Union, cast
 
 import cv2
 import numpy as np
@@ -507,9 +507,11 @@ class TimeIntervalInterpolator(Interpolator):
         self.start_time = meta["start_time"]
         self.end_time = meta["end_time"]
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
+        self.loaded_labeled_intervals: Dict[str, Any] = {}
 
+        # Preload all intervals files into memory.
         if self.cache_data:
-            self.labeled_intervals = {
+            self.loaded_labeled_intervals = {
                 label: np.load(self.root_folder / filename)
                 for label, filename in self.meta_labels.items()
             }
@@ -566,9 +568,10 @@ class TimeIntervalInterpolator(Interpolator):
 
         out = np.zeros((n_times, n_labels), dtype=bool)
         for i, (label, filename) in enumerate(self.meta_labels.items()):
-            if self.cache_data:
-                intervals = self.labeled_intervals[label]
+            if label in self.loaded_labeled_intervals:
+                intervals = self.loaded_labeled_intervals[label]
             else:
+                # intervals file for this label was not loaded, so load it.
                 intervals = np.load(self.root_folder / filename)
 
             if len(intervals) == 0:
