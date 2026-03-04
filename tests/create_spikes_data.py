@@ -56,7 +56,7 @@ def create_spikes_data(duration=100.0, n_neurons=50, rate=20.0):
         }
 
         with open(SPIKES_ROOT / "meta.yml", "w") as f:
-            yaml.dump(meta, f)
+            yaml.safe_dump(meta, f)
 
         yield all_spikes_list
 
