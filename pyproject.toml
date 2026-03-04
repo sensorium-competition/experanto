@@ -15,7 +15,6 @@ dependencies = [
     "numpy==2.2.5",
     "opencv-python==4.11.0.86",
     "PyYAML==6.0.2",
-    "setuptools==75.8.0",
     "torch==2.7.0",
     "torchvision==0.22.0"
 ]
