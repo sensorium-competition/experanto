@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-import re
 import warnings
-from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional, Union
 
@@ -26,8 +24,7 @@ class Experiment:
     ) -> None:
         """
         root_folder: path to the data folder
-        interp_config: dict for configuring interpolators, like
-            interp_config = {"screen": {...}, {"eye_tracker": {...}, }
+        modality_config: dict for configuring interpolators
         cache_data: if True, loads and keeps all trial data in memory
         """
         self.root_folder = Path(root_folder)
@@ -39,47 +36,38 @@ class Experiment:
         self._load_devices()
 
     def _load_devices(self) -> None:
-        # Populate devices by going through subfolders
         # Assumption: blocks are sorted by start time
-        device_folders = [d for d in self.root_folder.iterdir() if (d.is_dir())]
+        device_folders = [d for d in self.root_folder.iterdir() if d.is_dir()]
 
         for d in device_folders:
             if d.name not in self.modality_config:
                 log.info(f"Skipping {d.name} data... ")
                 continue
-            log.info(f"Parsing {d.name} data... ")
 
-            # Get interpolation config for this device
+            log.info(f"Parsing {d.name} data... ")
             interp_conf = self.modality_config[d.name]["interpolation"]
 
             if (
                 isinstance(interp_conf, (dict, DictConfig))
                 and "_target_" in interp_conf
             ):
-                # Custom interpolator (Hydra instantiates it)
                 dev = instantiate(
                     interp_conf, root_folder=d, cache_data=self.cache_data
                 )
-                # Check if instantiated object is proper Interpolator
                 if not isinstance(dev, Interpolator):
                     raise ValueError(
-                        "Please provide an Interpolator which inherits from experantos Interpolator class."
+                        "Instantiated object must inherit from Interpolator class."
                     )
 
             elif isinstance(interp_conf, Interpolator):
-                # Already instantiated Interpolator
                 dev = interp_conf
 
             else:
-                # Default back to original logic
-                warnings.warn(
-                    "Falling back to original Interpolator creation logic.", UserWarning
-                )
-                dev = Interpolator.create(d, cache_data=self.cache_data, **interp_conf)  # type: ignore[arg-type]
+                dev = Interpolator.create(d, cache_data=self.cache_data, **interp_conf)
 
             self.devices[d.name] = dev
-            self.start_time = dev.start_time
-            self.end_time = dev.end_time
+            self.start_time = min(self.start_time, dev.start_time)
+            self.end_time = max(self.end_time, dev.end_time)
             log.info("Parsing finished")
 
     @property
@@ -89,30 +77,26 @@ class Experiment:
     def interpolate(
         self,
         times: np.ndarray,
-        device: Union[str, Interpolator, None] = None,
+        device: Union[str, None] = None,
         return_valid: bool = False,
     ) -> Union[tuple[dict, dict], dict, tuple[np.ndarray, np.ndarray], np.ndarray]:
         if device is None:
-            values = {}
-            valid = {}
+            values, valid = {}, {}
             for d, interp in self.devices.items():
                 res = interp.interpolate(times, return_valid=return_valid)
                 if return_valid:
                     vals, vlds = res
-                    values[d] = vals
-                    valid[d] = vlds
+                    values[d], valid[d] = vals, vlds
                 else:
                     values[d] = res
-            if return_valid:
-                return values, valid
-            else:
-                return values
-        elif isinstance(device, str):
-            assert device in self.devices, "Unknown device '{}'".format(device)
-            res = self.devices[device].interpolate(times, return_valid=return_valid)
-            return res
-        else:
-            raise ValueError(f"Unsupported device type: {type(device)}")
+            return (values, valid) if return_valid else values
 
-    def get_valid_range(self, device_name) -> tuple[float, float]:
+        elif isinstance(device, str):
+            if device not in self.devices:
+                raise KeyError(f"Unknown device '{device}'")
+            return self.devices[device].interpolate(times, return_valid=return_valid)
+
+        raise ValueError(f"Unsupported device type: {type(device)}")
+
+    def get_valid_range(self, device_name: str) -> tuple[float, float]:
         return tuple(self.devices[device_name].valid_interval)
