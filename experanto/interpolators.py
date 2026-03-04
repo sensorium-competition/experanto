@@ -834,7 +834,11 @@ class SpikesInterpolator(Interpolator):
 
         # Handle edge case where no times are valid
         if len(valid_times) == 0:
-            return (np.empty((0, self.n_signals)), valid) if return_valid else np.empty((0, self.n_signals))
+            return (
+                (np.empty((0, self.n_signals)), valid)
+                if return_valid
+                else np.empty((0, self.n_signals))
+            )
 
         # 2. Prepare boundaries
         if self.interpolation_align == "center":
@@ -853,8 +857,9 @@ class SpikesInterpolator(Interpolator):
 
         # 3. Prepare Output
         # SIZE FIX: Only allocate for the VALID batch size
-        batch_size = len(valid_times)
-        counts = np.zeros((batch_size, self.n_signals), dtype=np.float64)
+        # valid_size refers to the number of valid timestamps you are querying at once.
+        valid_size = len(valid_times)
+        counts = np.zeros((valid_size, self.n_signals), dtype=np.float64)
 
         # 4. Call Numba Engine
         fast_count_spikes(self.spikes, self.indices, starts, ends, counts)
@@ -862,8 +867,8 @@ class SpikesInterpolator(Interpolator):
         # 5. Apply Smoothing (Gaussian Filter)
         if self.smoothing_sigma > 0:
             # We assume 'times' is a sorted, equidistant sequence.
-            # If batch_size is 1, smoothing is impossible/no-op.
-            if batch_size > 1:
+            # If valid_size is 1, smoothing is impossible/no-op.
+            if valid_size > 1:
                 # Apply Gaussian filter along the time axis (axis 0)
                 # Note: sigma is in units of array indices (time steps).
                 # If your times are 30Hz (33ms) and you want 100ms smoothing,
