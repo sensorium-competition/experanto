@@ -794,8 +794,8 @@ class SpikesInterpolator(Interpolator):
 
         meta = self.load_meta()
 
-        self.start_time = meta.get("start_time", 0)
-        self.end_time = meta.get("end_time", np.inf)
+        self.start_time = meta["start_time"]
+        self.end_time = meta["end_time"]
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
 
         self.interpolation_window = interpolation_window
@@ -815,10 +815,10 @@ class SpikesInterpolator(Interpolator):
             raise ValueError(
                 f"Unknown alignment mode: {self.interpolation_align}, should be 'center', 'left' or 'right'"
             )
-
+        
+        # The screen times for our experiment are stored in float64. So this should be the same dtype for consistency and to avoid issues with memmap.
         # Use the unified cache_data flag for eager loading
         if self.cache_data:
-            print("Loading spikes to RAM...")
             self.spikes = np.fromfile(self.dat_path, dtype="float64")
         else:
             self.spikes = np.memmap(self.dat_path, dtype="float64", mode="r")
@@ -831,8 +831,6 @@ class SpikesInterpolator(Interpolator):
         # Handle edge case where no times are valid
         if len(valid_times) == 0:
             return np.empty((0, self.n_signals)), valid
-
-        # valid_times += 1e-4
 
         # 2. Prepare boundaries
         if self.interpolation_align == "center":
