@@ -4,7 +4,6 @@ import functools
 import importlib
 import json
 import os
-from collections import namedtuple
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -52,7 +51,6 @@ class SimpleChunkedDataset(Dataset):
         self._sample_times = np.arange(
             self.start_time, self.end_time, 1.0 / self.sampling_rate
         )
-        self.DataPoint = namedtuple("DataPoint", self.device_names)
 
     def __len__(self):
         return int(len(self._sample_times) / self.chunk_size)
@@ -60,7 +58,8 @@ class SimpleChunkedDataset(Dataset):
     def __getitem__(self, idx):
         s = idx * self.chunk_size
         times = self._sample_times[s : s + self.chunk_size]
-        data, _ = self._experiment.interpolate(times)
+        data = self._experiment.interpolate(times, return_valid=False)
+        assert isinstance(data, dict)
         phase_shifts = self._experiment.devices["responses"]._phase_shifts
         timestamps_neurons = (times - times.min())[:, None] + phase_shifts[None, :]
         data["timestamps"] = timestamps_neurons
@@ -174,7 +173,7 @@ class ChunkDataset(Dataset):
           chunk_size: null
           offset: 0.1
           transforms:
-            standardize: true
+            normalize_variance_only: true # old standardize: true
           interpolation:
             interpolation_mode: nearest_neighbor
         eye_tracker:
@@ -216,8 +215,8 @@ class ChunkDataset(Dataset):
     def __init__(
         self,
         root_folder: str,
-        global_sampling_rate: Optional[float],
-        global_chunk_size: Optional[float],
+        global_sampling_rate: Optional[float] = None,
+        global_chunk_size: Optional[int] = None,
         add_behavior_as_channels: bool = False,
         replace_nans_with_means: bool = False,
         cache_data: bool = False,
@@ -242,7 +241,7 @@ class ChunkDataset(Dataset):
 
         self.add_behavior_as_channels = add_behavior_as_channels
         self.replace_nans_with_means = replace_nans_with_means
-        self.sample_stride = self.modality_config.screen.sample_stride
+        self.sample_stride = self.modality_config.screen.sample_stride  # type: ignore[union-attr]
         self._experiment = Experiment(
             root_folder,
             modality_config,
@@ -350,8 +349,8 @@ class ChunkDataset(Dataset):
                 if not isinstance(mode, str):
                     means = np.array(mode.get("means", means))
                     stds = np.array(mode.get("stds", stds))
-                if mode == "standardize":
-                    # If modality should only be standarized, set means to 0.
+                if mode == "normalize_variance_only":
+                    # If modality should only be adjusted by variance (old "standardize"), set means to 0.
                     means = np.zeros_like(means)
                 elif mode == "recompute_responses":
                     means = np.zeros_like(means)
@@ -389,9 +388,9 @@ class ChunkDataset(Dataset):
         for device_name in self.device_names:
             if device_name == "screen":
                 add_channel = Lambda(self.add_channel_function)
-                transform_list = []
+                transform_list: List[Any] = []
 
-                for v in self.modality_config.screen.transforms.values():
+                for v in self.modality_config.screen.transforms.values():  # type: ignore[union-attr]
                     if isinstance(v, dict):  # config dict
                         module = instantiate(v)
                         if isinstance(module, torch.nn.Module):
@@ -399,7 +398,7 @@ class ChunkDataset(Dataset):
 
                 transform_list.insert(0, add_channel)
             else:
-                transform_list = [ToTensor()]
+                transform_list: List[Any] = [ToTensor()]
 
             # Normalization.
             if self.modality_config[device_name].transforms.get("normalization", False):
@@ -458,7 +457,7 @@ class ChunkDataset(Dataset):
                 }
 
                 # Call the factory function with its arguments to get the actual implementation function
-                implementation_func = factory_func(**args)
+                implementation_func = factory_func(**args)  # type: ignore[reportCallIssue]
                 return implementation_func
 
             except (ImportError, AttributeError, KeyError, TypeError) as e:
@@ -473,7 +472,7 @@ class ChunkDataset(Dataset):
     def get_valid_intervals_from_filters(
         self, visualize: bool = False
     ) -> List[TimeInterval]:
-        valid_intervals = None
+        valid_intervals: Optional[List[TimeInterval]] = None
         for modality in self.modality_config:
             if "filters" in self.modality_config[modality]:
                 device = self._experiment.devices[modality]
@@ -482,7 +481,7 @@ class ChunkDataset(Dataset):
                 ].items():
                     # Get the final callable filter function
                     filter_function = self._get_callable_filter(filter_config)
-                    valid_intervals_ = filter_function(device_=device)
+                    valid_intervals_: List[TimeInterval] = filter_function(device_=device)  # type: ignore[assignment]
                     if visualize:
                         print(f"modality: {modality}, filter: {filter_name}")
                         visualization_string = get_stats_for_valid_interval(
@@ -496,7 +495,7 @@ class ChunkDataset(Dataset):
                             valid_intervals, valid_intervals_
                         )
 
-        return valid_intervals
+        return valid_intervals if valid_intervals is not None else []
 
     def get_condition_mask_from_meta_conditions(
         self, valid_conditions_sum_of_product: List[dict]
@@ -521,7 +520,7 @@ class ChunkDataset(Dataset):
         ``[{'tier': 'train', 'stim_type': 'natural'}, {'tier': 'blank'}]``
         matches trials that are either (train AND natural) OR blank.
         """
-        all_conditions = None
+        all_conditions: Optional[np.ndarray] = None
         for valid_conditions_product in valid_conditions_sum_of_product:
             conditions_of_product = None
             for k, valid_condition in valid_conditions_product.items():
@@ -537,6 +536,8 @@ class ChunkDataset(Dataset):
                 all_conditions = conditions_of_product
             else:
                 all_conditions |= conditions_of_product
+        if all_conditions is None:
+            return np.array([], dtype=bool)
         return all_conditions
 
     def get_screen_sample_mask_from_meta_conditions(
@@ -610,7 +611,7 @@ class ChunkDataset(Dataset):
 
     def get_full_valid_sample_times(
         self, filter_for_valid_intervals: bool = True
-    ) -> Iterable:
+    ) -> np.ndarray:
         """Get all valid chunk starting times based on meta conditions.
 
         Iterates through sample times and checks if they can be used as chunk
@@ -643,14 +644,14 @@ class ChunkDataset(Dataset):
         if not isinstance(valid_conditions, (list, tuple, ListConfig)):
             valid_conditions = [valid_conditions]
 
+        valid_conditions = list(valid_conditions)
+
         if self.modality_config["screen"]["include_blanks"]:
             additional_valid_conditions = {"tier": "blank"}
             valid_conditions.append(additional_valid_conditions)
 
-        sample_mask_from_meta_conditions = (
-            self.get_screen_sample_mask_from_meta_conditions(
-                chunk_size, valid_conditions, filter_for_valid_intervals
-            )
+        sample_mask_from_meta_conditions = self.get_screen_sample_mask_from_meta_conditions(
+            chunk_size, valid_conditions, filter_for_valid_intervals  # type: ignore[arg-type]
         )
 
         final_mask = duration_mask & sample_mask_from_meta_conditions
@@ -662,7 +663,7 @@ class ChunkDataset(Dataset):
         Shuffle valid screen times using the dataset's random number generator
         for reproducibility.
         """
-        times = self._full_valid_sample_times
+        times = self._full_valid_sample_times_filtered
         if self.seed is not None:
             self._valid_screen_times = np.sort(
                 self._rng.choice(
@@ -715,10 +716,10 @@ class ChunkDataset(Dataset):
                     data_key = f"{key['animal_id']}-{key['session']}-{key['scan_idx']}"
                     return data_key
                 if "dynamic" in root_folder:
-                    dataset_name = path.split("dynamic")[1].split("-Video")[0]
+                    dataset_name = root_folder.split("dynamic")[1].split("-Video")[0]
                     return dataset_name
-                elif "_gaze" in path:
-                    dataset_name = path.split("_gaze")[0].split("datasets/")[1]
+                elif "_gaze" in root_folder:
+                    dataset_name = root_folder.split("_gaze")[0].split("datasets/")[1]
                     return dataset_name
                 else:
                     print(
@@ -776,7 +777,9 @@ class ChunkDataset(Dataset):
             # scale everything back to truncated values
             times = times.astype(np.float64) / self.scale_precision
 
-            data, _ = self._experiment.interpolate(times, device=device_name)
+            data = self._experiment.interpolate(
+                times, device=device_name, return_valid=False
+            )
             out[device_name] = self.transforms[device_name](data).squeeze(
                 0
             )  # remove dim0 for response/eye_tracker/treadmill

@@ -10,6 +10,9 @@ Experanto is a Python package designed for interpolating recordings and stimuli 
 - **Configurable Preprocessing**: YAML-based configuration for sampling rates, normalization, transforms, and filtering
 - **PyTorch Integration**: Native PyTorch `Dataset` and `DataLoader` implementations optimized for training
 
+## Docs
+[![Docs](https://readthedocs.org/projects/experanto/badge/?version=latest)](https://experanto.readthedocs.io/)
+
 ## Installation
 
 ```bash
