@@ -8,7 +8,10 @@ This function takes:
 - A list of paths pointing to your experiment directories
 - A configuration dictionary, similar to the one used for loading a single dataset
 
-It returns a dictionary of :class:`~experanto.utils.MultiEpochsDataLoader` objects, each corresponding to a session, loaded with the specified configurations.
+It returns a :class:`~experanto.utils.LongCycler`, an iterator that wraps an
+internal dictionary of :class:`~experanto.utils.MultiEpochsDataLoader` objects
+(one per session) and yields ``(session_key, batch)`` pairs on each iteration,
+cycling until the longest session is exhausted.
 
 Example
 -------
@@ -30,4 +33,6 @@ Example
     # Load first two sessions
     train_dl = get_multisession_dataloader(full_paths[:2], cfg)
 
-The returned ``train_dl`` is a dictionary containing two :class:`~experanto.utils.MultiEpochsDataLoader` objects which can be used for training.
+    # Iterate — each step yields a (session_key, batch) tuple
+    for session_key, batch in train_dl:
+        print(session_key, batch['responses'].shape)
