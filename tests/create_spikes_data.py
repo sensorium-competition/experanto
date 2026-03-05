@@ -11,7 +11,9 @@ SPIKES_ROOT = Path("tests/spikes_data")
 
 
 @contextmanager
-def create_spikes_data(duration=100.0, n_neurons=50, rate=20.0):
+def create_spikes_data(
+    duration=100.0, n_neurons=50, rate=20.0, use_mem_mapped=False
+):
     """
     Context manager to create temporary spike data for testing.
 
@@ -44,9 +46,22 @@ def create_spikes_data(duration=100.0, n_neurons=50, rate=20.0):
 
         # Flatten and save to binary file (replicating real data structure)
         flat_spikes = np.concatenate(all_spikes_list)
-        np.save(
-            SPIKES_ROOT / "spikes.npy", flat_spikes
-        )  # Save in .npy format for easier loading
+
+        if use_mem_mapped:
+            # Create memmap file
+            fp = np.memmap(
+                SPIKES_ROOT / "data.mem",
+                dtype="float64",
+                mode="w+",
+                shape=flat_spikes.shape,
+            )
+            fp[:] = flat_spikes[:]
+            fp.flush()
+            del fp
+        else:
+            np.save(
+                SPIKES_ROOT / "spikes.npy", flat_spikes
+            )  # Save in .npy format for easier loading
 
         meta = {
             "modality": "spikes",
@@ -56,6 +71,10 @@ def create_spikes_data(duration=100.0, n_neurons=50, rate=20.0):
             "end_time": duration,
             "sampling_rate": 1000.0,  # Arbitrary for spikes, but required by some loaders
         }
+
+        if use_mem_mapped:
+            meta["is_mem_mapped"] = True
+            meta["dtype"] = "float64"
 
         with open(SPIKES_ROOT / "meta.yml", "w") as f:
             yaml.safe_dump(meta, f)

@@ -149,3 +149,44 @@ def test_spikes_invalid_alignment():
             interp_kwargs={"interpolation_align": "invalid"},
         ):
             pass
+
+def test_memmap_loading():
+    """
+    Verify that loading data from a memmap file works correctly.
+    """
+    duration = 10.0
+    n_neurons = 5
+    rate = 20.0
+
+    # 1. Test lazy loading (memmap)
+    with spikes_data_and_interpolator(
+        data_kwargs={
+            "duration": duration,
+            "n_neurons": n_neurons,
+            "rate": rate,
+            "use_mem_mapped": True,
+        },
+        interp_kwargs={"cache_data": False},
+    ) as (gt_spikes, interp):
+        assert isinstance(interp.spikes, np.memmap), "Expected a memmap object"
+        
+        # Verify content matches ground truth
+        # Since 'gt_spikes' is a list of arrays, let's reconstruct flat array
+        flat_gt = np.concatenate(gt_spikes)
+        np.testing.assert_allclose(interp.spikes, flat_gt)
+
+    # 2. Test eager loading (cache_data=True) from memmap source
+    with spikes_data_and_interpolator(
+        data_kwargs={
+            "duration": duration,
+            "n_neurons": n_neurons,
+            "rate": rate,
+            "use_mem_mapped": True,
+        },
+        interp_kwargs={"cache_data": True},
+    ) as (gt_spikes, interp):
+        assert isinstance(interp.spikes, np.ndarray), "Expected a numpy array (loaded into RAM)"
+        assert not isinstance(interp.spikes, np.memmap), "Should not be a memmap"
+
+        flat_gt = np.concatenate(gt_spikes)
+        np.testing.assert_allclose(interp.spikes, flat_gt)

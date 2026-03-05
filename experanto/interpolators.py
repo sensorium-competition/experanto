@@ -830,18 +830,16 @@ class SpikesInterpolator(Interpolator):
 
         # The screen times for our experiment are stored in float64. So this should be the same dtype for consistency and to avoid issues with memmap.
         # Use the unified cache_data flag for eager loading
-        if self.cache_data:
-            self.spikes = np.load(self.dat_path)
-        elif self.is_mem_mapped:
-            # Raise error that memmap is to be implemented, and fallback to np.load for now
-            raise NotImplementedError(
-                "Memory-mapped access for spikes is not yet implemented. Set cache_data=True to load all data into memory."
+        if self.is_mem_mapped:
+            self.spikes = np.memmap(
+                self.root_folder / "data.mem",
+                dtype=meta.get("dtype", "float64"),
+                mode="r",
+                shape=(self.indices[-1],),
             )
+            if self.cache_data:
+                self.spikes = np.array(self.spikes)
         else:
-            # Convert the below to warning and fallback to np.load for now
-            warnings.warn(
-                "Memory-mapped access for spikes is not yet implemented. Falling back to loading all data into memory. Set cache_data=True to suppress this warning."
-            )
             self.spikes = np.load(self.dat_path)
 
     def interpolate(
