@@ -149,7 +149,9 @@ class SequenceInterpolator(Interpolator):
     cache_data : bool, default=False
         If True, loads memory-mapped data into RAM for faster access.
     keep_nans : bool, default=False
-        If False, replaces NaN values with column means during interpolation.
+        If False and ``interpolation_mode='linear'``, replaces NaN values with
+        column means during interpolation. For ``'nearest_neighbor'``, NaNs are
+        left unchanged.
     interpolation_mode : str, default='nearest_neighbor'
         Interpolation method: ``'nearest_neighbor'`` or ``'linear'``.
     normalize : bool, default=False
@@ -727,7 +729,11 @@ class TimeIntervalInterpolator(Interpolator):
             warnings.warn(
                 "TimeIntervalInterpolator returns an empty array, no valid times queried."
             )
-            return np.empty((0, n_labels), dtype=bool)
+            return (
+                (np.empty((0, n_labels), dtype=bool), valid)
+                if return_valid
+                else np.empty((0, n_labels), dtype=bool)
+            )
 
         out = np.zeros((n_times, n_labels), dtype=bool)
         for i, (label, filename) in enumerate(self.meta_labels.items()):

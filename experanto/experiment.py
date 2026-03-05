@@ -174,7 +174,7 @@ class Experiment:
         --------
         Interpolate a single device:
 
-        >>> data = exp.interpolate(times, device='responses', return_valid=True)
+        >>> data, valid = exp.interpolate(times, device='responses', return_valid=True)
         >>> data.shape
         (n_valid, 500)  # n_valid <= len(times), 500 neurons
         >>> times[valid].shape == (data.shape[0],)
