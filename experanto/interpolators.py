@@ -810,7 +810,14 @@ class SpikesInterpolator(Interpolator):
 
         # Ensure indices are typed correctly for Numba
         self.indices = np.array(meta["spike_indices"]).astype(np.int64)
-        self.n_signals = len(self.indices) - 1
+        computed_n_signals = len(self.indices) - 1
+        meta_n_signals = meta.get("n_signals")
+        if meta_n_signals is not None and meta_n_signals != computed_n_signals:
+            raise ValueError(
+                f"Mismatch between meta['n_signals'] ({meta_n_signals}) and "
+                f"len(spike_indices) - 1 ({computed_n_signals})."
+            )
+        self.n_signals = meta_n_signals if meta_n_signals is not None else computed_n_signals
 
         # Check interpolation_align validity
         if self.interpolation_align not in ["center", "left", "right"]:
