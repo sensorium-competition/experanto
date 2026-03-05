@@ -40,8 +40,11 @@ def nan_filter(vicinity=0.05):
 
         nan_mask = np.isnan(data)  # (T, n_features)
         nan_mask = np.any(nan_mask, axis=1)  # (T,)
+
+        # Find indices where nan_mask is True
         nan_indices = np.where(nan_mask)[0]
 
+        # Create invalid TimeIntervals around each nan point
         invalid_intervals = []
         for idx in nan_indices:
             time_point = start_time + idx * time_delta

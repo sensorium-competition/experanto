@@ -73,6 +73,7 @@ autodoc_mock_imports = [
     "torch",
     "torchvision",
     "numpy",
+    "yaml",
     "scipy",
     "cv2",
     "pandas",

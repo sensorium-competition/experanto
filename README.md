@@ -51,10 +51,10 @@ import numpy as np
 times = np.linspace(0, 10, 100)  # 100 time points over 10 seconds
 
 # Get interpolated data and a boolean mask with valid time points from all devices
-data, valid = exp.interpolate(times)
+data = exp.interpolate(times)
 
 # Or from a specific device
-responses, valid = exp.interpolate(times, device="responses")
+responses = exp.interpolate(times, device="responses")
 ```
 
 ### Configuration
@@ -87,7 +87,7 @@ Full documentation is available at [Read the Docs](https://experanto.readthedocs
 - [Installation Guide](https://experanto.readthedocs.io/en/latest/concepts/installation.html)
 - [Getting Started](https://experanto.readthedocs.io/en/latest/concepts/getting_started.html)
 - [API Reference](https://experanto.readthedocs.io/en/latest/api.html)
-- [Configuration Options](https://experanto.readthedocs.io/en/latest/configuration.html)
+- [Configuration Options](https://experanto.readthedocs.io/en/latest/concepts/demo_configs.html)
 
 ## Contributing
 

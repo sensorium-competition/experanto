@@ -144,19 +144,37 @@ class Experiment:
         Returns
         -------
         values : numpy.ndarray or dict
-            If ``device`` is specified, returns the interpolated data array.
-            Otherwise, returns a dict mapping device names to their data arrays.
-        valid : numpy.ndarray or dict
-            Boolean mask(s) indicating which time points were valid.
-            Same structure as ``values``.
+            If ``device`` is specified, returns the interpolated data array
+            for the valid time points only (shape is modality-dependent, see
+            below). Otherwise, returns a dict mapping device names to their
+            data arrays.
+        valid : numpy.ndarray or dict, optional
+            Only present when ``return_valid=True``. Integer index array(s)
+            into ``times`` indicating which entries were used to produce
+            ``values``. ``values[i]`` corresponds to ``times[valid[i]]``, and
+            ``len(valid) == values.shape[0]``. When a dict is returned,
+            ``valid`` is a dict with the same keys and ``len(valid[d])`` may
+            differ across devices because each modality has its own valid
+            range.
+
+        Notes
+        -----
+        Output shapes per modality:
+
+        * Sequence modalities (``responses``, ``eye_tracker``, ``treadmill``):
+          ``(n_valid, n_signals)``
+        * Screen modality: ``(n_valid, H, W)`` for grayscale,
+          ``(n_valid, H, W, C)`` for colour.
 
         Examples
         --------
         Interpolate a single device:
 
-        >>> data, valid = exp.interpolate(times, device='responses')
+        >>> data, valid = exp.interpolate(times, device='responses', return_valid=True)
         >>> data.shape
-        (100, 500)  # 100 time points, 500 neurons
+        (n_valid, 500)  # n_valid <= len(times), 500 neurons
+        >>> times[valid].shape == (data.shape[0],)
+        True
 
         Interpolate all devices:
 

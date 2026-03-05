@@ -51,22 +51,31 @@ Once the modalities are identified, we can interpolate their data using
 :meth:`~experanto.experiment.Experiment.interpolate`.
 
 :meth:`~experanto.experiment.Experiment.interpolate` accepts any 1-D array of
-time points and returns, for each modality, an array of shape
-``(len(times), n_signals)``. The number of returned points is always
-``len(times)``, regardless of the native acquisition rate of the modality.
+time points and returns a NumPy array containing only the **valid** time
+points — those that fall within the recorded range of the requested modality.
+The returned array therefore has length ``n_valid``, which is less than or
+equal to ``len(times)``, and its shape is modality-dependent:
+
+* **Sequence modalities** (``responses``, ``eye_tracker``, ``treadmill``):
+  ``(n_valid, n_signals)``
+* **Screen modality** (``screen``): ``(n_valid, H, W)`` for grayscale stimuli,
+  or ``(n_valid, H, W, C)`` when colour channels are present.
+
+Pass ``return_valid=True`` to also receive ``valid``, an **integer index
+array** into the original ``times`` array, such that ``times[valid]`` gives
+the time points that correspond row-for-row to the returned data array.
 
 When you call :meth:`~experanto.experiment.Experiment.interpolate` **without**
-a ``device`` argument, every modality receives the *same* time array. This
-means modalities with low native rates can return repeated values for
-consecutive requested times that fall in the same native sample (nearest
-neighbour), while modalities with high native rates will effectively be
-sub-sampled (the behavior is interpolator-dependent). If you need different
-time densities per modality, call :meth:`~experanto.experiment.Experiment.interpolate`
-separately with a different ``times`` array for each ``device``. This is
-exactly what :class:`~experanto.datasets.ChunkDataset` does internally.
+a ``device`` argument, every modality receives the *same* time array. Because
+each modality may have a different valid range, the ``n_valid`` count can
+differ between modalities. If you need different time densities per modality,
+call :meth:`~experanto.experiment.Experiment.interpolate` separately with a
+different ``times`` array for each ``device``. This is exactly what
+:class:`~experanto.datasets.ChunkDataset` does internally.
 
 The following example interpolates a 20-second window at 2 time points per
-second, resulting in 40 screen frames:
+second. Any requested time that falls outside a valid screen trial is
+excluded, so ``video.shape[0]`` may be less than ``len(times)``:
 
 .. code-block:: python
 
@@ -78,13 +87,14 @@ second, resulting in 40 screen frames:
     # Define the time window for interpolation
     times = np.arange(4300., 4320., 0.5)
 
-    # Retrieve the frames as a torch array with shape (C, T, H, W)
-    video, valid = e.interpolate(times, device="screen")
+    # Retrieve the frames as a NumPy float32 array with shape (n_valid, H, W)
+    # ``valid`` is an integer index array into ``times``; times[valid] gives
+    # the time point for each row of ``video`` (screen is blank outside trials).
+    video, valid = e.interpolate(times, device="screen", return_valid=True)
 
-    # Convert to NumPy and prepare for visualization
-    video_np = video.numpy().astype(int)
-    channels, n_frames, height, width = video_np.shape
-    video_np = np.transpose(video_np, (1, 2, 3, 0))
+    # ``video`` already contains only the n_valid frames; no further indexing needed.
+    video_np = video.astype(np.uint8)
+    n_frames, height, width = video_np.shape
 
     # Create a figure and axis for animation
     fig, ax = plt.subplots()
