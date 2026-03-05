@@ -89,9 +89,26 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
 
 
 class MultiEpochsDataLoader(torch.utils.data.DataLoader):
-    """solves bug to keep all workers initialized across epochs.
-    From https://discuss.pytorch.org/t/enumerate-dataloader-slow/87778
-    and
+    """DataLoader that keeps workers alive across epochs.
+
+    Solves a bug where worker processes are re-spawned at the start of each
+    epoch, causing significant overhead. Workers are initialized once and
+    reused throughout training.
+
+    Parameters
+    ----------
+    *args
+        Positional arguments forwarded to :class:`torch.utils.data.DataLoader`.
+    shuffle_each_epoch : bool, default=False
+        If True and the underlying dataset has a ``shuffle_valid_screen_times``
+        method, that method is called at the start of every epoch.
+    **kwargs
+        Keyword arguments forwarded to :class:`torch.utils.data.DataLoader`.
+
+    References
+    ----------
+    https://discuss.pytorch.org/t/enumerate-dataloader-slow/87778
+
     https://github.com/huggingface/pytorch-image-models/blob/d72ac0db259275233877be8c1d4872163954dfbb/timm/data/loader.py#L209-L238
     """
 
@@ -582,7 +599,11 @@ class FastSessionDataLoader:
 
         # Restore RNG state for the main dataloader
         dataloader_rng_state = state.get("dataloader_rng_state")
-        if dataloader_rng_state is not None and hasattr(self, "rng") and self.rng is not None:  # type: ignore[attr-defined]
+        if (
+            dataloader_rng_state is not None
+            and hasattr(self, "rng")
+            and self.rng is not None
+        ):  # type: ignore[attr-defined]
             self.rng.set_state(dataloader_rng_state)  # type: ignore[attr-defined]
 
         # Restore RNG state for the batch sampler

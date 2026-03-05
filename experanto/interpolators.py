@@ -137,7 +137,7 @@ class Interpolator:
 
 
 class SequenceInterpolator(Interpolator):
-    """Interpolator for 1D time series data (neural responses, behaviors).
+    """Interpolator for time series data.
 
     Handles regularly-sampled time series stored as memory-mapped or NumPy
     arrays. Supports nearest-neighbor and linear interpolation modes.

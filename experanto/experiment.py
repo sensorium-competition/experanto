@@ -59,7 +59,7 @@ class Experiment:
     >>> exp.device_names
     ('screen', 'responses', 'eye_tracker')
     >>> times = np.linspace(0, 10, 100)
-    >>> data, valid = exp.interpolate(times, device='responses')
+    >>> data = exp.interpolate(times, device='responses')
     """
 
     def __init__(
@@ -114,7 +114,9 @@ class Experiment:
                     "Falling back to original Interpolator creation logic.",
                     UserWarning,
                 )
-                dev = Interpolator.create(d, cache_data=self.cache_data, **interp_conf)  # type: ignore[arg-type]
+                dev = Interpolator.create(
+                    d, cache_data=self.cache_data, **interp_conf
+                )  # type: ignore[arg-type]
 
             self.devices[d.name] = dev
             self.start_time = dev.start_time
@@ -170,7 +172,7 @@ class Experiment:
         --------
         Interpolate a single device:
 
-        >>> data, valid = exp.interpolate(times, device='responses', return_valid=True)
+        >>> data = exp.interpolate(times, device='responses', return_valid=True)
         >>> data.shape
         (n_valid, 500)  # n_valid <= len(times), 500 neurons
         >>> times[valid].shape == (data.shape[0],)
@@ -178,7 +180,7 @@ class Experiment:
 
         Interpolate all devices:
 
-        >>> data, valid = exp.interpolate(times)
+        >>> data = exp.interpolate(times)
         >>> data.keys()
         dict_keys(['screen', 'responses', 'eye_tracker'])
         """

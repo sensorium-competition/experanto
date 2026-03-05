@@ -72,8 +72,6 @@ autodoc_typehints_description_target = "documented"
 autodoc_mock_imports = [
     "torch",
     "torchvision",
-    "numpy",
-    "yaml",
     "scipy",
     "cv2",
     "pandas",
@@ -100,3 +98,4 @@ intersphinx_mapping = {
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
+add_module_names = False

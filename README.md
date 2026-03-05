@@ -50,7 +50,7 @@ exp = Experiment("/path/to/experiment")
 import numpy as np
 times = np.linspace(0, 10, 100)  # 100 time points over 10 seconds
 
-# Get interpolated data and a boolean mask with valid time points from all devices
+# Get interpolated data from all devices
 data = exp.interpolate(times)
 
 # Or from a specific device
