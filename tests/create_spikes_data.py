@@ -44,7 +44,9 @@ def create_spikes_data(duration=100.0, n_neurons=50, rate=20.0):
 
         # Flatten and save to binary file (replicating real data structure)
         flat_spikes = np.concatenate(all_spikes_list)
-        flat_spikes.tofile(SPIKES_ROOT / "spikes.npy")
+        np.save(
+            SPIKES_ROOT / "spikes.npy", flat_spikes
+        )  # Save in .npy format for easier loading
 
         meta = {
             "modality": "spikes",

@@ -765,7 +765,7 @@ class SpikesInterpolator(Interpolator):
     root_folder : str
         Path to the directory containing `spikes.npy` and `meta.yml`.
     cache_data : bool, optional
-        If True, eagerly loads the entire spike array into RAM (`np.fromfile`)
+        If True, eagerly loads the entire spike array into RAM (`np.load`)
         for faster access. If False, memory-maps the data from disk (`np.memmap`).
         Default is False.
     interpolation_window : float, optional
@@ -804,6 +804,7 @@ class SpikesInterpolator(Interpolator):
         self.interpolation_align = interpolation_align
         self.smoothing_sigma = smoothing_sigma
         self.cache_data = cache_data
+        self.is_mem_mapped = meta.get("is_mem_mapped", False)  # read-only memmap
 
         # Use self.root_folder, defined in the base class
         self.dat_path = self.root_folder / "spikes.npy"
@@ -817,7 +818,9 @@ class SpikesInterpolator(Interpolator):
                 f"Mismatch between meta['n_signals'] ({meta_n_signals}) and "
                 f"len(spike_indices) - 1 ({computed_n_signals})."
             )
-        self.n_signals = meta_n_signals if meta_n_signals is not None else computed_n_signals
+        self.n_signals = (
+            meta_n_signals if meta_n_signals is not None else computed_n_signals
+        )
 
         # Check interpolation_align validity
         if self.interpolation_align not in ["center", "left", "right"]:
@@ -828,9 +831,18 @@ class SpikesInterpolator(Interpolator):
         # The screen times for our experiment are stored in float64. So this should be the same dtype for consistency and to avoid issues with memmap.
         # Use the unified cache_data flag for eager loading
         if self.cache_data:
-            self.spikes = np.fromfile(self.dat_path, dtype="float64")
+            self.spikes = np.load(self.dat_path)
+        elif self.is_mem_mapped:
+            # Raise error that memmap is to be implemented, and fallback to np.load for now
+            raise NotImplementedError(
+                "Memory-mapped access for spikes is not yet implemented. Set cache_data=True to load all data into memory."
+            )
         else:
-            self.spikes = np.memmap(self.dat_path, dtype="float64", mode="r")
+            # Convert the below to warning and fallback to np.load for now
+            warnings.warn(
+                "Memory-mapped access for spikes is not yet implemented. Falling back to loading all data into memory. Set cache_data=True to suppress this warning."
+            )
+            self.spikes = np.load(self.dat_path)
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
