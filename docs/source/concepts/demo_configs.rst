@@ -49,7 +49,7 @@ Default YAML configuration
           chunk_size: 16
           offset: 0.0
           transforms:
-            normalization: standardize
+            normalization: normalize_variance_only
           interpolation:
             interpolation_mode: nearest_neighbor
           filters:

@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 
 def get_multisession_dataloader(
     paths: List[str],
-    configs: Union[DictConfig, Dict, List[Union[DictConfig, Dict]]] = None,
+    configs: Optional[Union[DictConfig, Dict, List[Union[DictConfig, Dict]]]] = None,
     shuffle_keys: bool = False,
     **kwargs,
-) -> DataLoader:
+) -> LongCycler:
     """Create a multi-session dataloader from multiple experiment paths.
 
     By default, creates a :class:`ChunkDataset` for each path and wraps them in
@@ -75,6 +75,7 @@ def get_multisession_dataloader(
     if isinstance(configs, (DictConfig, dict)):
         configs = [configs] * len(paths)
 
+    assert configs is not None
     dataloaders = {}
     for i, (path, cfg) in enumerate(zip(paths, configs)):
         # TODO use saved meta dict to find data key
@@ -84,10 +85,10 @@ def get_multisession_dataloader(
             dataset_name = path.split("_gaze")[0].split("datasets/")[1]
         else:
             dataset_name = f"session_{i}"
-        dataset = ChunkDataset(path, **cfg.dataset)
+        dataset = ChunkDataset(path, **cfg["dataset"])
         dataloaders[dataset_name] = MultiEpochsDataLoader(
             dataset,
-            **cfg.dataloader,
+            **cfg["dataloader"],
         )
 
     return LongCycler(dataloaders)
@@ -95,11 +96,11 @@ def get_multisession_dataloader(
 
 def get_multisession_concat_dataloader(
     paths: List[str],
-    configs: Union[Dict, List[Dict]] = None,
+    configs: Optional[Union[Dict, List[Dict]]] = None,
     seed: Optional[int] = 0,
     dataloader_config: Optional[Dict] = None,
     **kwargs,
-) -> "FastSessionDataLoader":
+) -> Optional["FastSessionDataLoader"]:
     """Create a concatenated multi-session dataloader.
 
     Unlike :func:`get_multisession_dataloader`, this function concatenates
@@ -148,7 +149,7 @@ def get_multisession_concat_dataloader(
     """
     if configs is None and "config" in kwargs:
         configs = kwargs.pop("config")
-
+    assert configs is not None
     # Convert single config to list for uniform handling
     if not isinstance(configs, list):
         configs = [configs] * len(paths)
