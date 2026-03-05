@@ -25,7 +25,8 @@ def test_spikes_interpolation_accuracy(align):
         assert isinstance(interp, SpikesInterpolator)
 
         # Query random times within the duration (avoiding edges for simplicity)
-        times = np.sort(np.random.uniform(window, duration - window, 20))
+        rng = np.random.default_rng(12345)
+        times = np.sort(rng.uniform(window, duration - window, 20))
 
         counts, valid = interp.interpolate(times, return_valid=True)
 
