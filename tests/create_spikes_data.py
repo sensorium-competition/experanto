@@ -11,9 +11,7 @@ SPIKES_ROOT = Path("tests/spikes_data")
 
 
 @contextmanager
-def create_spikes_data(
-    duration=100.0, n_neurons=50, rate=20.0, use_mem_mapped=False
-):
+def create_spikes_data(duration=100.0, n_neurons=50, rate=20.0, use_mem_mapped=False):
     """
     Context manager to create temporary spike data for testing.
 

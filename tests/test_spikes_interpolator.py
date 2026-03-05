@@ -150,6 +150,7 @@ def test_spikes_invalid_alignment():
         ):
             pass
 
+
 def test_memmap_loading():
     """
     Verify that loading data from a memmap file works correctly.
@@ -169,7 +170,7 @@ def test_memmap_loading():
         interp_kwargs={"cache_data": False},
     ) as (gt_spikes, interp):
         assert isinstance(interp.spikes, np.memmap), "Expected a memmap object"
-        
+
         # Verify content matches ground truth
         # Since 'gt_spikes' is a list of arrays, let's reconstruct flat array
         flat_gt = np.concatenate(gt_spikes)
@@ -185,7 +186,9 @@ def test_memmap_loading():
         },
         interp_kwargs={"cache_data": True},
     ) as (gt_spikes, interp):
-        assert isinstance(interp.spikes, np.ndarray), "Expected a numpy array (loaded into RAM)"
+        assert isinstance(
+            interp.spikes, np.ndarray
+        ), "Expected a numpy array (loaded into RAM)"
         assert not isinstance(interp.spikes, np.memmap), "Should not be a memmap"
 
         flat_gt = np.concatenate(gt_spikes)
