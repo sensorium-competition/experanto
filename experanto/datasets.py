@@ -677,7 +677,7 @@ class ChunkDataset(Dataset):
                 )
             )
 
-    def get_data_key_from_root_folder(cls, root_folder):
+    def get_data_key_from_root_folder(self, root_folder):
         """Extract a data key from the root folder path.
 
         Checks for a meta.json file and extracts the data_key or scan_key.
