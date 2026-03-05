@@ -1,4 +1,3 @@
-
 .. _loading_dataset:
 
 Loading a dataset object
@@ -6,12 +5,29 @@ Loading a dataset object
 
 Dataset objects organize experimental data (from the :class:`~experanto.experiment.Experiment` class) for machine learning tasks, offering project-specific and configurable access for training and evaluation. They often serve as a source for creating dataloaders (see :func:`~experanto.dataloaders.get_multisession_dataloader`).
 
+.. note::
+
+   The key distinction between :class:`~experanto.experiment.Experiment` and a
+   dataset object is one of **time discretization**.
+   :class:`~experanto.experiment.Experiment` is a low-level interface: you hand
+   it any array of time points and it returns values at those points via a
+   lookup into the raw stored data. :class:`~experanto.datasets.ChunkDataset` 
+   is used on top of it and imposes a specific time structure. For each item,
+   it constructs a separate ``times`` array per modality using that modality's
+   configured ``sampling_rate`` and ``chunk_size`` (``times = start + np.arange(chunk_size) / sampling_rate``),
+   then calls :meth:`~experanto.experiment.Experiment.interpolate` for each
+   modality independently. This is how all modalities end up covering the same
+   time window with compatible shapes in a batch.
+
 Key features of dataset objects
 -------------------------------
 
 Dataset objects provide several essential features:
 
-- **Sampling Rate**: Defines the frequency of equally spaced interpolation times across the entire experiment. This ensures consistency in temporal data alignment.
+- **Sampling Rate**: Defines the spacing of the time points that the dataset
+  constructs and hands to the underlying :class:`~experanto.experiment.Experiment`
+  for each item (``time_delta = 1 / sampling_rate``). The experiment then does
+  a lookup into the raw stored data at those points.
 - **Chunk Size**: Determines the number of values returned when calling the ``__getitem__`` method. This is crucial, for example, for deep learning models that use 3D convolutions over time, where single elements or small chunk sizes are insufficient to capture meaningful temporal patterns.
 - **Modality Configuration**: Specifies the details of the interpolation, including:
 

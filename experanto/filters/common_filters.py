@@ -49,7 +49,9 @@ def nan_filter(vicinity=0.05):
             interval_end = min(end_time, time_point + vicinity)
             invalid_intervals.append(TimeInterval(interval_start, interval_end))
 
+        # Merge overlapping invalid intervals
         invalid_intervals = uniquefy_interval_array(invalid_intervals)
+        # Find the complement of invalid intervals to get valid intervals
         valid_intervals = find_complement_of_interval_array(
             start_time, end_time, invalid_intervals
         )

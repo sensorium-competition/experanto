@@ -1,3 +1,5 @@
+.. _dataset_and_dataloader_configuration:
+
 Dataset and dataloader configuration
 ====================================
 
@@ -123,10 +125,23 @@ Dataset options
 """""""""""""""
 
 ``global_sampling_rate``
-   Override sampling rate for all modalities. Set to ``null`` to use per-modality rates.
+   Override sampling rate for all modalities. Set to ``None`` to use
+   per-modality rates.
 
 ``global_chunk_size``
-   Override chunk size for all modalities. Set to ``null`` to use per-modality sizes.
+   Override chunk size (number of time steps/data points) for all modalities.
+   Set to ``None`` to use per-modality sizes.
+
+   The time window covered by a chunk is ``chunk_size / sampling_rate``, so
+   the ``global_sampling_rate`` should be taken into account:
+
+   - **With** ``global_sampling_rate`` set: all modalities share the same
+     output rate, so a single ``global_chunk_size`` unambiguously gives every
+     modality the same time window.
+   - **Without** ``global_sampling_rate`` (per-modality rates active):
+     different modalities have different rates, so the same sample count
+     produces different durations. In this case, leave ``global_chunk_size``
+     as ``None`` and set ``chunk_size`` per modality instead.
 
 ``add_behavior_as_channels``
    If ``True``, concatenate behavioral data (e.g., eye tracker, treadmill) as
@@ -153,21 +168,73 @@ Each modality (e.g., screen, responses, eye_tracker, treadmill) supports:
    Whether to keep NaN values in the output.
 
 ``sampling_rate``
-   Sampling rate in Hz for this modality.
+   Controls the spacing of the time points that the dataset constructs and
+   passes to :meth:`~experanto.experiment.Experiment.interpolate`. Concretely,
+   each item in the dataset requests values at times
+   ``start, start + 1/sampling_rate, start + 2/sampling_rate, …``. The
+   interpolator then interpolates the stored raw samples at those points.
 
 ``chunk_size``
-   Number of samples per chunk.
+   Number of **time steps/data points** returned per item for this modality.
+   Internally, ``sampling_rate`` defines the spacing of the time points passed
+   to the interpolator, so the covered time window is:
+
+   .. math::
+
+      \text{duration (s)} = \frac{\text{chunk\_size}}{\text{sampling\_rate}}
+
+   Note that ``sampling_rate`` here controls the *spacing* of the time points
+   requested from the underlying experiment (see ``sampling_rate`` above). The
+   native acquisition rate of the signal does not matter (the interpolator simply looks up the stored values closest to each requested time, e.g.).
+
+   When per-modality output rates differ, ``chunk_size`` must be set per
+   modality to cover the same time window. The default configuration keeps
+   all modalities at a 2-second window while using different output rates:
+
+   ============  =============  ===========  ===========
+   Modality      sampling_rate  chunk_size   Duration
+   ============  =============  ===========  ===========
+   screen        30 Hz          60           2 s
+   eye_tracker   30 Hz          60           2 s
+   treadmill     30 Hz          60           2 s
+   responses     8 Hz           16           2 s
+   ============  =============  ===========  ===========
+
+   If you unify all rates with ``global_sampling_rate``, use
+   ``global_chunk_size`` instead and this per-modality value is ignored.
+   In general: ``chunk_size = desired_duration_seconds * sampling_rate``.
 
 ``offset``
-   Time offset in seconds relative to the screen timestamps.
+   Time offset in seconds applied to the time points constructed for this
+   modality. For example, if the screen is queried at times
+   ``[t, t + 1/sampling_rate, …]``, setting ``offset = 0.1`` on responses
+   means responses are queried at ``[t + 0.1, t + 0.1 + 1/sampling_rate, …]``.
+   Useful for aligning modalities with known temporal delays relative to the
+   screen stimulus.
 
 ``transforms``
-   Dictionary of transforms to apply. Supports ``"normalize"`` (0-1 scaling)
-   and ``"standardize"`` (z-score normalization).
+   Dictionary of transforms to apply at the dataset level. This is modality
+   specific, i.e., not all modalities support the same set of transforms. Some
+   examples include ``"normalize"`` for sequences, such as eye_tracker,
+   and ``"standardize"`` for responses.
+
+   To understand how transforms are loaded and applied internally, refer to
+   :meth:`experanto.datasets.ChunkDataset.initialize_transforms`. If you need
+   to implement a custom transform, we recommend following the same pattern
+   used there. In particular, note how each entry in the ``transforms``
+   dictionary is checked and, when it is a config ``dict``, instantiated via
+   Hydra before being added to the transform pipeline.
+
+   You can point Experanto to any callable (function or class) by using
+   Hydra's ``_target_`` key, which triggers
+   `hydra.utils.instantiate <https://hydra.cc/docs/advanced/instantiate_objects/overview/>`_
+   under the hood (e.g., ``_target_: my_package.my_module.MyTransform``).
 
 ``interpolation``
-   Interpolation settings including ``interpolation_mode`` (``"linear"`` or
-   ``"nearest_neighbor"``).
+   Interpolation settings. This is modality specific, i.e., not all modalities
+   support the same set of interpolation methods. Some examples include
+   ``"rescale"`` for the screen and ``"interpolation_mode"`` (e.g.,
+   ``"nearest_neighbor"``) for sequences.
 
 ``filters``
    Dictionary of filter functions to apply to the data.

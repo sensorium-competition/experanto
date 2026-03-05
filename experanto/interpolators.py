@@ -21,7 +21,11 @@ class Interpolator:
 
     Interpolators load data from a modality folder and map time points to
     data values. Each modality (e.g., screen, responses, eye_tracker,
-    treadmill) has a specialized interpolator subclass.
+    treadmill) is assigned to a separate interpolator object belonging to
+    one of the Interpolator subclasses (e.g., SequenceInterpolator,
+    ScreenInterpolator, etc.), but multiple modalities can belong to the same
+    class, such as treadmill and eye_tracker both being assigned to the
+    SequenceInterpolator subclass.
 
     Parameters
     ----------
@@ -41,7 +45,7 @@ class Interpolator:
 
     See Also
     --------
-    SequenceInterpolator : For 1D time series data (responses, behaviors).
+    SequenceInterpolator : For time series data (responses, behaviors).
     ScreenInterpolator : For visual stimuli (images, videos).
     TimeIntervalInterpolator : For labeled time intervals (e.g., train/test splits).
     Experiment : High-level interface that manages multiple interpolators.

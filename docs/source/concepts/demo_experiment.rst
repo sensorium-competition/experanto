@@ -3,7 +3,20 @@
 Loading a single experiment
 ===========================
 
-To load an experiment, we use the :class:`~experanto.experiment.Experiment` class. This is particularly useful for testing whether the formatting and interpolation behave as expected before loading multiple experiments into dataset objects.
+To load an experiment, we use the :class:`~experanto.experiment.Experiment`
+class. This class aggregates all modalities and their respective interpolators
+in a single object. Its main job is to unify the access to all modalities.
+
+:class:`~experanto.experiment.Experiment` accepts an arbitrary array of time
+points and returns the corresponding values for each modality by looking them
+up in the raw stored data (e.g., using nearest-neighbour or linear
+interpolation for sequences). When you need a regular sampling grid or
+fixed-length intervals (chunks) for training, a dataset object such as
+:class:`~experanto.datasets.ChunkDataset` should be used **on top of**
+:class:`~experanto.experiment.Experiment`. There you can define the time
+discretization (via ``sampling_rate`` and ``chunk_size``), construct the
+appropriate time points, and delegate the data retrieval to the
+underlying :class:`~experanto.experiment.Experiment`.
 
 Loading an experiment
 ---------------------
@@ -34,8 +47,26 @@ All compatible modalities for the loaded experiment can be checked using:
 
 Interpolating data
 ------------------
-Once the modalities are identified, we can interpolate their data using :meth:`~experanto.experiment.Experiment.interpolate`.
-The following example interpolates a 20-second window with 2 frames per second, resulting in 40 images:
+Once the modalities are identified, we can interpolate their data using
+:meth:`~experanto.experiment.Experiment.interpolate`.
+
+:meth:`~experanto.experiment.Experiment.interpolate` accepts any 1-D array of
+time points and returns, for each modality, an array of shape
+``(len(times), n_signals)``. The number of returned points is always
+``len(times)``, regardless of the native acquisition rate of the modality.
+
+When you call :meth:`~experanto.experiment.Experiment.interpolate` **without**
+a ``device`` argument, every modality receives the *same* time array. This
+means modalities with low native rates can return repeated values for
+consecutive requested times that fall in the same native sample (nearest
+neighbour), while modalities with high native rates will effectively be
+sub-sampled (the behavior is interpolator-dependent). If you need different
+time densities per modality, call :meth:`~experanto.experiment.Experiment.interpolate`
+separately with a different ``times`` array for each ``device``. This is
+exactly what :class:`~experanto.datasets.ChunkDataset` does internally.
+
+The following example interpolates a 20-second window at 2 time points per
+second, resulting in 40 screen frames:
 
 .. code-block:: python
 
