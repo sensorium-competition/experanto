@@ -115,8 +115,10 @@ class Experiment:
                     UserWarning,
                 )
                 dev = Interpolator.create(
-                    d, cache_data=self.cache_data, **interp_conf
-                )  # type: ignore[arg-type]
+                    d,
+                    cache_data=self.cache_data,
+                    **interp_conf,  # type: ignore[arg-type]
+                )
 
             self.devices[d.name] = dev
             self.start_time = dev.start_time

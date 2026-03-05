@@ -602,8 +602,8 @@ class FastSessionDataLoader:
         if (
             dataloader_rng_state is not None
             and hasattr(self, "rng")
-            and self.rng is not None
-        ):  # type: ignore[attr-defined]
+            and self.rng is not None  # type: ignore[attr-defined]
+        ):
             self.rng.set_state(dataloader_rng_state)  # type: ignore[attr-defined]
 
         # Restore RNG state for the batch sampler
