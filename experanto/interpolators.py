@@ -807,7 +807,8 @@ class SpikesInterpolator(Interpolator):
         self.is_mem_mapped = meta.get("is_mem_mapped", False)  # read-only memmap
 
         # Use self.root_folder, defined in the base class
-        self.dat_path = self.root_folder / "spikes.npy"
+        filename = 'spikes.mem' if self.is_mem_mapped else 'spikes.npy'
+        self.dat_path = self.root_folder / filename
 
         # Ensure indices are typed correctly for Numba
         self.indices = np.array(meta["spike_indices"]).astype(np.int64)
