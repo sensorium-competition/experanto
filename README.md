@@ -91,7 +91,7 @@ Full documentation is available at [Read the Docs](https://experanto.readthedocs
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request on [GitHub](https://github.com/sensorium-competition/experanto).
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) and open an issue or submit a pull request on [GitHub](https://github.com/sensorium-competition/experanto).
 
 ## License
 
