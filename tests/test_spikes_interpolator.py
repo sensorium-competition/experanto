@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from scipy.ndimage import gaussian_filter1d
 
-from experanto.interpolators import SpikesInterpolator
+from experanto.interpolators import SpikeInterpolator
 
 from .create_spikes_data import spikes_data_and_interpolator
 
@@ -22,7 +22,7 @@ def test_spikes_interpolation_accuracy(align):
         interp_kwargs={"interpolation_window": window, "interpolation_align": align},
     ) as (gt_spikes, interp):
 
-        assert isinstance(interp, SpikesInterpolator)
+        assert isinstance(interp, SpikeInterpolator)
 
         # Query random times within the duration (avoiding edges for simplicity)
         rng = np.random.default_rng(12345)

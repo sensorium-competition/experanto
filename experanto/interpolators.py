@@ -66,7 +66,7 @@ class Interpolator:
         elif modality == "time_interval":
             return TimeIntervalInterpolator(root_folder, cache_data, **kwargs)
         elif modality == "spikes":
-            return SpikesInterpolator(root_folder, cache_data, **kwargs)
+            return SpikeInterpolator(root_folder, cache_data, **kwargs)
         else:
             raise ValueError(
                 f"There is no interpolator for {modality}. Please use 'sequence', 'screen', 'time_interval' as modality or provide a custom interpolator."
@@ -699,10 +699,10 @@ class InvalidTrial(ScreenTrial):
         return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
 
 
-#  This decorator works on a Python function and does not know how to handle self, so it cannot be a member of a class, here SpikesInterpolator.
+#  This decorator works on a Python function and does not know how to handle self, so it cannot be a member of a class, here SpikeInterpolator.
 # 'parallel=True' allows it to use all CPU cores.
 @njit(parallel=True, fastmath=True)
-def fast_count_spikes(all_spikes, indices, window_starts, window_ends, out_counts):
+def _fast_count_spikes(all_spikes, indices, window_starts, window_ends, out_counts):
     """
     all_spikes: 1D array
     indices: 1D array - start/end of each neuron in all_spikes
@@ -739,7 +739,7 @@ def fast_count_spikes(all_spikes, indices, window_starts, window_ends, out_count
             out_counts[b, i] = c_end - c_start
 
 
-class SpikesInterpolator(Interpolator):
+class SpikeInterpolator(Interpolator):
     """
     Interpolator for spike train data.
 
@@ -880,7 +880,7 @@ class SpikesInterpolator(Interpolator):
         counts = np.zeros((valid_size, self.n_signals), dtype=np.float64)
 
         # 4. Call Numba Engine
-        fast_count_spikes(self.spikes, self.indices, starts, ends, counts)
+        _fast_count_spikes(self.spikes, self.indices, starts, ends, counts)
 
         # 5. Apply Smoothing (Gaussian Filter)
         if self.smoothing_sigma > 0:

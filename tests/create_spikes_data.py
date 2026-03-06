@@ -93,7 +93,7 @@ def spikes_data_and_interpolator(data_kwargs=None, interp_kwargs=None):
     interp_kwargs = interp_kwargs or {}
 
     with create_spikes_data(**data_kwargs) as gt_spikes:
-        # Interpolator.create detects 'modality: spikes' from meta.yml and returns SpikesInterpolator
+        # Interpolator.create detects 'modality: spikes' from meta.yml and returns SpikeInterpolator
         with closing(
             Interpolator.create("tests/spikes_data", **interp_kwargs)
         ) as interp:
