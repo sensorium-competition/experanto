@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import importlib
 import json
+import logging
 import os
 from collections import namedtuple
 from collections.abc import Iterable
@@ -30,6 +31,8 @@ from .utils import add_behavior_as_channels, replace_nan_with_batch_mean
 
 # see .configs.py for the definition of DEFAULT_MODALITY_CONFIG
 DEFAULT_MODALITY_CONFIG = dict()
+
+logger = logging.getLogger(__name__)
 
 
 class SimpleChunkedDataset(Dataset):
@@ -396,11 +399,11 @@ class ChunkDataset(Dataset):
                     filter_function = self._get_callable_filter(filter_config)
                     valid_intervals_ = filter_function(device_=device)
                     if visualize:
-                        print(f"modality: {modality}, filter: {filter_name}")
+                        logger.info(f"modality: {modality}, filter: {filter_name}")
                         visualization_string = get_stats_for_valid_interval(
                             valid_intervals_, self.start_time, self.end_time
                         )
-                        print(visualization_string)
+                        logger.info(visualization_string)
                     if valid_intervals is None:
                         valid_intervals = valid_intervals_
                     else:
@@ -596,21 +599,21 @@ class ChunkDataset(Dataset):
                     data_key = f"{key['animal_id']}-{key['session']}-{key['scan_idx']}"
                     return data_key
                 if "dynamic" in root_folder:
-                    dataset_name = path.split("dynamic")[1].split("-Video")[0]
+                    dataset_name = root_folder.split("dynamic")[1].split("-Video")[0]
                     return dataset_name
-                elif "_gaze" in path:
-                    dataset_name = path.split("_gaze")[0].split("datasets/")[1]
+                elif "_gaze" in root_folder:
+                    dataset_name = root_folder.split("_gaze")[0].split("datasets/")[1]
                     return dataset_name
                 else:
-                    print(
+                    logger.info(
                         f"No 'data_key' found in {meta_file_path}, using folder name instead"
                     )
             except json.JSONDecodeError:
-                print(f"Error: {meta_file_path} is not a valid JSON file")
+                logger.warning(f"Error: {meta_file_path} is not a valid JSON file")
             except Exception as e:
-                print(f"Error loading {meta_file_path}: {str(e)}")
+                logger.warning(f"Error loading {meta_file_path}: {str(e)}")
         else:
-            print(f"No metadata file found at {meta_file_path}")
+            logger.warning(f"No metadata file found at {meta_file_path}")
         return os.path.basename(root_folder)
 
     def __len__(self):

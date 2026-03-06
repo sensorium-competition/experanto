@@ -14,7 +14,7 @@ from omegaconf import DictConfig
 from .configs import DEFAULT_MODALITY_CONFIG
 from .interpolators import Interpolator
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Experiment:
@@ -45,9 +45,9 @@ class Experiment:
 
         for d in device_folders:
             if d.name not in self.modality_config:
-                log.info(f"Skipping {d.name} data... ")
+                logger.info(f"Skipping {d.name} data... ")
                 continue
-            log.info(f"Parsing {d.name} data... ")
+            logger.info(f"Parsing {d.name} data... ")
 
             # Get interpolation config for this device
             interp_conf = self.modality_config[d.name]["interpolation"]
@@ -80,7 +80,7 @@ class Experiment:
             self.devices[d.name] = dev
             self.start_time = dev.start_time
             self.end_time = dev.end_time
-            log.info("Parsing finished")
+            logger.info("Parsing finished")
 
     @property
     def device_names(self):

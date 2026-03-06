@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import typing
@@ -14,6 +15,8 @@ import numpy.lib.format as fmt
 import yaml
 
 from .intervals import TimeInterval
+
+logger = logging.getLogger(__name__)
 
 
 class Interpolator:
@@ -322,7 +325,7 @@ class ScreenInterpolator(Interpolator):
         root_folder: str,
         cache_data: bool = False,  # New parameter
         rescale: bool = False,
-        rescale_size: typing.Optional[tuple(int, int)] = None,
+        rescale_size: typing.Optional[tuple[int, int]] = None,
         normalize: bool = False,
         **kwargs,
     ) -> None:
@@ -402,7 +405,7 @@ class ScreenInterpolator(Interpolator):
 
     def read_combined_meta(self) -> None:
         if not (self.root_folder / "combined_meta.json").exists():
-            print("Combining metadatas...")
+            logger.info("Combining metadatas...")
             self._combine_metadatas()
 
         with open(self.root_folder / "combined_meta.json", "r") as file:

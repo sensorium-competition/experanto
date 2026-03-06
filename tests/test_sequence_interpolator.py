@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import pytest
 
@@ -9,6 +11,7 @@ from experanto.interpolators import (
 from .create_sequence_data import sequence_data_and_interpolator
 
 DEFAULT_SEQUENCE_LENGTH = 10
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.parametrize("n_signals", [0, 1, 10, 50])
@@ -438,5 +441,5 @@ def test_interpolation_mode_not_implemented():
 
 
 if __name__ == "__main__":
-    print("Running tests")
+    logger.info("Running tests")
     pytest.main([__file__])
