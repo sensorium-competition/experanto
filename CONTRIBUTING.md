@@ -23,6 +23,7 @@ Tests live in `tests/`. Synthetic data fixtures are created via context managers
 ```bash
 pytest                                       # all tests
 pytest tests/test_sequence_interpolator.py  # single file
+```
 
 ## Documentation
 
