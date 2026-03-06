@@ -5,6 +5,7 @@
 
 import os
 import sys
+from datetime import datetime
 
 # Add the project root to the path so autodoc can find the modules
 sys.path.insert(0, os.path.abspath("../.."))
@@ -13,7 +14,7 @@ sys.path.insert(0, os.path.abspath("../.."))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "experanto"
-copyright = "2025, sinzlab"
+copyright = f"{datetime.today().strftime('%Y')}, sinzlab"
 author = "sinzlab"
 release = "0.1"
 
