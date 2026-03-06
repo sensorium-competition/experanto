@@ -42,6 +42,6 @@ All sources are in the `docs/` folder. To build locally:
 ## Pull Requests
 
 - Keep PRs focused; one logical change per PR.
-- All existing tests must pass; add tests for new behaviour.
+- All existing tests must pass; add tests for new behavior.
 - Code style checks and type checking must pass.
 - Keep documentation up to date — add, update, or remove docstrings and `docs/source/` pages to reflect your changes.
