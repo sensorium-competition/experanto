@@ -83,9 +83,9 @@ class Experiment:
 
         for d in device_folders:
             if d.name not in self.modality_config:
-                logger.info(f"Skipping {d.name} data... ")
+                logger.info("Skipping %s data... ", d.name)
                 continue
-            logger.info(f"Parsing {d.name} data... ")
+            logger.info("Parsing %s data... ", d.name)
 
             # Get interpolation config for this device
             interp_conf = self.modality_config[d.name]["interpolation"]

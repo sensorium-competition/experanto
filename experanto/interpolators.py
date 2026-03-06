@@ -573,7 +573,7 @@ class ScreenInterpolator(Interpolator):
 
     def read_combined_meta(self) -> tuple[list, list]:
         if not (self.root_folder / "combined_meta.json").exists():
-            logger.info("Combining metadatas...")
+            logger.info("Combining metadata files...")
             self._combine_metadatas()
 
         with open(self.root_folder / "combined_meta.json", "r") as file:

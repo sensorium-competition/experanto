@@ -486,11 +486,11 @@ class ChunkDataset(Dataset):
                     filter_function = self._get_callable_filter(filter_config)
                     valid_intervals_: List[TimeInterval] = filter_function(device_=device)  # type: ignore[assignment]
                     if visualize:
-                        logger.info(f"modality: {modality}, filter: {filter_name}")
+                        logger.info("modality: %s, filter: %s", modality, filter_name)
                         visualization_string = get_stats_for_valid_interval(
                             valid_intervals_, self.start_time, self.end_time
                         )
-                        logger.info(visualization_string)
+                        logger.info("%s", visualization_string)
                     if valid_intervals is None:
                         valid_intervals = valid_intervals_
                     else:
@@ -728,12 +728,12 @@ class ChunkDataset(Dataset):
                     logger.info(
                         f"No 'data_key' found in {meta_file_path}, using folder name instead"
                     )
-            except json.JSONDecodeError:
-                logger.warning(f"Error: {meta_file_path} is not a valid JSON file")
+            except json.JSONDecodeError as e:
+                logger.warning("Error loading %s: %s", meta_file_path, e, exc_info=True)
             except Exception as e:
-                logger.warning(f"Error loading {meta_file_path}: {str(e)}")
+                logger.warning("Error loading %s: %s", meta_file_path, e, exc_info=True)
         else:
-            logger.warning(f"No metadata file found at {meta_file_path}")
+            logger.warning("No metadata file found at %s", meta_file_path)
         return os.path.basename(root_folder)
 
     def __len__(self):

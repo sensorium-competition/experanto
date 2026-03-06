@@ -278,7 +278,7 @@ class SessionConcatDataset(Dataset):
 
         # Log dataset sizes for debugging
         for i, (name, dataset) in enumerate(zip(session_names, datasets)):
-            logger.info("Dataset %s: %s, length = %s", i, name, len(dataset))
+            logger.debug("Dataset %s: %s, length = %s", i, name, len(dataset))
 
         # Compute cumulative sizes for efficient indexing
         self.cumulative_sizes = []
@@ -403,8 +403,8 @@ class SessionBatchSampler(Sampler):
             self.batches_per_session[session_name] = num_batches
             total_batches += num_batches
 
-        logger.info("Batches per session: %s", self.batches_per_session)
-        logger.info("Total batches: %s", total_batches)
+        logger.debug("Batches per session: %s", self.batches_per_session)
+        logger.debug("Total batches: %s", total_batches)
 
     def __len__(self):
         """Return the total number of batches across all sessions."""
@@ -558,7 +558,7 @@ class FastSessionDataLoader:
         # Track active sessions
         self.active_sessions = set(self.session_names)
 
-        logger.info(
+        logger.debug(
             "Created FastSessionDataLoader with %s sessions and %s total batches",
             len(self.session_names),
             len(self),
