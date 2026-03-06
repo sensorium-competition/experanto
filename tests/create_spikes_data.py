@@ -48,7 +48,7 @@ def create_spikes_data(duration=100.0, n_neurons=50, rate=20.0, use_mem_mapped=F
         if use_mem_mapped:
             # Create memmap file
             fp = np.memmap(
-                SPIKES_ROOT / "data.mem",
+                SPIKES_ROOT / "spikes.mem",
                 dtype="float64",
                 mode="w+",
                 shape=flat_spikes.shape,
