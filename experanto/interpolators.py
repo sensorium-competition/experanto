@@ -699,7 +699,7 @@ class InvalidTrial(ScreenTrial):
         return np.full((1,) + self.image_size, self.interleave_value, dtype=np.float32)
 
 
-#  This decorator works on a Python function and does not know how to handle self, so it cannot be a member of a class, here SpikeInterpolator.
+#  This decorator works on a Python function and does not know how to handle self, so it cannot be a member of a class, here SpikesInterpolator.
 # 'parallel=True' allows it to use all CPU cores.
 @njit(parallel=True, fastmath=True)
 def fast_count_spikes(all_spikes, indices, window_starts, window_ends, out_counts):
