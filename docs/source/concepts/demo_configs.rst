@@ -216,7 +216,7 @@ Each modality (e.g., screen, responses, eye_tracker, treadmill) supports:
    Dictionary of transforms to apply at the dataset level. This is modality
    specific, i.e., not all modalities support the same set of transforms. Some
    examples include ``"normalize"`` for sequences, such as eye_tracker,
-   and ``"standardize"`` for responses.
+   and ``"normalize_variance_only"`` for responses.
 
    To understand how transforms are loaded and applied internally, refer to
    :meth:`experanto.datasets.ChunkDataset.initialize_transforms`. If you need
