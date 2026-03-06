@@ -13,7 +13,6 @@ import warnings
 from collections import defaultdict
 from copy import deepcopy
 from functools import partial
-from itertools import cycle
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 # third-party libraries
@@ -28,7 +27,7 @@ from .intervals import TimeInterval
 logger = logging.getLogger(__name__)
 
 
-def replace_nan_with_batch_mean(data: np.array) -> np.array:
+def replace_nan_with_batch_mean(data: np.ndarray) -> np.ndarray:
     row, col = np.where(np.isnan(data))
     for i, j in zip(row, col):
         new_value = np.nanmean(data[:, j])
@@ -37,21 +36,20 @@ def replace_nan_with_batch_mean(data: np.array) -> np.array:
 
 
 def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
-    """
-    Adds behavioral data as additional channels to screen data.
+    """Add behavioral data as additional channels to screen data.
 
-    Input:
-    data = {
-        'screen': torch.Tensor: (c, t, h, w)
-        'eye_tracker': torch.Tensor: (t, c_eye) or (t, h, w)
-        'treadmill': torch.Tensor: (t, c_tread) or (t, h, w)
-    }
+    Parameters
+    ----------
+    data : dict
+        Dictionary with keys 'screen', 'eye_tracker', 'treadmill'.
+        Screen shape: ``(C, T, H, W)``.
+        Behavior shapes: ``(T, C_behavior)`` or ``(T, H, W)``.
 
-    Output:
-    data = {
-        'screen': torch.Tensor: (c+behavior_channels, t, h, w) - contiguous
-        ...
-    }
+    Returns
+    -------
+    dict
+        Modified dictionary with behavior concatenated to screen channels.
+        Screen shape becomes ``(C + behavior_channels, T, H, W)``.
     """
     screen = data["screen"]  # Already contiguous, shape (c, t, h, w)
     c, t, h, w = screen.shape
@@ -93,9 +91,26 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
 
 
 class MultiEpochsDataLoader(torch.utils.data.DataLoader):
-    """solves bug to keep all workers initialized across epochs.
-    From https://discuss.pytorch.org/t/enumerate-dataloader-slow/87778
-    and
+    """DataLoader that keeps workers alive across epochs.
+
+    Solves a bug where worker processes are re-spawned at the start of each
+    epoch, causing significant overhead. Workers are initialized once and
+    reused throughout training.
+
+    Parameters
+    ----------
+    *args
+        Positional arguments forwarded to :class:`torch.utils.data.DataLoader`.
+    shuffle_each_epoch : bool, default=False
+        If True and the underlying dataset has a ``shuffle_valid_screen_times``
+        method, that method is called at the start of every epoch.
+    **kwargs
+        Keyword arguments forwarded to :class:`torch.utils.data.DataLoader`.
+
+    References
+    ----------
+    https://discuss.pytorch.org/t/enumerate-dataloader-slow/87778
+
     https://github.com/huggingface/pytorch-image-models/blob/d72ac0db259275233877be8c1d4872163954dfbb/timm/data/loader.py#L209-L238
     """
 
@@ -113,13 +128,13 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
         self.shuffle_each_epoch = shuffle_each_epoch
 
     def __len__(self):
-        return len(self.batch_sampler.sampler)
+        return len(self.batch_sampler)
 
-    def __iter__(self):
+    def __iter__(self):  # type: ignore[override]
         if self.shuffle_each_epoch and hasattr(
             self.dataset, "shuffle_valid_screen_times"
         ):
-            self.dataset.shuffle_valid_screen_times()
+            self.dataset.shuffle_valid_screen_times()  # type: ignore[union-attr]
         for i in range(len(self)):
             yield next(self.iterator)
 
@@ -155,9 +170,28 @@ class Exhauster:
 
 
 class LongCycler:
-    """
-    Cycles through trainloaders until the loader with largest size is exhausted.
-        Needed for dataloaders of unequal size (as in the monkey data).
+    """Cycle through multiple dataloaders until the longest is exhausted.
+
+    Useful for training with multiple sessions of unequal size. Cycles through
+    all loaders, yielding ``(session_key, batch)`` pairs. Shorter loaders are
+    recycled until the longest loader completes one full epoch.
+
+    Parameters
+    ----------
+    loaders : dict
+        Dictionary mapping session keys to DataLoader instances.
+
+    Attributes
+    ----------
+    max_batches : int
+        Number of batches in the longest loader.
+
+    Examples
+    --------
+    >>> loaders = {'session_1': loader1, 'session_2': loader2}
+    >>> cycler = LongCycler(loaders)
+    >>> for session_key, batch in cycler:
+    ...     print(f"Processing {session_key}")
     """
 
     def __init__(self, loaders):
@@ -178,9 +212,20 @@ class LongCycler:
 
 
 class ShortCycler:
-    """
-    Cycles through trainloaders until the loader with smallest size is exhausted.
-        Needed for dataloaders of unequal size (as in the monkey data).
+    """Cycle through multiple dataloaders until the shortest is exhausted.
+
+    Similar to :class:`LongCycler`, but stops when the smallest loader
+    completes one epoch. No recycling occurs.
+
+    Parameters
+    ----------
+    loaders : dict
+        Dictionary mapping session keys to DataLoader instances.
+
+    Attributes
+    ----------
+    min_batches : int
+        Number of batches in the shortest loader.
     """
 
     def __init__(self, loaders):
@@ -248,7 +293,10 @@ class SessionConcatDataset(Dataset):
         for i, dataset in enumerate(datasets):
             session_name = session_names[i]
             session_size = len(dataset)
-            self.session_indices[session_name] = (start_idx, start_idx + session_size)
+            self.session_indices[session_name] = (
+                start_idx,
+                start_idx + session_size,
+            )
             start_idx += session_size
 
     def __len__(self):
@@ -301,15 +349,21 @@ class SessionBatchSampler(Sampler):
     """
 
     def __init__(self, dataset, batch_size, drop_last=False, shuffle=False, seed=None):
-        """
-        Initialize session batch sampler.
+        """Initialize session batch sampler.
 
-        Args:
-            dataset: The SessionConcatDataset to sample from
-            batch_size: Number of samples per batch
-            drop_last: Whether to drop the last batch if it's smaller than batch_size
-            shuffle: Whether to shuffle samples within each session
-            seed: Random seed for reproducibility
+        Parameters
+        ----------
+        dataset : SessionConcatDataset
+            The dataset to sample from.
+        batch_size : int
+            Number of samples per batch.
+        drop_last : bool, optional
+            Whether to drop the last batch if smaller than batch_size.
+            Default is False.
+        shuffle : bool, optional
+            Whether to shuffle samples within each session. Default is False.
+        seed : int, optional
+            Random seed for reproducibility.
         """
         self.dataset = dataset
         self.batch_size = batch_size
@@ -389,12 +443,45 @@ class SessionBatchSampler(Sampler):
 
 
 class FastSessionDataLoader:
-    """
-    An optimized dataloader that ensures:
-    1. Each session appears exactly once before repeating
-    2. The epoch ends when the longest session is exhausted
-    3. Perfect alignment between sessions and batches is maintained
-    4. State is properly tracked and can be restored
+    """Optimized multi-session dataloader with state tracking.
+
+    Provides efficient data loading across multiple sessions with guarantees:
+
+    - Each session appears exactly once before repeating
+    - Epoch ends when the longest session is exhausted
+    - Perfect alignment between sessions and batches is maintained
+    - State is properly tracked and can be restored
+
+    Parameters
+    ----------
+    dataset : SessionConcatDataset
+        Concatenated dataset with session tracking.
+    batch_size : int, default=1
+        Number of samples per batch.
+    shuffle : bool, default=False
+        Whether to shuffle samples within each session.
+    num_workers : int, default=0
+        Number of worker processes for data loading.
+    pin_memory : bool, default=False
+        Whether to pin memory for GPU transfer.
+    drop_last : bool, default=False
+        Whether to drop incomplete batches.
+    seed : int, optional
+        Random seed for reproducibility.
+    **kwargs
+        Additional arguments passed to underlying DataLoaders.
+
+    Attributes
+    ----------
+    session_names : list
+        Names of all sessions in the dataset.
+    batches_per_session : dict
+        Number of batches in each session.
+
+    See Also
+    --------
+    SessionConcatDataset : Dataset that tracks session membership.
+    LongCycler : Simpler alternative without state tracking.
     """
 
     def __init__(
@@ -408,18 +495,6 @@ class FastSessionDataLoader:
         seed=None,
         **kwargs,
     ):
-        """
-        Initialize optimized session dataloader.
-
-        Args:
-            dataset: The SessionConcatDataset to load from
-            batch_size: Number of samples per batch
-            shuffle: Whether to shuffle indices within sessions
-            num_workers: Number of worker processes for data loading
-            pin_memory: Whether to pin memory in GPU
-            drop_last: Whether to drop the last batch if smaller than batch_size
-            seed: Random seed for reproducibility
-        """
         # Store dataset and parameters
         self.dataset = dataset
         self.batch_size = batch_size
@@ -528,8 +603,12 @@ class FastSessionDataLoader:
 
         # Restore RNG state for the main dataloader
         dataloader_rng_state = state.get("dataloader_rng_state")
-        if dataloader_rng_state is not None and self.rng is not None:
-            self.rng.set_state(dataloader_rng_state)
+        if (
+            dataloader_rng_state is not None
+            and hasattr(self, "rng")
+            and self.rng is not None  # type: ignore[attr-defined]
+        ):
+            self.rng.set_state(dataloader_rng_state)  # type: ignore[attr-defined]
 
         # Restore RNG state for the batch sampler
         batch_sampler_state = state.get("batch_sampler_state")
@@ -609,7 +688,6 @@ class FastSessionDataLoader:
         # Continue until we've gone through one full epoch
         # (i.e., until the longest session is exhausted)
         while active_sessions and position_in_epoch < self.max_batches_per_session:
-
             # Create a cycle order of sessions
             cycle_order = self.batch_sampler.get_session_cycle()
 
@@ -672,15 +750,21 @@ class SessionSpecificSampler(Sampler):
     """
 
     def __init__(self, indices, batch_size, drop_last=False, shuffle=False, seed=None):
-        """
-        Initialize session-specific sampler.
+        """Initialize session-specific sampler.
 
-        Args:
-            indices: List of dataset indices belonging to this session
-            batch_size: Number of samples per batch
-            drop_last: Whether to drop the last batch if smaller than batch_size
-            shuffle: Whether to shuffle indices
-            seed: Random seed for reproducibility
+        Parameters
+        ----------
+        indices : list
+            Dataset indices belonging to this session.
+        batch_size : int
+            Number of samples per batch.
+        drop_last : bool, optional
+            Whether to drop the last batch if smaller than batch_size.
+            Default is False.
+        shuffle : bool, optional
+            Whether to shuffle indices. Default is False.
+        seed : int, optional
+            Random seed for reproducibility.
         """
         self.indices = list(indices)  # Make a copy to avoid modification issues
         self.batch_size = batch_size

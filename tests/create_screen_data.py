@@ -29,7 +29,7 @@ def create_screen_data(
         for i in range(min(image_frame_count, n_frames)):
             np.save(data_dir / f"{i:05d}.npy", frames[i])
             with open(meta_dir / f"{i:05d}.yml", "w") as f:
-                yaml.dump(
+                yaml.safe_dump(
                     {
                         "first_frame_idx": i,
                         "image_size": list(frame_shape),
@@ -53,7 +53,7 @@ def create_screen_data(
                 video_array = np.stack(chunk, axis=0)
                 np.save(data_dir / f"{vid_idx+image_frame_count:05d}.npy", video_array)
                 with open(meta_dir / f"{vid_idx+image_frame_count:05d}.yml", "w") as f:
-                    yaml.dump(
+                    yaml.safe_dump(
                         {
                             "first_frame_idx": start_vid + start,
                             "num_frames": len(chunk),
@@ -65,7 +65,7 @@ def create_screen_data(
                     )
 
         with open(SCREEN_ROOT / "meta.yml", "w") as f:
-            yaml.dump(
+            yaml.safe_dump(
                 {
                     "modality": "screen",
                     "frame_rate": fps,

@@ -65,7 +65,7 @@ def create_sequence_data(
             np.save(SEQUENCE_ROOT / "meta" / "phase_shifts.npy", shifts)
 
         with open(SEQUENCE_ROOT / "meta.yml", "w") as f:
-            yaml.dump(meta, f)
+            yaml.safe_dump(meta, f)
 
         yield timestamps, data, shifts if shifts_per_signal else None
     finally:
