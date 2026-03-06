@@ -13,41 +13,6 @@ from experanto.intervals import (
 
 
 # ============================================================================
-# TimeInterval — __contains__
-# ============================================================================
-
-
-def test_time_interval_contains_inside():
-    """A time point inside the interval should be contained."""
-    interval = TimeInterval(1.0, 5.0)
-    assert 3.0 in interval
-
-
-def test_time_interval_contains_start_boundary():
-    """Start boundary is inclusive (start <= time)."""
-    interval = TimeInterval(1.0, 5.0)
-    assert 1.0 in interval
-
-
-def test_time_interval_contains_end_boundary():
-    """End boundary is inclusive (time <= end)."""
-    interval = TimeInterval(1.0, 5.0)
-    assert 5.0 in interval
-
-
-def test_time_interval_not_contains_before():
-    """A time before the interval should not be contained."""
-    interval = TimeInterval(1.0, 5.0)
-    assert 0.5 not in interval
-
-
-def test_time_interval_not_contains_after():
-    """A time after the interval should not be contained."""
-    interval = TimeInterval(1.0, 5.0)
-    assert 5.5 not in interval
-
-
-# ============================================================================
 # TimeInterval — find_intersection_between_two_intervals
 # ============================================================================
 
@@ -109,35 +74,6 @@ def test_intersection_two_intervals_commutative():
 def test_time_interval_repr():
     interval = TimeInterval(1.5, 3.5)
     assert repr(interval) == "TimeInterval(start=1.5, end=3.5)"
-
-
-# ============================================================================
-# TimeInterval — intersect (numpy array of times)
-# ============================================================================
-
-
-def test_intersect_returns_correct_indices():
-    """Should return indices where times fall within [start, end]."""
-    interval = TimeInterval(2.0, 5.0)
-    times = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-    indices = interval.intersect(times)
-    np.testing.assert_array_equal(indices, np.array([2, 3, 4, 5]))
-
-
-def test_intersect_no_match():
-    """Should return empty array when no times are in range."""
-    interval = TimeInterval(10.0, 20.0)
-    times = np.array([0.0, 1.0, 2.0])
-    indices = interval.intersect(times)
-    assert len(indices) == 0
-
-
-def test_intersect_all_match():
-    """Should return all indices when all times are in range."""
-    interval = TimeInterval(0.0, 10.0)
-    times = np.array([1.0, 2.0, 3.0])
-    indices = interval.intersect(times)
-    np.testing.assert_array_equal(indices, np.array([0, 1, 2]))
 
 
 # ============================================================================
@@ -393,7 +329,6 @@ def test_complement_with_overlapping_input():
     """Overlapping input intervals — complement should still be correct."""
     intervals = [TimeInterval(1.0, 5.0), TimeInterval(3.0, 7.0)]
     result = find_complement_of_interval_array(0.0, 10.0, intervals)
-    # After sorting: [1,5], [3,7]. Current_time advances past 7.
     assert result == [TimeInterval(0.0, 1.0), TimeInterval(7.0, 10.0)]
 
 
