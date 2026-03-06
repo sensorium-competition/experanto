@@ -18,6 +18,40 @@ from .intervals import TimeInterval
 
 
 class Interpolator:
+    """Abstract base class for time series interpolation.
+
+    Interpolators load data from a modality folder and map time points to
+    data values. Each modality (e.g., screen, responses, eye_tracker,
+    treadmill) is assigned to a separate interpolator object belonging to
+    one of the Interpolator subclasses (e.g., SequenceInterpolator,
+    ScreenInterpolator, etc.), but multiple modalities can belong to the same
+    class, such as treadmill and eye_tracker both being assigned to the
+    SequenceInterpolator subclass.
+
+    Parameters
+    ----------
+    root_folder : str
+        Path to the modality directory containing data and metadata files.
+
+    Attributes
+    ----------
+    root_folder : pathlib.Path
+        Path to the modality directory.
+    start_time : float
+        Earliest timestamp in the data.
+    end_time : float
+        Latest timestamp in the data.
+    valid_interval : TimeInterval
+        Time range for which interpolation is valid.
+
+    See Also
+    --------
+    SequenceInterpolator : For time series data (responses, behaviors).
+    ScreenInterpolator : For visual stimuli (images, videos).
+    TimeIntervalInterpolator : For labeled time intervals (e.g., train/test splits).
+    Experiment : High-level interface that manages multiple interpolators.
+    """
+
     def __init__(self, root_folder: str) -> None:
         self.root_folder = Path(root_folder)
         self.start_time = None
@@ -34,8 +68,8 @@ class Interpolator:
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
     ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
+        """Map an array of time points to interpolated data values."""
         ...
-        # returns interpolated signal and boolean mask of valid samples
 
     def __contains__(self, times: np.ndarray):
         return np.any(self.valid_times(times))
@@ -48,6 +82,30 @@ class Interpolator:
 
     @staticmethod
     def create(root_folder: str, cache_data: bool = False, **kwargs) -> "Interpolator":
+        """Factory method to create the appropriate interpolator for a modality.
+
+        Reads the ``meta.yml`` file in the folder to determine the modality type
+        and instantiates the corresponding interpolator subclass.
+
+        Parameters
+        ----------
+        root_folder : str
+            Path to the modality directory.
+        cache_data : bool, default=False
+            If True, loads all data into memory for faster access.
+        **kwargs
+            Additional arguments passed to the interpolator constructor.
+
+        Returns
+        -------
+        Interpolator
+            An instance of the appropriate interpolator subclass.
+
+        Raises
+        ------
+        ValueError
+            If the modality type is not supported.
+        """
         with open(Path(root_folder) / "meta.yml", "r") as file:
             meta_data = yaml.safe_load(file)
         modality = meta_data.get("modality")
@@ -79,6 +137,52 @@ class Interpolator:
 
 
 class SequenceInterpolator(Interpolator):
+    """Interpolator for time series data.
+
+    Handles regularly-sampled time series stored as memory-mapped or NumPy
+    arrays. Supports nearest-neighbor and linear interpolation modes.
+
+    Parameters
+    ----------
+    root_folder : str
+        Path to the modality directory containing ``data.mem`` or ``data.npy``.
+    cache_data : bool, default=False
+        If True, loads memory-mapped data into RAM for faster access.
+    keep_nans : bool, default=False
+        If False and ``interpolation_mode='linear'``, replaces NaN values with
+        column means during interpolation. For ``'nearest_neighbor'``, NaNs are
+        left unchanged.
+    interpolation_mode : str, default='nearest_neighbor'
+        Interpolation method: ``'nearest_neighbor'`` or ``'linear'``.
+    normalize : bool, default=False
+        If True, normalizes data using stored mean/std statistics.
+    normalize_subtract_mean : bool, default=False
+        If True, subtracts mean during normalization.
+    normalize_std_threshold : float, optional
+        Minimum std threshold to prevent division by near-zero values.
+    **kwargs
+        Additional keyword arguments (ignored).
+
+    Attributes
+    ----------
+    sampling_rate : float
+        Original sampling rate of the data in Hz.
+    time_delta : float
+        Time between samples (1 / sampling_rate).
+    n_signals : int
+        Number of signals (e.g., neurons, behavior channels).
+
+    Notes
+    -----
+    For linear interpolation, values are computed as:
+
+    .. math::
+
+        y(t) = y_0 \\cdot \\frac{t_1 - t}{t_1 - t_0} + y_1 \\cdot \\frac{t - t_0}{t_1 - t_0},
+
+    where :math:`t_0` and :math:`t_1` are the surrounding sample times.
+    """
+
     def __init__(
         self,
         root_folder: str,
@@ -90,10 +194,6 @@ class SequenceInterpolator(Interpolator):
         normalize_std_threshold: typing.Optional[float] = None,  # or 0.01
         **kwargs,
     ) -> None:
-        """
-        interpolation_mode - nearest neighbor or linear
-        keep_nans - if we keep nans in linear interpolation
-        """
         super().__init__(root_folder)
         meta = self.load_meta()
         self.keep_nans = keep_nans
@@ -228,6 +328,25 @@ class SequenceInterpolator(Interpolator):
 
 
 class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
+    """Sequence interpolator with per-signal phase shifts.
+
+    Extends :class:`SequenceInterpolator` to handle signals recorded with
+    different phase offsets (e.g., neurons with different response latencies).
+    Each signal is interpolated at its own phase-shifted time.
+
+    Parameters
+    ----------
+    root_folder : str
+        Path to the modality directory. Must contain ``meta/phase_shifts.npy``.
+    **kwargs
+        All parameters from :class:`SequenceInterpolator`.
+
+    Attributes
+    ----------
+    _phase_shifts : numpy.ndarray
+        Per-signal phase shift values in seconds.
+    """
+
     def __init__(
         self,
         root_folder: str,
@@ -333,6 +452,43 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
 
 class ScreenInterpolator(Interpolator):
+    """Interpolator for visual stimuli (images and videos).
+
+    Handles frame-based visual data organized as trials. Each trial can be
+    a single image, a video sequence, or a blank screen. Frames are indexed
+    by timestamp and retrieved on demand.
+
+    Parameters
+    ----------
+    root_folder : str
+        Path to the screen modality directory containing ``timestamps.npy``,
+        ``data/`` folder with trial files, and ``meta/`` folder with metadata.
+    cache_data : bool, default=False
+        If True, loads all trial data into memory for faster access.
+    rescale : bool, default=False
+        If True, rescales frames to ``rescale_size``.
+    rescale_size : tuple of int, optional
+        Target size ``(height, width)`` for rescaling. If None, uses the
+        native image size from metadata.
+    normalize : bool, default=False
+        If True, normalizes frames using stored mean/std statistics.
+    **kwargs
+        Additional keyword arguments (ignored).
+
+    Attributes
+    ----------
+    timestamps : numpy.ndarray
+        Array of frame timestamps.
+    trials : list of ScreenTrial
+        List of trial objects containing frame data.
+
+    See Also
+    --------
+    ImageTrial : Single-frame stimuli.
+    VideoTrial : Multi-frame video stimuli.
+    BlankTrial : Blank/gray screen stimuli.
+    """
+
     def __init__(
         self,
         root_folder: str,
@@ -342,10 +498,6 @@ class ScreenInterpolator(Interpolator):
         normalize: bool = False,
         **kwargs,
     ) -> None:
-        """
-        rescale would rescale images to the _image_size if true
-        cache_data: if True, loads and keeps all trial data in memory
-        """
         super().__init__(root_folder)
         self.timestamps = np.load(self.root_folder / "timestamps.npy")
         self.start_time = self.timestamps[0]
@@ -488,9 +640,17 @@ class ScreenInterpolator(Interpolator):
         return (out, valid) if return_valid else out
 
     def rescale_frame(self, frame: np.ndarray) -> np.ndarray:
-        """
-        Changes the resolution of the image to this size.
-        Returns: Rescaled image
+        """Rescale frame to the configured image size.
+
+        Parameters
+        ----------
+        frame : np.ndarray
+            Input image frame.
+
+        Returns
+        -------
+        np.ndarray
+            Rescaled image as float32.
         """
         return cv2.resize(frame, self._image_size, interpolation=cv2.INTER_AREA).astype(
             np.float32
@@ -498,6 +658,48 @@ class ScreenInterpolator(Interpolator):
 
 
 class TimeIntervalInterpolator(Interpolator):
+    """Interpolator for labeled time intervals.
+
+    Maps time points to boolean membership in labeled intervals. Given a
+    set of time points, returns a boolean array indicating whether each
+    point falls within any interval for each label.
+
+    Labels and their intervals are defined in the ``meta.yml`` file under
+    the ``labels`` key. Each label points to a ``.npy`` file containing an
+    array of shape ``(n, 2)``, where each row is a ``[start, end)``
+    half-open time interval. Typical labels include ``'train'``,
+    ``'validation'``, ``'test'``, ``'saccade'``, ``'gaze'``, or
+    ``'target'``.
+
+    The half-open convention means a timestamp *t* is considered inside an
+    interval when ``start <= t < end``. Intervals where ``start > end``
+    are treated as invalid and trigger a warning.
+
+    Parameters
+    ----------
+    root_folder : str
+        Path to the modality directory containing ``meta.yml`` and the
+        ``.npy`` interval files referenced by its ``labels`` mapping.
+    cache_data : bool, default=False
+        If True, loads all interval arrays into memory at init time.
+    **kwargs
+        Additional keyword arguments (ignored).
+
+    Attributes
+    ----------
+    meta_labels : dict
+        Mapping from label names to ``.npy`` filenames.
+
+    Notes
+    -----
+    - Only time points within the valid interval (as defined by
+      ``start_time`` and ``end_time`` in ``meta.yml``) are considered;
+      others are filtered out.
+    - The ``interpolate`` method returns an array of shape
+      ``(n_valid_times, n_labels)`` where ``out[i, j]`` is True if the
+      *i*-th valid time falls within any interval for the *j*-th label.
+    """
+
     def __init__(self, root_folder: str, cache_data: bool = False, **kwargs):
         super().__init__(root_folder)
         self.cache_data = cache_data
@@ -517,41 +719,6 @@ class TimeIntervalInterpolator(Interpolator):
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
     ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
-        """
-        Interpolate time intervals for labeled events.
-
-        Given a set of time points and a set of labeled intervals (defined in the
-        `meta.yml` file), this method returns a boolean array indicating, for each
-        time point, whether it falls within any interval for each label.
-
-        The method uses half-open intervals [start, end), where a timestamp t is
-        considered to fall within an interval if start <= t < end. This means the
-        start time is inclusive and the end time is exclusive.
-
-        Parameters
-        ----------
-        times : np.ndarray
-            Array of time points to be checked against the labeled intervals.
-
-        Returns
-        -------
-        out : np.ndarray of bool, shape (len(valid_times), n_labels)
-            Boolean array where each row corresponds to a valid time point and each
-            column corresponds to a label. `out[i, j]` is True if the i-th valid
-            time falls within any interval for the j-th label, and False otherwise.
-
-        Notes
-        -----
-        - The labels and their corresponding intervals are defined in the `meta.yml`
-          file under the `labels` key. Each label points to a `.npy` file containing
-          an array of shape (n, 2), where each row is a [start, end) time interval.
-        - Typical labels might include 'train', 'validation', 'test', 'saccade',
-          'gaze', or 'target'.
-        - Only time points within the valid interval (as defined by start_time and
-          end_time in meta.yml) are considered; others are filtered out.
-        - Intervals where start > end are considered invalid and will trigger a
-          warning.
-        """
         valid = self.valid_times(times)
         valid_times = times[valid]
 
@@ -562,7 +729,11 @@ class TimeIntervalInterpolator(Interpolator):
             warnings.warn(
                 "TimeIntervalInterpolator returns an empty array, no valid times queried."
             )
-            return np.empty((0, n_labels), dtype=bool)
+            return (
+                (np.empty((0, n_labels), dtype=bool), valid)
+                if return_valid
+                else np.empty((0, n_labels), dtype=bool)
+            )
 
         out = np.zeros((n_times, n_labels), dtype=bool)
         for i, (label, filename) in enumerate(self.meta_labels.items()):
@@ -591,6 +762,27 @@ class TimeIntervalInterpolator(Interpolator):
 
 
 class ScreenTrial:
+    """Base class for visual stimulus trials.
+
+    Represents a single trial (stimulus presentation) in a screen recording.
+    Subclasses handle different trial types: images, videos, and blanks.
+
+    Parameters
+    ----------
+    data_file_name : str
+        Path to the data file for this trial.
+    meta_data : dict
+        Metadata dictionary for the trial.
+    image_size : tuple
+        Frame dimensions ``(height, width)`` or ``(height, width, channels)``.
+    first_frame_idx : int
+        Index of the first frame in the global timestamp array.
+    num_frames : int
+        Number of frames in this trial.
+    cache_data : bool, default=False
+        If True, loads and caches data on initialization.
+    """
+
     def __init__(
         self,
         data_file_name: Union[str, Path],
@@ -613,7 +805,9 @@ class ScreenTrial:
 
     @staticmethod
     def create(
-        data_file_name: Union[str, Path], meta_data: dict, cache_data: bool = False
+        data_file_name: Union[str, Path],
+        meta_data: dict,
+        cache_data: bool = False,
     ) -> "ScreenTrial":
         modality = meta_data.get("modality")
         assert modality is not None
@@ -636,6 +830,8 @@ class ScreenTrial:
 
 
 class ImageTrial(ScreenTrial):
+    """Trial containing a single static image."""
+
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         super().__init__(
             data_file_name,
@@ -648,6 +844,8 @@ class ImageTrial(ScreenTrial):
 
 
 class VideoTrial(ScreenTrial):
+    """Trial containing a multi-frame video sequence."""
+
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         super().__init__(
             data_file_name,
@@ -660,6 +858,8 @@ class VideoTrial(ScreenTrial):
 
 
 class BlankTrial(ScreenTrial):
+    """Trial containing a blank/gray screen (inter-stimulus interval)."""
+
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         self.interleave_value = meta_data.get("interleave_value")
 
@@ -678,6 +878,8 @@ class BlankTrial(ScreenTrial):
 
 
 class InvalidTrial(ScreenTrial):
+    """Placeholder for invalid or corrupted trials."""
+
     def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
         self.interleave_value = meta_data.get("interleave_value")
 
