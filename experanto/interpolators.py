@@ -832,7 +832,7 @@ class SpikesInterpolator(Interpolator):
         # Use the unified cache_data flag for eager loading
         if self.is_mem_mapped:
             self.spikes = np.memmap(
-                self.root_folder / "data.mem",
+                self.dat_path,
                 dtype=meta.get("dtype", "float64"),
                 mode="r",
                 shape=(self.indices[-1],),
