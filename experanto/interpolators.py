@@ -982,7 +982,7 @@ class SpikeInterpolator(Interpolator):
     smoothing_sigma : float, optional
         Standard deviation for a Gaussian filter applied to the resulting
         spike counts along the time axis. The unit is in number of time steps
-        (array indices), not physical time. 
+        (array indices), not physical time.
         If your times are 30Hz (33ms) and you want 100ms smoothing,
         sigma should be ~3.
         Set to 0.0 to disable smoothing.
@@ -1019,10 +1019,10 @@ class SpikeInterpolator(Interpolator):
         self.indices = np.array(meta["spike_indices"]).astype(np.int64)
         self.n_signals = len(self.indices) - 1
         meta_n_signals = meta.get("n_signals")
-        if meta_n_signals is not None and meta_n_signals != computed_n_signals:
+        if meta_n_signals is not None and meta_n_signals != self.n_signals:
             raise ValueError(
                 f"Mismatch between meta['n_signals'] ({meta_n_signals}) and "
-                f"len(spike_indices) - 1 ({computed_n_signals})."
+                f"len(spike_indices) - 1 ({self.n_signals})."
             )
 
         # Check interpolation_align validity
