@@ -24,6 +24,8 @@ from torch.utils.data import ConcatDataset, DataLoader, Dataset, Sampler
 # local libraries
 from .intervals import TimeInterval
 
+logger = logging.getLogger(__name__)
+
 
 def replace_nan_with_batch_mean(data: np.ndarray) -> np.ndarray:
     row, col = np.where(np.isnan(data))
@@ -274,9 +276,9 @@ class SessionConcatDataset(Dataset):
             session_names = [f"session_{i}" for i in range(len(datasets))]
         self.session_names = session_names
 
-        # Print dataset sizes for debugging
+        # Log dataset sizes for debugging
         for i, (name, dataset) in enumerate(zip(session_names, datasets)):
-            print(f"Dataset {i}: {name}, length = {len(dataset)}")
+            logger.debug("Dataset %s: %s, length = %s", i, name, len(dataset))
 
         # Compute cumulative sizes for efficient indexing
         self.cumulative_sizes = []
@@ -377,7 +379,7 @@ class SessionBatchSampler(Sampler):
 
         # Get sessions
         self.session_names = list(dataset.session_indices.keys())
-        print(f"Sessions: {self.session_names}")
+        logger.info("Sessions: %s", self.session_names)
 
         self.consumed_sessions = []
 
@@ -401,8 +403,8 @@ class SessionBatchSampler(Sampler):
             self.batches_per_session[session_name] = num_batches
             total_batches += num_batches
 
-        print(f"Batches per session: {self.batches_per_session}")
-        print(f"Total batches: {total_batches}")
+        logger.debug("Batches per session: %s", self.batches_per_session)
+        logger.debug("Total batches: %s", total_batches)
 
     def __len__(self):
         """Return the total number of batches across all sessions."""
@@ -556,8 +558,10 @@ class FastSessionDataLoader:
         # Track active sessions
         self.active_sessions = set(self.session_names)
 
-        print(
-            f"Created FastSessionDataLoader with {len(self.session_names)} sessions and {len(self)} total batches"
+        logger.debug(
+            "Created FastSessionDataLoader with %s sessions and %s total batches",
+            len(self.session_names),
+            len(self),
         )
 
     def __len__(self):
@@ -641,8 +645,10 @@ class FastSessionDataLoader:
             if sampler_state is not None and hasattr(sampler, "set_state"):
                 sampler.set_state(sampler_state)
 
-        print(
-            f"Restored dataloader state to batch {self.current_batch}, epoch {self.epoch}"
+        logger.info(
+            "Restored dataloader state to batch %s, epoch %s",
+            self.current_batch,
+            self.epoch,
         )
 
     def __iter__(self):
