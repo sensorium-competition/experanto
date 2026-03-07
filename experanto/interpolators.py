@@ -893,7 +893,6 @@ class SpikeInterpolator(Interpolator):
                 # sigma should be ~3.
                 counts = gaussian_filter1d(counts, sigma=self.smoothing_sigma, axis=0)
 
-        # SIGNATURE FIX: Return both data and the mask
         return (counts, valid) if return_valid else counts
 
     def close(self):
