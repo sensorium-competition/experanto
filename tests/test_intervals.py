@@ -2,14 +2,13 @@ import numpy as np
 
 from experanto.intervals import (
     TimeInterval,
-    uniquefy_interval_array,
-    find_intersection_between_two_interval_arrays,
-    find_intersection_across_arrays_of_intervals,
-    find_union_across_arrays_of_intervals,
     find_complement_of_interval_array,
+    find_intersection_across_arrays_of_intervals,
+    find_intersection_between_two_interval_arrays,
+    find_union_across_arrays_of_intervals,
     get_stats_for_valid_interval,
+    uniquefy_interval_array,
 )
-
 
 # ============================================================================
 # TimeInterval — find_intersection_between_two_intervals
@@ -59,10 +58,9 @@ def test_intersection_two_intervals_commutative():
     """a ∩ b should equal b ∩ a."""
     a = TimeInterval(1.0, 5.0)
     b = TimeInterval(3.0, 7.0)
-    assert (
-        a.find_intersection_between_two_intervals(b)
-        == b.find_intersection_between_two_intervals(a)
-    )
+    assert a.find_intersection_between_two_intervals(
+        b
+    ) == b.find_intersection_between_two_intervals(a)
 
 
 # ============================================================================
@@ -181,16 +179,12 @@ def test_array_intersection_multiple():
 
 
 def test_array_intersection_empty_first():
-    result = find_intersection_between_two_interval_arrays(
-        [], [TimeInterval(1.0, 5.0)]
-    )
+    result = find_intersection_between_two_interval_arrays([], [TimeInterval(1.0, 5.0)])
     assert result == []
 
 
 def test_array_intersection_empty_second():
-    result = find_intersection_between_two_interval_arrays(
-        [TimeInterval(1.0, 5.0)], []
-    )
+    result = find_intersection_between_two_interval_arrays([TimeInterval(1.0, 5.0)], [])
     assert result == []
 
 
@@ -290,9 +284,7 @@ def test_complement_of_empty():
 
 def test_complement_of_full_coverage():
     """Full coverage has no complement."""
-    result = find_complement_of_interval_array(
-        0.0, 10.0, [TimeInterval(0.0, 10.0)]
-    )
+    result = find_complement_of_interval_array(0.0, 10.0, [TimeInterval(0.0, 10.0)])
     assert result == []
 
 
