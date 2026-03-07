@@ -748,7 +748,7 @@ class SpikeInterpolator(Interpolator):
 
     Data Storage Format:
     --------------------
-    The spike data must be stored in a flat 1D binary file named `spikes.npy`
+    The spike data must be stored in a flat 1D binary file named `spikes.npy` or `spikes.mem`
     (dtype: float64) inside the `root_folder`.
 
     The array contains the actual continuous spike timings (e.g., in seconds).
