@@ -874,7 +874,6 @@ class SpikeInterpolator(Interpolator):
             )
 
         # 3. Prepare Output
-        # SIZE FIX: Only allocate for the VALID batch size
         # valid_size refers to the number of valid timestamps you are querying at once.
         valid_size = len(valid_times)
         counts = np.zeros((valid_size, self.n_signals), dtype=np.float64)
