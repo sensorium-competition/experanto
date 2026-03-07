@@ -780,7 +780,10 @@ class SpikeInterpolator(Interpolator):
     smoothing_sigma : float, optional
         Standard deviation for a Gaussian filter applied to the resulting
         spike counts along the time axis. The unit is in number of time steps
-        (array indices), not physical time. Set to 0.0 to disable smoothing.
+        (array indices), not physical time. 
+        If your times are 30Hz (33ms) and you want 100ms smoothing,
+        sigma should be ~3.
+        Set to 0.0 to disable smoothing.
         Default is 0.0.
     """
 
