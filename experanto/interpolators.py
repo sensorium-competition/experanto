@@ -13,9 +13,9 @@ import cv2
 import numpy as np
 import numpy.lib.format as fmt
 import yaml
-from torchcodec.decoders import VideoDecoder, set_cuda_backend
 from numba import njit, prange
 from scipy.ndimage import gaussian_filter1d
+from torchcodec.decoders import VideoDecoder, set_cuda_backend
 
 from .intervals import TimeInterval
 
