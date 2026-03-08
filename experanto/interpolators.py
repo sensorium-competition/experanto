@@ -7,10 +7,11 @@ import typing
 import warnings
 from abc import abstractmethod
 from pathlib import Path
-from typing import Union, cast
+from typing import Optional, Union, cast
 
 import cv2
 import numpy as np
+import torch
 import numpy.lib.format as fmt
 import yaml
 from numba import njit, prange
@@ -546,8 +547,8 @@ class ScreenInterpolator(Interpolator):
         self.mean = np.load(self.root_folder / "meta/means.npy")
         self.std = np.load(self.root_folder / "meta/stds.npy")
         if self.rescale:
-            self.mean = self.rescale_frame(self.mean.T).T
-            self.std = self.rescale_frame(self.std.T).T
+            self.mean = self.rescale_frames(self.mean.T).T
+            self.std = self.rescale_frames(self.std.T).T
         assert (
             self.mean.shape == self._image_size
         ), f"mean size is different: {self.mean.shape} vs {self._image_size}"
@@ -708,7 +709,7 @@ class ScreenInterpolator(Interpolator):
         )  # transform into (T, C, H, W) after finishing with Cv2 operation
         return (out, valid) if return_valid else out
 
-    def format_data(self, data: np.array) -> np.array:
+    def format_data(self, data: np.ndarray) -> np.ndarray:
         # Make sure all data has shape (T, H, W, C)
         if len(data.shape) == 2:
             # (H, W) → add time at dim 0 and channels at dim 3
@@ -791,13 +792,13 @@ class ScreenInterpolator(Interpolator):
                 (
                     cv2.resize(
                         frame,
-                        np.flip(self._image_size),
+                        tuple(np.flip(self._image_size)),
                         interpolation=cv2.INTER_AREA,
                     )[:, :, np.newaxis]
                     if frame.shape[2] == 1
                     else cv2.resize(
                         frame,
-                        np.flip(self._image_size),
+                        tuple(np.flip(self._image_size)),
                         interpolation=cv2.INTER_AREA,
                     )
                 )
@@ -959,7 +960,7 @@ class ScreenTrial:
         meta_data: dict,
         cache_data: bool = False,
         encoded: bool = False,
-        shared_decoder: VideoDecoder = None,
+        shared_decoder: Optional[VideoDecoder] = None,
     ) -> "ScreenTrial":
         modality = meta_data.get("modality")
         assert modality is not None
@@ -973,6 +974,7 @@ class ScreenTrial:
 
         # Pass shared_decoder only for EncodedVideoTrials
         if cls is EncodedVideoTrial:
+            assert shared_decoder is not None
             return cls(
                 data_file_name,
                 meta_data,
@@ -990,7 +992,7 @@ class ScreenTrial:
         """Wrapper that handles caching"""
         if self._cached_data is not None:
             return self._cached_data
-        return self.get_data_(*args, **kwargs)
+        return self.get_data_()
 
     def get_meta(self, property: str):
         return self._meta_data.get(property)
@@ -1021,7 +1023,7 @@ class EncodedImageTrial(ScreenTrial):
             cache_data=cache_data,
         )
 
-    def get_data_(self) -> np.array:
+    def get_data_(self) -> np.ndarray:
         """Override base implementation to load compressed images"""
         img = cv2.imread(str(self.data_file_name))  # returns BGR
         if img is None:
@@ -1047,7 +1049,7 @@ class VideoTrial(ScreenTrial):
 
 class EncodedVideoTrial(ScreenTrial):
     def __init__(
-        self, data_file_name, meta_data, shared_decoder=None, cache_data: bool = False
+        self, data_file_name, meta_data, shared_decoder: VideoDecoder, cache_data: bool = False
     ) -> None:
         super().__init__(
             data_file_name,
@@ -1063,21 +1065,21 @@ class EncodedVideoTrial(ScreenTrial):
                 "EncodedVideoTrial requires a shared_decoder to be provided."
             )
 
-    def get_data(self, frame_indices) -> np.array:
+    def get_data(self, frame_indices) -> np.ndarray:
         """Overwrite Wrapper to accept Frame Indices"""
         if self._cached_data is not None:
             # We index here since cached data contains all frames and EncodedVideoTrial is not indexed in main loop
             return self._cached_data[frame_indices]
         return self.get_data_(frame_indices)
 
-    def get_data_(self, frame_indices=None) -> np.array:
+    def get_data_(self, frame_indices=None) -> np.ndarray:
         """Override base implementation to load compressed videos"""
         # Frame_indices is only ever None for caching purposes, we then decode entire video and cache it
         if frame_indices is None:
             frame_indices = np.arange(self.num_frames)
 
         frames = self.video_decoder.get_frames_at(
-            frame_indices
+            torch.from_numpy(frame_indices)
         ).data  # T,C,H,W (BGR), CPU or GPU
         # BGR → RGB
         frames = frames[:, [2, 1, 0], ...]

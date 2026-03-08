@@ -188,6 +188,7 @@ class Experiment:
         """
         if device is None:
             values = {}
+            valid = {}
             for d, interp in self.devices.items():
                 res = interp.interpolate(times, return_valid=return_valid)
                 if return_valid:
