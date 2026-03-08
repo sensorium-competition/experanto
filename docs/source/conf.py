@@ -82,6 +82,7 @@ autodoc_mock_imports = [
     "plotly",
     "optree",
     "rootutils",
+    "numba",
 ]
 
 # -- Intersphinx settings (cross-references to external docs) ----------------
