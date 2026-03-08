@@ -11,8 +11,8 @@ from typing import Optional, Union, cast
 
 import cv2
 import numpy as np
-import torch
 import numpy.lib.format as fmt
+import torch
 import yaml
 from numba import njit, prange
 from scipy.ndimage import gaussian_filter1d
@@ -1049,7 +1049,11 @@ class VideoTrial(ScreenTrial):
 
 class EncodedVideoTrial(ScreenTrial):
     def __init__(
-        self, data_file_name, meta_data, shared_decoder: VideoDecoder, cache_data: bool = False
+        self,
+        data_file_name,
+        meta_data,
+        shared_decoder: VideoDecoder,
+        cache_data: bool = False,
     ) -> None:
         super().__init__(
             data_file_name,
