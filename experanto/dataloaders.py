@@ -26,15 +26,46 @@ def get_multisession_dataloader(
     shuffle_keys: bool = False,
     **kwargs,
 ) -> LongCycler:
-    """
-    Create a multisession dataloader from a list of paths and corresponding configs.
-    Args:
-        paths (List[str]): List of paths to the datasets.
-        configs (Union[DictConfig, Dict, List[Union[DictConfig, Dict]]]): Configuration for each dataset.
-            If a single config is provided, it will be applied to all datasets.
-            If a list is provided, it should match the length of paths.
-        shuffle_keys (bool): Whether to shuffle the keys of the dataloaders.
-        **kwargs: Additional keyword arguments for dataset and dataloader configuration.
+    """Create a multi-session dataloader from multiple experiment paths.
+
+    By default, creates a :class:`ChunkDataset` for each path and wraps them in
+    a :class:`LongCycler` that yields ``(session_key, batch)`` pairs.
+    The cycler continues until the longest session is exhausted.
+
+    Parameters
+    ----------
+    paths : list of str
+        Paths to experiment directories.
+    configs : dict, DictConfig,  list, optional
+        Configuration for each dataset. If a single config is provided,
+        it will be applied to all datasets. If a list is provided, it
+        should match the length of ``paths``. Each config should have
+        ``dataset`` and ``dataloader`` keys.
+    shuffle_keys : bool, default=False
+        Whether to shuffle the order of session keys.
+    **kwargs
+        Additional keyword arguments. Supports ``config`` as an alias
+        for ``configs``.
+
+    Returns
+    -------
+    LongCycler
+        A dataloader-like object that yields ``(session_key, batch)`` tuples.
+        Iterates until the longest session is exhausted.
+
+    See Also
+    --------
+    get_multisession_concat_dataloader : Alternative that concatenates sessions.
+    LongCycler : The underlying multi-session iterator.
+
+    Examples
+    --------
+    >>> from experanto.dataloaders import get_multisession_dataloader
+    >>> from experanto.configs import DEFAULT_CONFIG
+    >>> paths = ['/path/to/exp1', '/path/to/exp2']
+    >>> loader = get_multisession_dataloader(paths, configs=DEFAULT_CONFIG)
+    >>> for session_key, batch in loader:
+    ...     print(f"Session: {session_key}, batch shape: {batch['responses'].shape}")
     """
 
     if configs is None and "config" in kwargs:
@@ -70,20 +101,51 @@ def get_multisession_concat_dataloader(
     dataloader_config: Optional[Dict] = None,
     **kwargs,
 ) -> Optional["FastSessionDataLoader"]:
-    """
-    Creates a multi-session dataloader using SessionConcatDataset and SessionDataLoader.
-    Returns (session_key, batch) pairs during iteration.
+    """Create a concatenated multi-session dataloader.
 
-    Args:
-        paths: List of paths to dataset files
-        configs: Configuration for datasets (single config or list of configs)
-        seed: Random seed for reproducibility
-        num_workers: Number of worker processes for data loading
-        prefetch_factor: Prefetch factor for data loading
-        **kwargs: Additional arguments
+    Unlike :func:`get_multisession_dataloader`, this function concatenates
+    all sessions into a single dataset and uses batch sampling to ensure
+    each batch contains samples from only one session. This is more
+    memory-efficient and provides better shuffling across sessions.
 
-    Returns:
-        SessionDataLoader instance or None if no valid datasets found
+    Parameters
+    ----------
+    paths : list of str
+        Paths to experiment directories.
+    configs : dict or list of dict, optional
+        Configuration for each dataset. If a single config is provided,
+        it will be applied to all datasets. Each config should have
+        ``dataset`` and ``dataloader`` keys.
+    seed : int, default=0
+        Random seed for reproducibility. Each dataset gets a deterministic
+        seed derived from this value and its path hash.
+    dataloader_config : dict, optional
+        Configuration for the dataloader (batch_size, num_workers, etc.).
+        If None, uses the dataloader config from the first config.
+    **kwargs
+        Additional keyword arguments. Supports ``config`` as an alias
+        for ``configs``.
+
+    Returns
+    -------
+    FastSessionDataLoader or None
+        A dataloader that yields ``(session_key, batch)`` tuples.
+        Returns None if no valid datasets could be created.
+
+    See Also
+    --------
+    get_multisession_dataloader : Alternative using separate dataloaders.
+    FastSessionDataLoader : The underlying dataloader implementation.
+    SessionConcatDataset : Dataset that concatenates multiple sessions.
+
+    Examples
+    --------
+    >>> from experanto.dataloaders import get_multisession_concat_dataloader
+    >>> from experanto.configs import DEFAULT_CONFIG
+    >>> paths = ['/path/to/exp1', '/path/to/exp2', '/path/to/exp3']
+    >>> loader = get_multisession_concat_dataloader(paths, configs=DEFAULT_CONFIG)
+    >>> for session_key, batch in loader:
+    ...     print(f"Session: {session_key}")
     """
     if configs is None and "config" in kwargs:
         configs = kwargs.pop("config")
@@ -98,7 +160,6 @@ def get_multisession_concat_dataloader(
 
     start_time = time.time()
     for i, (path, cfg) in enumerate(zip(paths, configs)):
-
         # Create dataset with deterministic seed
         path_hash = hash(path) % 10000
         dataset_seed = seed + path_hash if seed is not None else None

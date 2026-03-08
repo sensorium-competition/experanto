@@ -71,26 +71,77 @@ class SimpleChunkedDataset(Dataset):
 
 
 class ChunkDataset(Dataset):
-    def __init__(
-        self,
-        root_folder: str,
-        global_sampling_rate: Optional[float] = None,
-        global_chunk_size: Optional[int] = None,
-        add_behavior_as_channels: bool = False,
-        replace_nans_with_means: bool = False,
-        cache_data: bool = False,
-        out_keys: Optional[Iterable] = None,
-        normalize_timestamps: bool = True,
-        modality_config: dict = DEFAULT_MODALITY_CONFIG,
-        seed: Optional[int] = None,
-        safe_interval_threshold: float = 0.5,
-        interpolate_precision: int = 5,
-    ) -> None:
-        """
-        interpolate_precision: number of digits after the dot to keep, without it we might get different numbers from interpolation
+    """PyTorch Dataset for chunked experiment data.
 
-        The full modality config is a nested dictionary.
-        The following is an example of a modality config for a screen, responses, eye_tracker, and treadmill:
+    This dataset loads an experiment and provides temporally-chunked samples
+    suitable for training neural networks. Each sample contains synchronized
+    data from all modalities (e.g., screen, responses, eye_tracker, treadmill)
+    at a given time window.
+
+    Parameters
+    ----------
+    root_folder : str
+        Path to the experiment directory containing modality subfolders.
+    global_sampling_rate : float, optional
+        Sampling rate (Hz) applied to all modalities. If None, uses
+        per-modality rates from ``modality_config``.
+    global_chunk_size : int, optional
+        Number of samples per chunk for all modalities. If None, uses
+        per-modality sizes from ``modality_config``.
+    add_behavior_as_channels : bool, default=False
+        If True, concatenates behavioral data as additional image channels.
+        Deprecated: use separate modality outputs instead.
+    replace_nans_with_means : bool, default=False
+        If True, replaces NaN values with column means.
+    cache_data : bool, default=False
+        If True, keeps loaded data in memory for faster access.
+    out_keys : iterable, optional
+        Which modalities to include in output. Defaults to all modalities
+        plus 'timestamps'.
+    normalize_timestamps : bool, default=True
+        If True, normalizes timestamps relative to recording start.
+    modality_config : dict
+        Configuration for each modality including sampling rates, transforms,
+        filters, and interpolation settings. See Notes for structure.
+    seed : int, optional
+        Random seed for reproducible shuffling of valid time points.
+    safe_interval_threshold : float, default=0.5
+        Safety margin (in seconds) to exclude from edges of valid intervals.
+    interpolate_precision : int, default=5
+        Number of decimal places for time precision. Prevents floating-point
+        accumulation errors during interpolation.
+
+
+    Attributes
+    ----------
+    data_key : str
+        Unique identifier for this dataset, extracted from metadata.
+    device_names : tuple
+        Names of loaded modalities.
+    start_time : float
+        Start of valid time range (after applying safety threshold).
+    end_time : float
+        End of valid time range (after applying safety threshold).
+
+    See Also
+    --------
+    Experiment : Lower-level interface for data access.
+    get_multisession_dataloader : Load multiple datasets.
+    experanto.configs : Default configuration values.
+
+    Notes
+    -----
+    The dataset handles:
+
+    - Per-modality sampling rates and chunk sizes
+    - Time offset alignment between modalities
+    - Data normalization and transforms
+    - Filtering based on trial conditions and data quality
+    - Reproducible random sampling with seeds
+
+    The ``modality_config`` is a nested dictionary with per-modality settings. The following is an example of a modality config for a screen, responses, eye_tracker, and treadmill:
+
+    .. code-block:: yaml
 
         screen:
           sampling_rate: null
@@ -141,7 +192,41 @@ class ChunkDataset(Dataset):
             normalize: true
           interpolation:
             interpolation_mode: nearest_neighbor
-        """
+
+    Examples
+    --------
+    >>> from experanto.datasets import ChunkDataset
+    >>> from experanto.configs import DEFAULT_MODALITY_CONFIG
+    >>> dataset = ChunkDataset(
+    ...     '/path/to/experiment',
+    ...     global_sampling_rate=30,
+    ...     global_chunk_size=60,
+    ...     modality_config=DEFAULT_MODALITY_CONFIG,
+    ... )
+    >>> len(dataset)
+    1000
+    >>> sample = dataset[0]
+    >>> sample['screen'].shape
+    torch.Size([1, 60, 144, 256])
+    >>> sample['responses'].shape
+    torch.Size([16, 500])
+    """
+
+    def __init__(
+        self,
+        root_folder: str,
+        global_sampling_rate: Optional[float] = None,
+        global_chunk_size: Optional[int] = None,
+        add_behavior_as_channels: bool = False,
+        replace_nans_with_means: bool = False,
+        cache_data: bool = False,
+        out_keys: Optional[Iterable] = None,
+        normalize_timestamps: bool = True,
+        modality_config: dict = DEFAULT_MODALITY_CONFIG,
+        seed: Optional[int] = None,
+        safe_interval_threshold: float = 0.5,
+        interpolate_precision: int = 5,
+    ) -> None:
         self.root_folder = Path(root_folder)
         self.data_key = self.get_data_key_from_root_folder(root_folder)
         self.interpolate_precision = interpolate_precision
@@ -234,10 +319,10 @@ class ChunkDataset(Dataset):
             ]
 
     def initialize_statistics(self) -> None:
-        """
-        Initializes the statistics for each device based on the modality config.
-        :return:
-            instantiates self._statistics with the mean and std for each device
+        """Initialize normalization statistics for each device.
+
+        Loads mean and standard deviation values from each device's meta folder
+        and stores them in ``self._statistics`` for use during data transforms.
         """
         self._statistics = {}
         for device_name in self.device_names:
@@ -298,10 +383,7 @@ class ChunkDataset(Dataset):
             return torch.from_numpy(x)
 
     def initialize_transforms(self):
-        """
-        Initializes the transforms for each device based on the modality config.
-        :return:
-        """
+        """Initialize data transforms for each device based on modality config."""
         transforms = {}
         for device_name in self.device_names:
             if device_name == "screen":
@@ -336,15 +418,22 @@ class ChunkDataset(Dataset):
         return transforms
 
     def _get_callable_filter(self, filter_config):
-        """
-        Helper function to get a callable filter function from either a config or an already instantiated callable.
+        """Return a callable filter function from config or an existing callable.
+
+        Notes
+        -----
         Handles partial instantiation using hydra.utils.instantiate.
 
-        Args:
-            filter_config: Either a config dict/DictConfig or a callable function
+        Parameters
+        ----------
+        filter_config : dict, DictConfig, or callable
+            Either a config dictionary/DictConfig specifying a filter (with
+            '__target__'), or an already-instantiated callable filter function.
 
-        Returns:
-            callable: The final filter function ready to be called with device_
+        Returns
+        -------
+        callable
+            The final filter function ready to be called with `device_`.
         """
         # Check if it's already a callable (function)
         if callable(filter_config):
@@ -416,16 +505,25 @@ class ChunkDataset(Dataset):
     def get_condition_mask_from_meta_conditions(
         self, valid_conditions_sum_of_product: List[dict]
     ) -> np.ndarray:
-        """Creates a boolean mask for trials that satisfy any of the given condition combinations.
+        """Create a boolean mask for trials satisfying given conditions.
 
-        Args:
-            valid_conditions_sum_of_product: List of dictionaries, where each dictionary represents a set of
-                conditions that should be satisfied together (AND). Multiple dictionaries are combined with OR.
-                Example: [{'tier': 'train', 'stim_type': 'natural'}, {'tier': 'blank'}] matches trials that
-                are either (train AND natural) OR blank.
+        Parameters
+        ----------
+        valid_conditions_sum_of_product : list of dict
+            Condition dictionaries combined with OR logic, where conditions
+            within each dictionary use AND logic.
 
-        Returns:
-            np.ndarray: Boolean mask indicating which trials satisfy at least one set of conditions.
+        Returns
+        -------
+        np.ndarray
+            Boolean mask indicating which trials satisfy at least one set of
+            conditions.
+
+        Notes
+        -----
+        For example,
+        ``[{'tier': 'train', 'stim_type': 'natural'}, {'tier': 'blank'}]``
+        matches trials that are either (train AND natural) OR blank.
         """
         all_conditions: Optional[np.ndarray] = None
         for valid_conditions_product in valid_conditions_sum_of_product:
@@ -453,15 +551,22 @@ class ChunkDataset(Dataset):
         valid_conditions_sum_of_product: List[dict],
         filter_for_valid_intervals: bool = True,
     ) -> np.ndarray:
-        """Creates a boolean mask indicating which screen samples satisfy the given conditions.
+        """Create a boolean mask for screen samples satisfying given conditions.
 
-        Args:
-            satisfy_for_next: Number of consecutive samples that must satisfy conditions
-            valid_conditions_sum_of_product: List of condition dictionaries combined with OR logic,
-                where conditions within each dictionary use AND logic
+        Parameters
+        ----------
+        satisfy_for_next : int
+            Number of consecutive samples that must satisfy conditions.
+        valid_conditions_sum_of_product : list of dict
+            Condition dictionaries combined with OR logic, where conditions
+            within each dictionary use AND logic.
+        filter_for_valid_intervals : bool, default=True
+            Whether to apply interval-based filtering.
 
-        Returns:
-            Boolean array matching screen sample times, True where conditions are met
+        Returns
+        -------
+        numpy.ndarray
+            Boolean array matching screen sample times, True where conditions are met.
         """
         all_conditions = self.get_condition_mask_from_meta_conditions(
             valid_conditions_sum_of_product
@@ -512,12 +617,21 @@ class ChunkDataset(Dataset):
     def get_full_valid_sample_times(
         self, filter_for_valid_intervals: bool = True
     ) -> np.ndarray:
-        """
-        iterates through all sample times and checks if they could be used as
-        start times, eg if the next `self.chunk_sizes["screen"]` points are still valid
-        based on the previous meta condition filtering
-        :returns:
-            valid_times: np.array of valid starting points
+        """Get all valid chunk starting times based on meta conditions.
+
+        Iterates through sample times and checks if they can be used as chunk
+        start times (i.e., the next ``chunk_size`` points are all valid based
+        on the previous meta condition filtering).
+
+        Parameters
+        ----------
+        filter_for_valid_intervals : bool, default=True
+            Whether to apply interval-based filtering.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of valid starting time points.
         """
 
         # Calculate all possible end indices
@@ -569,14 +683,20 @@ class ChunkDataset(Dataset):
             )
 
     def get_data_key_from_root_folder(self, root_folder):
-        """
-        Extract a data key from the root folder path by checking for a meta.json file.
+        """Extract a data key from the root folder path.
 
-        Args:
-            root_folder (str or Path): Path to the root folder containing dataset
+        Checks for a meta.json file and extracts the data_key or scan_key.
 
-        Returns:
-            str: The extracted data key or folder name if meta.json doesn't exist or lacks data_key
+        Parameters
+        ----------
+        root_folder : str or Path
+            Path to the root folder containing the dataset.
+
+        Returns
+        -------
+        str
+            The extracted data key, or folder name if meta.json doesn't
+            exist or lacks data_key.
         """
         # Convert Path object to string if necessary
         root_folder = str(root_folder)
@@ -621,7 +741,28 @@ class ChunkDataset(Dataset):
     def __len__(self):
         return len(self._valid_screen_times)
 
-    def __getitem__(self, idx) -> dict:
+    def __getitem__(self, idx: int) -> dict:
+        """Return a single data sample at the given index.
+
+        Parameters
+        ----------
+        idx : int
+            Index of the sample to retrieve.
+
+        Returns
+        -------
+        dict
+            Dictionary containing data for each modality in ``out_keys``, e.g.:
+
+            - ``'screen'``: torch.Tensor of shape ``(C, T, H, W)``
+            - ``'responses'``: torch.Tensor of shape ``(T, N_neurons)``
+            - ``'eye_tracker'``: torch.Tensor of shape ``(T, N_features)``
+            - ``'treadmill'``: torch.Tensor of shape ``(T, N_features)``
+            - ``'timestamps'``: dict mapping modality names to time arrays
+
+            Where ``T`` is the chunk size (may differ per modality),
+            ``C`` is channels, ``H`` is height, ``W`` is width.
+        """
         out = {}
         timestamps = {}
         s = self._valid_screen_times[idx]

@@ -166,3 +166,4 @@ cython_debug/
 
 # local workflow testing
 bin/ 
+docs/source/generated/
