@@ -11,6 +11,12 @@ dev = [
     "pyright",
 ]
 
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+    "myst-parser"
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["experanto*", "configs"]
