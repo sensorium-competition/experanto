@@ -7,7 +7,7 @@ To load an experiment, we use the :class:`~experanto.experiment.Experiment`
 class. This class aggregates all modalities and their respective interpolators
 in a single object. Its main job is to unify the access to all modalities.
 
-:class:`~experanto.experiment.Experiment` accepts an arbitrary array of time
+:meth:`Experiment.interpolate <experanto.experiment.Experiment.interpolate>` accepts an arbitrary array of time
 points and returns the corresponding values for each modality by looking them
 up in the raw stored data (e.g., using nearest-neighbour or linear
 interpolation for sequences). When you need a regular sampling grid or
