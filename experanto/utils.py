@@ -379,7 +379,7 @@ class SessionBatchSampler(Sampler):
 
         # Get sessions
         self.session_names = list(dataset.session_indices.keys())
-        logger.info("Sessions: %s", self.session_names)
+        logger.debug("Sessions: %s", self.session_names)
 
         self.consumed_sessions = []
 

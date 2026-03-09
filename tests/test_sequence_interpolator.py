@@ -551,6 +551,4 @@ def test_interpolation_mode_not_implemented():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    logger.info("Running tests")
     pytest.main([__file__])
