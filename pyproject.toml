@@ -14,7 +14,9 @@ dev = [
 docs = [
     "sphinx",
     "sphinx-rtd-theme",
-    "myst-parser"
+    "myst-parser",
+    "PyYAML",
+    "numpy"
 ]
 
 [tool.setuptools.packages.find]
