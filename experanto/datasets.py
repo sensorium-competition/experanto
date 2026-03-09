@@ -726,7 +726,8 @@ class ChunkDataset(Dataset):
                     return dataset_name
                 else:
                     logger.info(
-                        "No 'data_key' found in %s, using folder name instead", meta_file_path
+                        "No 'data_key' found in %s, using folder name instead",
+                        meta_file_path,
                     )
             except json.JSONDecodeError as e:
                 logger.warning("Error loading %s: %s", meta_file_path, e)
