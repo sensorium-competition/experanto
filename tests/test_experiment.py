@@ -60,7 +60,8 @@ def test_experiment_interpolate_routing(tmp_path, mock_interpolator):
 
     # Bulk routing (device=None)
     res_dict = exp.interpolate(test_times, device=None)
-    assert "screen" in res_dict
+    assert isinstance(res, dict)
+    assert isinstance(res["screen"], np.ndarray)
     np.testing.assert_array_equal(res_dict["screen"], np.array([1, 2, 3]))
 
 
@@ -73,7 +74,7 @@ def test_get_valid_range_all_devices(device_name, start_t, end_t):
         devices_kwargs=[{"t_end": 10.0}, {"t_end": 20.0}],
     ) as experiment_path:
         experiment = Experiment(
-            root_folder=experiment_path,
+            root_folder=str(experiment_path),
             modality_config=get_default_config(),
         )
 
@@ -85,7 +86,7 @@ def test_get_valid_range_all_devices(device_name, start_t, end_t):
 def test_get_valid_range_raises_for_invalid_device():
     with create_experiment() as experiment_path:
         experiment = Experiment(
-            root_folder=experiment_path,
+            root_folder=str(experiment_path),
             modality_config=get_default_config(),
         )
         with pytest.raises(KeyError):
@@ -100,7 +101,7 @@ def test_experiment_with_non_zero_start_time():
         devices_kwargs=[{"t_end": start_offset + duration, "start_time": start_offset}]
     ) as experiment_path:
         experiment = Experiment(
-            root_folder=experiment_path,
+            root_folder=str(experiment_path),
             modality_config=get_default_config(),
         )
 
@@ -125,7 +126,7 @@ def test_experiment_numeric_precision_offset():
         ]
     ) as experiment_path:
         experiment = Experiment(
-            root_folder=experiment_path,
+            root_folder=str(experiment_path),
             modality_config=get_default_config(),
         )
 
@@ -143,7 +144,7 @@ def test_experiment_irregular_timestamps():
         devices_kwargs=[{"irregular": True, "sampling_rate": 10.0}]
     ) as experiment_path:
         experiment = Experiment(
-            root_folder=experiment_path,
+            root_folder=str(experiment_path),
             modality_config=get_default_config(),
         )
 
@@ -152,6 +153,7 @@ def test_experiment_irregular_timestamps():
 
         res = experiment.interpolate(np.array([mid_point]), device="device_0")
         assert res is not None
+        assert isinstance(res, np.ndarray)
         assert res.shape == (1, 10)
 
 
@@ -159,7 +161,7 @@ def test_experiment_multi_device_interpolation():
     """Check data consistency when interpolating across multiple modalities."""
     with create_experiment(n_devices=2) as experiment_path:
         exp = Experiment(
-            root_folder=experiment_path, modality_config=get_default_config()
+            root_folder=str(experiment_path), modality_config=get_default_config()
         )
 
         times = np.array([1.0, 2.0])

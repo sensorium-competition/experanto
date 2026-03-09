@@ -107,7 +107,11 @@ class Experiment:
                 dev = interp_conf
 
             else:
-                dev = Interpolator.create(d, cache_data=self.cache_data, **interp_conf)
+                dev = Interpolator.create(
+                    str(d),
+                    cache_data=self.cache_data,
+                    **{str(k): v for k, v in dict(interp_conf).items()},
+                )
                 # Default back to original logic
                 warnings.warn(
                     "Falling back to original Interpolator creation logic.",
@@ -120,8 +124,10 @@ class Experiment:
                 )
 
             self.devices[d.name] = dev
-            self.start_time = min(self.start_time, dev.start_time)
-            self.end_time = max(self.end_time, dev.end_time)
+            if dev.start_time is not None:
+                self.start_time = min(self.start_time, dev.start_time)
+            if dev.end_time is not None:
+                self.end_time = max(self.end_time, dev.end_time)
             log.info("Parsing finished")
 
     @property

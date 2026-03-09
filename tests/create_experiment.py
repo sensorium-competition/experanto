@@ -46,7 +46,7 @@ def create_experiment(
 
         for device_id, device_kwargs in enumerate(devices_kwargs):
             device_path = EXPERIMENT_ROOT / f"device_{device_id}"
-            _generate_sequence_data(device_path, **device_kwargs)
+            _generate_sequence_data(str(device_path), **device_kwargs)  # pyright: ignore
 
         yield EXPERIMENT_ROOT
     finally:

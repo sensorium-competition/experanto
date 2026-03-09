@@ -112,5 +112,5 @@ def sequence_data_and_interpolator(data_kwargs=None, interp_kwargs=None):
         # Restore the helper expected by the rest of the test suite
         from experanto.interpolators import Interpolator
 
-        seq_interp = Interpolator.create(SEQUENCE_ROOT, **interp_kwargs)
+        seq_interp = Interpolator.create(str(SEQUENCE_ROOT), **interp_kwargs)
         yield timestamps, data, shifts, seq_interp
