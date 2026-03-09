@@ -1,5 +1,8 @@
 import numpy as np
 import pytest
+from hypothesis import assume, given
+from hypothesis import strategies as st
+from hypothesis.strategies import composite
 
 from experanto.interpolators import TimeIntervalInterpolator
 from experanto.intervals import (
@@ -806,10 +809,6 @@ def test_stats(intervals, start, end, expected_substring):
 # These test mathematical invariants rather than specific examples.
 # ============================================================================
 
-from hypothesis import assume, given, settings
-from hypothesis import strategies as st
-from hypothesis.strategies import composite
-
 
 @composite
 def time_intervals(draw, min_value=0.0, max_value=100.0):
@@ -874,7 +873,7 @@ def test_uniquefy_preserves_coverage_property(intervals):
 def test_complement_and_original_cover_full_range_property(intervals):
     """The union of intervals and their complement must cover the entire range."""
     start, end = 0.0, 10.0
-    assume(start < end)
+
     complement = find_complement_of_interval_array(start, end, intervals)
     merged_original = uniquefy_interval_array(intervals)
     # Clamp original intervals to [start, end]
