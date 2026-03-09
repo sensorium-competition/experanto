@@ -1,6 +1,16 @@
 import numpy as np
+import pytest
 
 from experanto.interpolators import TimeIntervalInterpolator
+from experanto.intervals import (
+    TimeInterval,
+    find_complement_of_interval_array,
+    find_intersection_across_arrays_of_intervals,
+    find_intersection_between_two_interval_arrays,
+    find_union_across_arrays_of_intervals,
+    get_stats_for_valid_interval,
+    uniquefy_interval_array,
+)
 
 from .create_time_intervals_data import time_interval_data_and_interpolator
 
@@ -457,3 +467,361 @@ def test_time_interval_interpolation_multi_inverted():
         assert_intervals_by_timestamps(signal, timestamps, [], label_idx=1)
         # Only the non-inverted interval [8.0, 10.0) should match
         assert_intervals_by_timestamps(signal, timestamps, [[8.0, 10.0]], label_idx=2)
+
+
+# ============================================================================
+# TimeInterval — __contains__ (closed interval [start, end])
+# Note: The interpolator tests above use half-open [start, end) semantics.
+# These tests cover the closed-interval __contains__ defined in intervals.py.
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "interval, time, expected",
+    [
+        (TimeInterval(1.0, 5.0), 3.0, True),   # inside
+        (TimeInterval(1.0, 5.0), 1.0, True),   # start boundary (inclusive)
+        (TimeInterval(1.0, 5.0), 5.0, True),   # end boundary (inclusive, differs from interpolator)
+        (TimeInterval(1.0, 5.0), 0.5, False),  # before interval
+        (TimeInterval(1.0, 5.0), 5.5, False),  # after interval
+    ],
+)
+def test_time_interval_contains(interval, time, expected):
+    """Test closed-interval __contains__ semantics [start, end]."""
+    assert (time in interval) == expected
+
+
+# ============================================================================
+# TimeInterval — intersect (closed interval [start, end] with numpy array)
+# Note: Uses closed-interval semantics, unlike the interpolator's half-open.
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "interval, times, expected_indices",
+    [
+        (
+            TimeInterval(2.0, 5.0),
+            np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+            np.array([2, 3, 4, 5]),
+        ),  # partial match
+        (
+            TimeInterval(10.0, 20.0),
+            np.array([0.0, 1.0, 2.0]),
+            np.array([]),
+        ),  # no match
+        (
+            TimeInterval(0.0, 10.0),
+            np.array([1.0, 2.0, 3.0]),
+            np.array([0, 1, 2]),
+        ),  # all match
+    ],
+)
+def test_time_interval_intersect(interval, times, expected_indices):
+    """Test closed-interval intersect() with numpy arrays."""
+    indices = interval.intersect(times)
+    np.testing.assert_array_equal(indices, expected_indices)
+
+
+# ============================================================================
+# TimeInterval — find_intersection_between_two_intervals
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "a, b, expected",
+    [
+        (TimeInterval(1.0, 5.0), TimeInterval(3.0, 7.0), TimeInterval(3.0, 5.0)),  # overlap
+        (TimeInterval(1.0, 3.0), TimeInterval(5.0, 7.0), None),                     # disjoint
+        (TimeInterval(1.0, 3.0), TimeInterval(3.0, 5.0), TimeInterval(3.0, 3.0)),  # touching
+        (TimeInterval(1.0, 10.0), TimeInterval(3.0, 5.0), TimeInterval(3.0, 5.0)), # contained
+        (TimeInterval(2.0, 6.0), TimeInterval(2.0, 6.0), TimeInterval(2.0, 6.0)),  # identical
+    ],
+)
+def test_two_interval_intersection(a, b, expected):
+    """Test pairwise intersection of two TimeInterval objects."""
+    assert a.find_intersection_between_two_intervals(b) == expected
+
+
+def test_two_interval_intersection_commutative():
+    """a ∩ b should equal b ∩ a."""
+    a = TimeInterval(1.0, 5.0)
+    b = TimeInterval(3.0, 7.0)
+    assert a.find_intersection_between_two_intervals(
+        b
+    ) == b.find_intersection_between_two_intervals(a)
+
+
+# ============================================================================
+# uniquefy_interval_array
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "intervals, expected",
+    [
+        ([], []),                                                                       # empty
+        ([TimeInterval(1.0, 3.0)], [TimeInterval(1.0, 3.0)]),                         # single
+        (
+            [TimeInterval(1.0, 3.0), TimeInterval(5.0, 7.0)],
+            [TimeInterval(1.0, 3.0), TimeInterval(5.0, 7.0)],
+        ),  # non-overlapping
+        (
+            [TimeInterval(1.0, 5.0), TimeInterval(3.0, 7.0)],
+            [TimeInterval(1.0, 7.0)],
+        ),  # overlapping merge
+        (
+            [TimeInterval(1.0, 3.0), TimeInterval(3.0, 5.0)],
+            [TimeInterval(1.0, 5.0)],
+        ),  # adjacent merge
+        (
+            [TimeInterval(1.0, 10.0), TimeInterval(3.0, 5.0)],
+            [TimeInterval(1.0, 10.0)],
+        ),  # contained
+        (
+            [TimeInterval(5.0, 7.0), TimeInterval(1.0, 3.0)],
+            [TimeInterval(1.0, 3.0), TimeInterval(5.0, 7.0)],
+        ),  # unsorted input
+        (
+            [TimeInterval(1.0, 4.0), TimeInterval(3.0, 6.0), TimeInterval(5.0, 8.0)],
+            [TimeInterval(1.0, 8.0)],
+        ),  # chain merge
+        (
+            [TimeInterval(1.0, 3.0), TimeInterval(2.0, 5.0), TimeInterval(8.0, 10.0)],
+            [TimeInterval(1.0, 5.0), TimeInterval(8.0, 10.0)],
+        ),  # mix of overlapping and disjoint
+    ],
+)
+def test_uniquefy(intervals, expected):
+    """Test merging of overlapping/adjacent intervals."""
+    assert uniquefy_interval_array(intervals) == expected
+
+
+# ============================================================================
+# find_intersection_between_two_interval_arrays
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "a, b, expected",
+    [
+        ([TimeInterval(1.0, 3.0)], [TimeInterval(5.0, 7.0)], []),                      # no overlap
+        ([TimeInterval(1.0, 5.0)], [TimeInterval(1.0, 5.0)], [TimeInterval(1.0, 5.0)]),  # full overlap
+        ([TimeInterval(1.0, 5.0)], [TimeInterval(3.0, 7.0)], [TimeInterval(3.0, 5.0)]),  # partial
+        (
+            [TimeInterval(1.0, 4.0), TimeInterval(6.0, 9.0)],
+            [TimeInterval(2.0, 7.0)],
+            [TimeInterval(2.0, 4.0), TimeInterval(6.0, 7.0)],
+        ),  # multiple intersections
+        ([], [TimeInterval(1.0, 5.0)], []),                                             # empty first
+        ([TimeInterval(1.0, 5.0)], [], []),                                             # empty second
+        ([], [], []),                                                                    # both empty
+    ],
+)
+def test_array_intersection(a, b, expected):
+    """Test intersection of two interval arrays."""
+    assert find_intersection_between_two_interval_arrays(a, b) == expected
+
+
+# ============================================================================
+# find_intersection_across_arrays_of_intervals
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "arrays, expected",
+    [
+        (
+            [[TimeInterval(1.0, 5.0)], [TimeInterval(3.0, 7.0)]],
+            [TimeInterval(3.0, 5.0)],
+        ),  # two arrays
+        (
+            [[TimeInterval(1.0, 6.0)], [TimeInterval(3.0, 8.0)], [TimeInterval(4.0, 10.0)]],
+            [TimeInterval(4.0, 6.0)],
+        ),  # three arrays
+        (
+            [[TimeInterval(1.0, 3.0)], [TimeInterval(5.0, 7.0)]],
+            [],
+        ),  # no common overlap
+        (
+            [[TimeInterval(1.0, 3.0), TimeInterval(5.0, 7.0)]],
+            [TimeInterval(1.0, 3.0), TimeInterval(5.0, 7.0)],
+        ),  # single array returns itself
+    ],
+)
+def test_across_intersection(arrays, expected):
+    """Test intersection across multiple interval arrays."""
+    assert find_intersection_across_arrays_of_intervals(arrays) == expected
+
+
+# ============================================================================
+# find_union_across_arrays_of_intervals
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "arrays, expected",
+    [
+        (
+            [[TimeInterval(1.0, 3.0)], [TimeInterval(5.0, 7.0)]],
+            [TimeInterval(1.0, 3.0), TimeInterval(5.0, 7.0)],
+        ),  # non-overlapping
+        (
+            [[TimeInterval(1.0, 5.0)], [TimeInterval(3.0, 7.0)]],
+            [TimeInterval(1.0, 7.0)],
+        ),  # overlapping merges
+        (
+            [[TimeInterval(1.0, 3.0)], [TimeInterval(2.0, 5.0)], [TimeInterval(8.0, 10.0)]],
+            [TimeInterval(1.0, 5.0), TimeInterval(8.0, 10.0)],
+        ),  # multiple arrays
+        ([[], []], []),  # empty arrays
+    ],
+)
+def test_union(arrays, expected):
+    """Test union across multiple interval arrays."""
+    assert find_union_across_arrays_of_intervals(arrays) == expected
+
+
+# ============================================================================
+# find_complement_of_interval_array
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "intervals, start, end, expected",
+    [
+        ([], 0.0, 10.0, [TimeInterval(0.0, 10.0)]),                              # empty → full range
+        ([TimeInterval(0.0, 10.0)], 0.0, 10.0, []),                              # full coverage → empty
+        ([TimeInterval(3.0, 10.0)], 0.0, 10.0, [TimeInterval(0.0, 3.0)]),        # gap at start
+        ([TimeInterval(0.0, 7.0)], 0.0, 10.0, [TimeInterval(7.0, 10.0)]),        # gap at end
+        (
+            [TimeInterval(0.0, 3.0), TimeInterval(7.0, 10.0)],
+            0.0, 10.0,
+            [TimeInterval(3.0, 7.0)],
+        ),  # middle gap
+        (
+            [TimeInterval(1.0, 3.0), TimeInterval(5.0, 7.0)],
+            0.0, 10.0,
+            [TimeInterval(0.0, 1.0), TimeInterval(3.0, 5.0), TimeInterval(7.0, 10.0)],
+        ),  # multiple gaps
+        (
+            [TimeInterval(1.0, 5.0), TimeInterval(3.0, 7.0)],
+            0.0, 10.0,
+            [TimeInterval(0.0, 1.0), TimeInterval(7.0, 10.0)],
+        ),  # overlapping input
+    ],
+)
+def test_complement(intervals, start, end, expected):
+    """Test complement of interval array within a given range."""
+    assert find_complement_of_interval_array(start, end, intervals) == expected
+
+
+# ============================================================================
+# get_stats_for_valid_interval
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "intervals, start, end, expected_substring",
+    [
+        ([], 10.0, 5.0, "Error"),                                                # invalid range
+        ([], 5.0, 5.0, "Error"),                                                 # zero duration
+        ([TimeInterval(0.0, 10.0)], 0.0, 10.0, "100.00%"),                      # full coverage
+        ([], 0.0, 10.0, "0.00%"),                                                # no valid intervals
+        ([TimeInterval(0.0, 5.0)], 0.0, 10.0, "50.00%"),                        # half coverage
+        ([TimeInterval(-5.0, 15.0)], 0.0, 10.0, "100.00%"),                     # clamped to range
+        ([TimeInterval(0.0, 3.0), TimeInterval(7.0, 10.0)], 0.0, 10.0, "60.00%"),  # multiple intervals
+        ([TimeInterval(0.0, 5.0)], 0.0, 10.0, "Valid Intervals"),               # has valid section
+        ([TimeInterval(0.0, 5.0)], 0.0, 10.0, "Invalid Intervals"),             # has invalid section
+        ([TimeInterval(0.0, 3.0), TimeInterval(7.0, 10.0)], 0.0, 10.0, "Valid Intervals (2)"),  # interval count
+    ],
+)
+def test_stats(intervals, start, end, expected_substring):
+    """Test statistics computation for valid intervals."""
+    result = get_stats_for_valid_interval(intervals, start, end)
+    assert expected_substring in result
+
+
+# ============================================================================
+# Property-based tests using Hypothesis
+# These test mathematical invariants rather than specific examples.
+# ============================================================================
+
+from hypothesis import given, assume, settings
+from hypothesis import strategies as st
+from hypothesis.strategies import composite
+
+
+@composite
+def time_intervals(draw, min_value=0.0, max_value=100.0):
+    """Strategy to generate valid TimeInterval objects with start <= end."""
+    start = draw(
+        st.floats(min_value=min_value, max_value=max_value, allow_nan=False, allow_infinity=False)
+    )
+    end = draw(
+        st.floats(min_value=start, max_value=max_value, allow_nan=False, allow_infinity=False)
+    )
+    return TimeInterval(start, end)
+
+
+@given(a=time_intervals(), b=time_intervals())
+def test_intersection_commutative_property(a, b):
+    """Intersection must be commutative: a ∩ b == b ∩ a for all intervals."""
+    assert a.find_intersection_between_two_intervals(
+        b
+    ) == b.find_intersection_between_two_intervals(a)
+
+
+@given(a=time_intervals(), b=time_intervals())
+def test_intersection_contained_in_both_property(a, b):
+    """If a ∩ b exists, it must be contained within both a and b."""
+    result = a.find_intersection_between_two_intervals(b)
+    if result is not None:
+        assert result.start >= a.start and result.end <= a.end
+        assert result.start >= b.start and result.end <= b.end
+
+
+@given(intervals=st.lists(time_intervals(), min_size=0, max_size=10))
+def test_uniquefy_idempotent_property(intervals):
+    """Running uniquefy twice must give the same result as running it once."""
+    once = uniquefy_interval_array(intervals)
+    twice = uniquefy_interval_array(once)
+    assert once == twice
+
+
+@given(intervals=st.lists(time_intervals(), min_size=0, max_size=10))
+def test_uniquefy_preserves_coverage_property(intervals):
+    """Uniquefy must not lose any covered point — merged result covers same range."""
+    merged = uniquefy_interval_array(intervals)
+    for iv in intervals:
+        # Every point at the midpoint of an original interval must still be covered
+        if iv.start < iv.end:
+            mid = (iv.start + iv.end) / 2.0
+            assert any(m.start <= mid <= m.end for m in merged)
+
+
+@given(
+    intervals=st.lists(time_intervals(min_value=0.0, max_value=10.0), min_size=0, max_size=5)
+)
+def test_complement_and_original_cover_full_range_property(intervals):
+    """The union of intervals and their complement must cover the entire range."""
+    start, end = 0.0, 10.0
+    assume(start < end)
+    complement = find_complement_of_interval_array(start, end, intervals)
+    merged_original = uniquefy_interval_array(intervals)
+    # Clamp original intervals to [start, end]
+    clamped = []
+    for iv in merged_original:
+        s = max(iv.start, start)
+        e = min(iv.end, end)
+        if s <= e:
+            clamped.append(TimeInterval(s, e))
+    all_intervals = clamped + complement
+    full_coverage = uniquefy_interval_array(all_intervals)
+    # The merged result should cover [start, end] completely
+    if full_coverage:
+        assert full_coverage[0].start <= start
+        assert full_coverage[-1].end >= end
+        # No gaps between consecutive intervals
+        for i in range(len(full_coverage) - 1):
+            assert full_coverage[i].end >= full_coverage[i + 1].start
