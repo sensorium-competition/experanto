@@ -27,6 +27,7 @@ Interpolators
    experanto.interpolators.PhaseShiftedSequenceInterpolator
    experanto.interpolators.ScreenInterpolator
    experanto.interpolators.TimeIntervalInterpolator
+   experanto.interpolators.SpikeInterpolator
    experanto.interpolators.ScreenTrial
    experanto.interpolators.ImageTrial
    experanto.interpolators.VideoTrial
