@@ -11,6 +11,73 @@ from experanto.intervals import (
 )
 
 # ============================================================================
+# TimeInterval — __contains__ (closed interval [start, end])
+# Note: The TimeIntervalInterpolator tests use half-open [start, end) semantics.
+# These tests cover the closed-interval __contains__ defined in intervals.py.
+# ============================================================================
+
+
+def test_time_interval_contains_inside():
+    """A time point inside the interval should be contained."""
+    interval = TimeInterval(1.0, 5.0)
+    assert 3.0 in interval
+
+
+def test_time_interval_contains_start_boundary():
+    """Start boundary is inclusive (start <= time)."""
+    interval = TimeInterval(1.0, 5.0)
+    assert 1.0 in interval
+
+
+def test_time_interval_contains_end_boundary():
+    """End boundary is inclusive (time <= end) — differs from interpolator's half-open semantics."""
+    interval = TimeInterval(1.0, 5.0)
+    assert 5.0 in interval
+
+
+def test_time_interval_not_contains_before():
+    """A time before the interval should not be contained."""
+    interval = TimeInterval(1.0, 5.0)
+    assert 0.5 not in interval
+
+
+def test_time_interval_not_contains_after():
+    """A time after the interval should not be contained."""
+    interval = TimeInterval(1.0, 5.0)
+    assert 5.5 not in interval
+
+
+# ============================================================================
+# TimeInterval — intersect (closed interval [start, end] with numpy array)
+# Note: Uses closed-interval semantics, unlike the interpolator's half-open.
+# ============================================================================
+
+
+def test_intersect_returns_correct_indices():
+    """Should return indices where times fall within closed [start, end]."""
+    interval = TimeInterval(2.0, 5.0)
+    times = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    indices = interval.intersect(times)
+    np.testing.assert_array_equal(indices, np.array([2, 3, 4, 5]))
+
+
+def test_intersect_no_match():
+    """Should return empty array when no times are in range."""
+    interval = TimeInterval(10.0, 20.0)
+    times = np.array([0.0, 1.0, 2.0])
+    indices = interval.intersect(times)
+    assert len(indices) == 0
+
+
+def test_intersect_all_match():
+    """Should return all indices when all times are in range."""
+    interval = TimeInterval(0.0, 10.0)
+    times = np.array([1.0, 2.0, 3.0])
+    indices = interval.intersect(times)
+    np.testing.assert_array_equal(indices, np.array([0, 1, 2]))
+
+
+# ============================================================================
 # TimeInterval — find_intersection_between_two_intervals
 # ============================================================================
 
