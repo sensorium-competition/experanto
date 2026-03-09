@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from hypothesis import assume, given
+from hypothesis import given
 from hypothesis import strategies as st
 from hypothesis.strategies import composite
 
