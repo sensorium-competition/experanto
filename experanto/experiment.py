@@ -66,11 +66,6 @@ class Experiment:
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
         cache_data: bool = False,
     ) -> None:
-        """
-        root_folder: path to the data folder
-        modality_config: dict for configuring interpolators
-        cache_data: if True, loads and keeps all trial data in memory
-        """
         self.root_folder = Path(root_folder)
         self.devices = dict()
         self.start_time = np.inf
@@ -111,16 +106,6 @@ class Experiment:
                     str(d),
                     cache_data=self.cache_data,
                     **{str(k): v for k, v in dict(interp_conf).items()},
-                )
-                # Default back to original logic
-                warnings.warn(
-                    "Falling back to original Interpolator creation logic.",
-                    UserWarning,
-                )
-                dev = Interpolator.create(
-                    d,
-                    cache_data=self.cache_data,
-                    **interp_conf,  # type: ignore[arg-type]
                 )
 
             self.devices[d.name] = dev

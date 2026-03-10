@@ -17,10 +17,8 @@ def _generate_sequence_data(
     t_end=10.0,
     sampling_rate=10.0,
     contain_nans=False,
-    irregular=False,
 ):
     """Generates synthetic sequence data folders for testing interpolator logic."""
-    from pathlib import Path
 
     sequence_root = Path(sequence_root)
     sequence_root.mkdir(parents=True, exist_ok=True)
@@ -40,14 +38,7 @@ def _generate_sequence_data(
     duration = meta["end_time"] - meta["start_time"]
     n_samples = int(round(duration * meta["sampling_rate"])) + 1
 
-    if not irregular:
-        timestamps = np.linspace(meta["start_time"], meta["end_time"], n_samples)
-    else:
-        steps = np.random.uniform(0.5, 1.5, size=n_samples - 1) / sampling_rate
-        timestamps = np.zeros(n_samples)
-        timestamps[0] = meta["start_time"]
-        timestamps[1:] = meta["start_time"] + np.cumsum(steps)
-        meta["end_time"] = float(timestamps[-1])
+    timestamps = np.linspace(meta["start_time"], meta["end_time"], n_samples)
 
     data = np.random.rand(len(timestamps), n_signals)
 

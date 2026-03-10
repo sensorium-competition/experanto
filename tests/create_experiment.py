@@ -1,7 +1,6 @@
 import copy
 import shutil
 from contextlib import contextmanager
-from pathlib import Path
 
 from .create_sequence_data import _generate_sequence_data
 
