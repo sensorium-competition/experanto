@@ -622,11 +622,12 @@ class ScreenInterpolator(Interpolator):
 
             # 2. Logic to handle shared video decoders
             decoder_to_use = None
-            if file_format in [".mp4", ".avi", ".mov"]:  # Add your video formats here
+            if file_format in [".mp4", ".avi", ".mov"]:
                 if data_file_name not in shared_decoders:
                     # Initialize the decoder only once per unique file
                     # Assuming ScreenTrial.create or a helper can return just a decoder
                     if self.device == "cuda":
+                        # setting backend to beta is recommended for faster performance in torchcodec docs
                         with set_cuda_backend("beta"):
                             shared_decoders[data_file_name] = self._initialize_decoder(
                                 data_file_name
@@ -637,6 +638,11 @@ class ScreenInterpolator(Interpolator):
                         )
 
                 decoder_to_use = shared_decoders[data_file_name]
+
+            elif file_format not in [".npy", ".jpg", ".png"]:
+                raise ValueError(
+                    f"Unsupported file format: {file_format} for file: {data_file_name}"
+                )
 
             # 3. Pass the shared decoder into the trial creation
             self.trials.append(
@@ -973,6 +979,7 @@ class ScreenTrial:
         cls = globals()[class_name]
 
         # Pass shared_decoder only for EncodedVideoTrials
+        # EncodedImageTrials do not require a decoder since they are single-frame and can be loaded with cv2.imread
         if cls is EncodedVideoTrial:
             assert shared_decoder is not None
             return cls(
@@ -1029,7 +1036,7 @@ class EncodedImageTrial(ScreenTrial):
         if img is None:
             raise ValueError(f"Could not read image file: {self.data_file_name}")
         # Convert BGR to RGB
-        img = img[:, :, [2, 1, 0]]
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         return img
 
 
@@ -1078,6 +1085,10 @@ class EncodedVideoTrial(ScreenTrial):
 
     def get_data_(self, frame_indices=None) -> np.ndarray:
         """Override base implementation to load compressed videos"""
+        assert (
+            self._cached_data is None or frame_indices is not None
+        ), "frame_indices must not be None when cached data exists"
+
         # Frame_indices is only ever None for caching purposes, we then decode entire video and cache it
         if frame_indices is None:
             frame_indices = np.arange(self.num_frames)
@@ -1085,10 +1096,8 @@ class EncodedVideoTrial(ScreenTrial):
         frames = self.video_decoder.get_frames_at(
             torch.from_numpy(frame_indices)
         ).data  # T,C,H,W (BGR), CPU or GPU
-        # BGR → RGB
-        frames = frames[:, [2, 1, 0], ...]
-        # Reorder dimensions
-        frames = frames.permute(0, 2, 3, 1).contiguous()  # T,H,W,C
+        # BGR → RGB not using cv2 to keep support for gpu tensors
+        frames = frames[:, [2, 1, 0], ...].permute(0, 2, 3, 1).contiguous()  # T,H,W,C
         # Since Cuda context cannot be forked we keep entire interpolation on CPU
         if frames.is_cuda:
             frames = frames.cpu()

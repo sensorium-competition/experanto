@@ -30,7 +30,7 @@ def create_screen_data(
         np.save(SCREEN_ROOT / "timestamps.npy", timestamps)
 
         # Generate frames with values in [0, 255] for better encoding
-        frames = (np.random.rand(n_frames, *frame_shape) * 255).astype(np.uint8)
+        frames = (np.random.rand(n_frames, *frame_shape) * 255).astype(np.float32)
 
         # Save image frames
         for i in range(min(image_frame_count, n_frames)):
@@ -43,7 +43,7 @@ def create_screen_data(
                 file_ext = ".jpg"
             else:
                 # Save as numpy array (original behavior)
-                np.save(data_dir / f"{i:05d}.npy", frames[i].astype(np.uint8))
+                np.save(data_dir / f"{i:05d}.npy", frames[i].astype(np.float32))
                 file_ext = ".npy"
 
             with open(meta_dir / f"{i:05d}.yml", "w") as f:
@@ -119,12 +119,13 @@ def create_screen_data(
 
 
 def _save_mp4_opencv(video_array, output_path, fps):
+    video_array_uint8 = np.clip(video_array, 0, 255).astype(np.uint8)
     if len(video_array.shape) == 3:
         # Grayscale: add channel dimension and convert to RGB needed for conversion
-        video_array = np.expand_dims(video_array, axis=-1)
-        video_array = np.repeat(video_array, 3, axis=-1)
+        video_array_uint8 = np.expand_dims(video_array_uint8, axis=-1)
+        video_array_uint8 = np.repeat(video_array_uint8, 3, axis=-1)
 
-    height, width = video_array.shape[1], video_array.shape[2]
+    height, width = video_array_uint8.shape[1], video_array_uint8.shape[2]
 
     # Use H.264 codec which torchcodec supports
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -135,7 +136,7 @@ def _save_mp4_opencv(video_array, output_path, fps):
         raise RuntimeError(f"Failed to open video writer for {output_path}")
 
     try:
-        for frame in video_array:
+        for frame in video_array_uint8:
             # Convert from RGB to BGR for OpenCV
             if frame.shape[-1] == 3:
                 frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
