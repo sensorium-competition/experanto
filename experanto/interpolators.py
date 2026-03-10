@@ -165,6 +165,10 @@ class SequenceInterpolator(Interpolator):
         If True, subtracts mean during normalization.
     normalize_std_threshold : float, optional
         Minimum std threshold to prevent division by near-zero values.
+    neuron_ids : list, optional
+        Biological neuron IDs to include. Converted to indexes using meta/unit_ids.npy.
+    indexes : list, optional
+        Column indexes of neurons to include.
     **kwargs
         Additional keyword arguments (ignored).
 
@@ -194,6 +198,8 @@ class SequenceInterpolator(Interpolator):
         cache_data: bool = False,  # already cached, put it here for consistency
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
+        neuron_ids: list[int] | None = None,
+        indexes: list[int] | None = None,
         normalize: bool = False,
         normalize_subtract_mean: bool = False,
         normalize_std_threshold: float | None = None,  # or 0.01
@@ -203,6 +209,7 @@ class SequenceInterpolator(Interpolator):
         meta = self.load_meta()
         self.keep_nans = keep_nans
         self.interpolation_mode = interpolation_mode
+        self.neuron_ids = neuron_ids
         self.normalize = normalize
         self.normalize_subtract_mean = normalize_subtract_mean
         self.normalize_std_threshold = normalize_std_threshold
@@ -215,6 +222,38 @@ class SequenceInterpolator(Interpolator):
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
 
         self.n_signals = meta["n_signals"]
+        # Convert neuron_ids → column indexes
+        if neuron_ids is not None:
+            unit_ids = np.load(self.root_folder / "meta/unit_ids.npy")
+
+            ids_to_indexes = []
+            for nid in neuron_ids:
+                match = np.where(unit_ids == nid)[0]
+                # raise error if neuron id not found
+                if len(match) == 0:
+                    raise ValueError(f"Neuron id {nid} not found in unit_ids.npy")
+                ids_to_indexes.append(int(match[0]))
+
+        # If both neuron_ids and indexes are provided check whether they refer to the same neurons
+        if neuron_ids is not None and indexes is not None:
+            if set(ids_to_indexes) == set(indexes):
+                warnings.warn(
+                    "Both neuron_ids and indexes provided but refer to the same neurons. Using indexes."
+                )
+            else:
+                raise ValueError(
+                    "neuron_ids and indexes refer to different neurons. Provide only one."
+                )
+
+        # If neuron_ids were provided, convert them to indexes
+        if neuron_ids is not None:
+            indexes = ids_to_indexes
+        # Validate provided indexes
+        if indexes is not None and len(indexes) > 0:
+            if max(indexes) >= self.n_signals:
+                raise ValueError("indexes contains invalid value")
+
+        self.indexes = indexes
         # read .mem (memmap) or .npy file
         if self.is_mem_mapped:
             self._data = np.memmap(
@@ -231,20 +270,34 @@ class SequenceInterpolator(Interpolator):
         else:
             self._data = np.load(self.root_folder / "data.npy")
 
+        # Filter selected neurons from data
+        if self.indexes is not None:
+            self._data = self._data[:, self.indexes]
+            self.n_signals = len(self.indexes)
+
         if self.normalize:
             self.normalize_init()
 
     def normalize_init(self):
-        self.mean = np.load(self.root_folder / "meta/means.npy")
-        self.std = np.load(self.root_folder / "meta/stds.npy")
+        mean = np.load(self.root_folder / "meta/means.npy")  # shape: (n_total_signals,)
+        std = np.load(self.root_folder / "meta/stds.npy")
+
+        # Filter to selected neurons, before assertion
+        if self.indexes is not None:
+            mean = mean[self.indexes]
+            std = std[self.indexes]
+
+        self.mean = mean.T
+        self.std = std.T
+
+        # Now n_signals and shape are guaranteed to match
         assert (
             self.mean.shape[0] == self.n_signals
-        ), f"mean shape does not match: {self.mean.shape} vs {self._data.shape}"
+        ), f"mean shape does not match: {self.mean.shape[0]} vs {self.n_signals}"
         assert (
             self.std.shape[0] == self.n_signals
-        ), f"std shape does not match: {self.std.shape} vs {self._data.shape}"
-        self.mean = self.mean.T
-        self.std = self.std.T
+        ), f"std shape does not match: {self.std.shape[0]} vs {self.n_signals}"
+
         if self.normalize_std_threshold:
             threshold = self.normalize_std_threshold * np.nanmean(self.std)
             idx = self.std > threshold
@@ -379,6 +432,10 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
         )
 
         self._phase_shifts = np.load(self.root_folder / "meta/phase_shifts.npy")
+        # Forward the required indexes
+        if self.indexes is not None:
+            self._phase_shifts = self._phase_shifts[self.indexes]
+
         self.valid_interval = TimeInterval(
             self.start_time
             + (np.max(self._phase_shifts) if len(self._phase_shifts) > 0 else 0),
@@ -1012,6 +1069,8 @@ class SpikeInterpolator(Interpolator):
         interpolation_window: float = 0.3,
         interpolation_align: str = "center",
         smoothing_sigma: float = 0.0,
+        neuron_ids: list[int] | None = None,
+        indexes: list[int] | None = None,
     ):
         super().__init__(root_folder)
 
@@ -1060,6 +1119,53 @@ class SpikeInterpolator(Interpolator):
                 self.spikes = np.array(self.spikes)
         else:
             self.spikes = np.load(self.dat_path)
+
+        # Convert biological neuron IDs to neuron indexes using unit_ids.npy
+        if neuron_ids is not None:
+            unit_ids = np.load(self.root_folder / "meta/unit_ids.npy")
+
+            ids_to_indexes = []
+            for nid in neuron_ids:
+                match = np.where(unit_ids == nid)[0]
+                if len(match) == 0:
+                    raise ValueError(f"Neuron id {nid} not found in unit_ids.npy")
+                ids_to_indexes.append(int(match[0]))
+
+        # Check if neuron_ids and indexes represent the same selection mechanism.
+        if neuron_ids is not None and indexes is not None:
+            if set(ids_to_indexes) == set(indexes):
+                warnings.warn(
+                    "Both neuron_ids and indexes provided but refer to the same neurons. Using indexes."
+                )
+            else:
+                raise ValueError(
+                    "neuron_ids and indexes refer to different neurons. Provide only one."
+                )
+        if neuron_ids is not None:
+            indexes = ids_to_indexes
+
+        if indexes is not None and len(indexes) > 0:
+            if max(indexes) >= self.n_signals:
+                raise ValueError("indexes contains invalid value")
+
+        # If specific neuron indexes are requested, rebuild the spike array so that it
+        # only contains spikes from the selected neurons. We also rebuild the indices
+        # array so that it matches the new compacted spike array.
+        if indexes is not None:
+            new_indices = [0]
+            new_spikes = []
+
+            for i in indexes:
+                start = self.indices[i]
+                end = self.indices[i + 1]
+                neuron_spikes = self.spikes[start:end]
+
+                new_spikes.append(neuron_spikes)
+                new_indices.append(new_indices[-1] + len(neuron_spikes))
+
+            self.spikes = np.concatenate(new_spikes)
+            self.indices = np.array(new_indices, dtype=np.int64)
+            self.n_signals = len(indexes)
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
