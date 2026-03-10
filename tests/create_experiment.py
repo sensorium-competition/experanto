@@ -5,9 +5,6 @@ from pathlib import Path
 
 from .create_sequence_data import _generate_sequence_data
 
-# Temporary directory for test execution
-EXPERIMENT_ROOT = Path("tests/experiment")
-
 DEFAULT_CONFIG = {
     "device_0": {
         "sampling_rate": 1.0,
@@ -33,6 +30,7 @@ def get_default_config():
 
 @contextmanager
 def create_experiment(
+    tmp_path,
     n_devices=2,
     devices_kwargs=None,
 ):
@@ -41,14 +39,18 @@ def create_experiment(
 
     devices_kwargs = [default_params | kwargs for kwargs in devices_kwargs]
 
+    assert len(devices_kwargs) == n_devices, "wrong experiment creation"
+
     try:
-        EXPERIMENT_ROOT.mkdir(parents=True, exist_ok=True)
+        tmp_path.mkdir(parents=True, exist_ok=True)
 
         for device_id, device_kwargs in enumerate(devices_kwargs):
-            device_path = EXPERIMENT_ROOT / f"device_{device_id}"
-            _generate_sequence_data(str(device_path), **device_kwargs)  # pyright: ignore
+            device_path = tmp_path / f"device_{device_id}"
+            _generate_sequence_data(
+                str(device_path), **device_kwargs
+            )  # pyright: ignore
 
-        yield EXPERIMENT_ROOT
+        yield tmp_path
     finally:
-        if EXPERIMENT_ROOT.exists():
-            shutil.rmtree(EXPERIMENT_ROOT)
+        if tmp_path.exists():
+            shutil.rmtree(tmp_path)

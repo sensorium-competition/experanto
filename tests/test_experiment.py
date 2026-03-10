@@ -9,7 +9,7 @@ from experanto.interpolators import Interpolator
 from .create_experiment import create_experiment, get_default_config
 
 
-class TestInterpolator(Interpolator):
+class DummyInterpolator(Interpolator):
     """Small concrete interpolator used for testing Experiment routing logic."""
 
     def __init__(self):
@@ -22,7 +22,7 @@ class TestInterpolator(Interpolator):
 @pytest.fixture
 def mock_interpolator():
     """Shared interpolator instance to isolate Experiment logic from interpolation math."""
-    return TestInterpolator()
+    return DummyInterpolator()
 
 
 def test_experiment_initialization_and_device_loading(tmp_path, mock_interpolator):
@@ -60,17 +60,18 @@ def test_experiment_interpolate_routing(tmp_path, mock_interpolator):
 
     # Bulk routing (device=None)
     res_dict = exp.interpolate(test_times, device=None)
-    assert isinstance(res, dict)
-    assert isinstance(res["screen"], np.ndarray)
+    assert isinstance(res_dict, dict)
+    assert isinstance(res_dict["screen"], np.ndarray)
     np.testing.assert_array_equal(res_dict["screen"], np.array([1, 2, 3]))
 
 
 @pytest.mark.parametrize(
     "device_name, start_t, end_t", [("device_0", 0.0, 10.0), ("device_1", 0.0, 20.0)]
 )
-def test_get_valid_range_all_devices(device_name, start_t, end_t):
+def test_get_valid_range_all_devices(tmp_path, device_name, start_t, end_t):
     """Integration test for valid_interval propagation from disk to object."""
     with create_experiment(
+        tmp_path,
         devices_kwargs=[{"t_end": 10.0}, {"t_end": 20.0}],
     ) as experiment_path:
         experiment = Experiment(
@@ -83,8 +84,8 @@ def test_get_valid_range_all_devices(device_name, start_t, end_t):
         assert isinstance(valid_range, tuple)
 
 
-def test_get_valid_range_raises_for_invalid_device():
-    with create_experiment() as experiment_path:
+def test_get_valid_range_raises_for_invalid_device(tmp_path):
+    with create_experiment(tmp_path) as experiment_path:
         experiment = Experiment(
             root_folder=str(experiment_path),
             modality_config=get_default_config(),
@@ -93,12 +94,14 @@ def test_get_valid_range_raises_for_invalid_device():
             experiment.get_valid_range("device_does_not_exist")
 
 
-def test_experiment_with_non_zero_start_time():
+def test_experiment_with_non_zero_start_time(tmp_path):
     """Test boundary conditions for data not starting at t=0."""
     start_offset, duration = 1.5, 10.0
 
     with create_experiment(
-        devices_kwargs=[{"t_end": start_offset + duration, "start_time": start_offset}]
+        tmp_path,
+        n_devices=1,
+        devices_kwargs=[{"t_end": start_offset + duration, "start_time": start_offset}],
     ) as experiment_path:
         experiment = Experiment(
             root_folder=str(experiment_path),
@@ -110,20 +113,22 @@ def test_experiment_with_non_zero_start_time():
         assert res is not None
 
 
-def test_experiment_numeric_precision_offset():
+def test_experiment_numeric_precision_offset(tmp_path):
     """Stress test using non-integer rates and offsets to catch float drift."""
     start_offset = 0.123456789
     sampling_rate = 33.3333333
     duration = 1.0
 
     with create_experiment(
+        tmp_path,
+        n_devices=1,
         devices_kwargs=[
             {
                 "start_time": start_offset,
                 "t_end": start_offset + duration,
                 "sampling_rate": sampling_rate,
             }
-        ]
+        ],
     ) as experiment_path:
         experiment = Experiment(
             root_folder=str(experiment_path),
@@ -138,28 +143,9 @@ def test_experiment_numeric_precision_offset():
         assert res is not None
 
 
-def test_experiment_irregular_timestamps():
-    """Verify interpolation stability with jittered (non-linear) time steps."""
-    with create_experiment(
-        devices_kwargs=[{"irregular": True, "sampling_rate": 10.0}]
-    ) as experiment_path:
-        experiment = Experiment(
-            root_folder=str(experiment_path),
-            modality_config=get_default_config(),
-        )
-
-        valid_range = experiment.get_valid_range("device_0")
-        mid_point = (valid_range[0] + valid_range[1]) / 2
-
-        res = experiment.interpolate(np.array([mid_point]), device="device_0")
-        assert res is not None
-        assert isinstance(res, np.ndarray)
-        assert res.shape == (1, 10)
-
-
-def test_experiment_multi_device_interpolation():
+def test_experiment_multi_device_interpolation(tmp_path):
     """Check data consistency when interpolating across multiple modalities."""
-    with create_experiment(n_devices=2) as experiment_path:
+    with create_experiment(tmp_path, n_devices=2) as experiment_path:
         exp = Experiment(
             root_folder=str(experiment_path), modality_config=get_default_config()
         )

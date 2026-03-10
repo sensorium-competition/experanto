@@ -20,6 +20,9 @@ def _generate_sequence_data(
     irregular=False,
 ):
     """Generates synthetic sequence data folders for testing interpolator logic."""
+    from pathlib import Path
+
+    sequence_root = Path(sequence_root)
     sequence_root.mkdir(parents=True, exist_ok=True)
     (sequence_root / "meta").mkdir(parents=True, exist_ok=True)
 
@@ -87,6 +90,7 @@ def create_sequence_data(
     t_end=10.0,
     sampling_rate=10.0,
     contain_nans=False,
+    start_time=0.0,
 ):
     """Context manager for temporary sequence data creation and cleanup."""
     try:
@@ -98,6 +102,7 @@ def create_sequence_data(
             t_end=t_end,
             sampling_rate=sampling_rate,
             contain_nans=contain_nans,
+            start_time=start_time,
         )
     finally:
         if SEQUENCE_ROOT.exists():
@@ -113,4 +118,7 @@ def sequence_data_and_interpolator(data_kwargs=None, interp_kwargs=None):
         from experanto.interpolators import Interpolator
 
         seq_interp = Interpolator.create(str(SEQUENCE_ROOT), **interp_kwargs)
-        yield timestamps, data, shifts, seq_interp
+        try:
+            yield timestamps, data, shifts, seq_interp
+        finally:
+            seq_interp.close()
