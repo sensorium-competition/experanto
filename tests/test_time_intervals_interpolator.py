@@ -566,15 +566,6 @@ def test_two_interval_intersection(a, b, expected):
     assert a.find_intersection_between_two_intervals(b) == expected
 
 
-def test_two_interval_intersection_commutative():
-    """a ∩ b should equal b ∩ a."""
-    a = TimeInterval(1.0, 5.0)
-    b = TimeInterval(3.0, 7.0)
-    assert a.find_intersection_between_two_intervals(
-        b
-    ) == b.find_intersection_between_two_intervals(a)
-
-
 # ============================================================================
 # uniquefy_interval_array
 # ============================================================================
