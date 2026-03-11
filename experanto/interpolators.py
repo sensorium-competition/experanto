@@ -221,6 +221,10 @@ class SequenceInterpolator(Interpolator):
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
 
         self.n_signals = meta["n_signals"]
+        if self.n_signals == 0:
+            self._data = np.empty((meta["n_timestamps"], 0), dtype=meta["dtype"])
+            self.indexes = indexes
+            return
         # Convert neuron_ids → column indexes
         if neuron_ids is not None:
             unit_ids = np.load(self.root_folder / "meta/unit_ids.npy")
@@ -237,7 +241,7 @@ class SequenceInterpolator(Interpolator):
         if neuron_ids is not None and indexes is not None:
             if set(ids_to_indexes) == set(indexes):
                 warnings.warn(
-                    "Both neuron_ids and indexes provided but refer to the same neurons. Using indexes."
+                    "neuron_ids and indexes resolve to the same indices; proceeding with indexes."
                 )
             else:
                 raise ValueError(
@@ -245,12 +249,29 @@ class SequenceInterpolator(Interpolator):
                 )
 
         # If neuron_ids were provided, convert them to indexes
-        if neuron_ids is not None:
+        if neuron_ids is not None and indexes is None:
             indexes = ids_to_indexes
         # Validate provided indexes
-        if indexes is not None and len(indexes) > 0:
-            if max(indexes) >= self.n_signals:
-                raise ValueError("indexes contains invalid value")
+        if indexes is not None:
+            try:
+                indexes_seq = list(indexes)
+            except TypeError as exc:
+                raise TypeError("indexes must be an iterable of integers") from exc
+
+            if len(indexes_seq) > 0:
+                for idx in indexes_seq:
+                    if not isinstance(idx, (int, np.integer)):
+                        raise TypeError(
+                            f"indexes must contain only integers, got {type(idx)!r}"
+                        )
+
+                if min(indexes_seq) < 0 or max(indexes_seq) >= self.n_signals:
+                    raise ValueError(
+                        f"indexes contains invalid value; valid range is [0, {self.n_signals - 1}]"
+                    )
+
+                if len(set(indexes_seq)) != len(indexes_seq):
+                    raise ValueError("indexes contains duplicate values")
 
         self.indexes = indexes
         # read .mem (memmap) or .npy file
@@ -1126,7 +1147,7 @@ class SpikeInterpolator(Interpolator):
                 raise ValueError(
                     "neuron_ids and indexes refer to different neurons. Provide only one."
                 )
-        if neuron_ids is not None:
+        if neuron_ids is not None and indexes is None:
             indexes = ids_to_indexes
 
         if indexes is not None and len(indexes) > 0:
@@ -1137,20 +1158,26 @@ class SpikeInterpolator(Interpolator):
         # only contains spikes from the selected neurons. We also rebuild the indices
         # array so that it matches the new compacted spike array.
         if indexes is not None:
-            new_indices = [0]
-            new_spikes = []
+            if len(indexes) == 0:
+                # No neurons selected: represent this as an empty spike train
+                self.spikes = np.empty((0,), dtype=self.spikes.dtype)
+                self.indices = np.array([0], dtype=np.int64)
+                self.n_signals = 0
+            else:
+                new_indices = [0]
+                new_spikes = []
 
-            for i in indexes:
-                start = self.indices[i]
-                end = self.indices[i + 1]
-                neuron_spikes = self.spikes[start:end]
+                for i in indexes:
+                    start = self.indices[i]
+                    end = self.indices[i + 1]
+                    neuron_spikes = self.spikes[start:end]
 
-                new_spikes.append(neuron_spikes)
-                new_indices.append(new_indices[-1] + len(neuron_spikes))
+                    new_spikes.append(neuron_spikes)
+                    new_indices.append(new_indices[-1] + len(neuron_spikes))
 
-            self.spikes = np.concatenate(new_spikes)
-            self.indices = np.array(new_indices, dtype=np.int64)
-            self.n_signals = len(indexes)
+                self.spikes = np.concatenate(new_spikes)
+                self.indices = np.array(new_indices, dtype=np.int64)
+                self.n_signals = len(indexes)
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
