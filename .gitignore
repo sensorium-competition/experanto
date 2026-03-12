@@ -163,3 +163,5 @@ cython_debug/
 
 *.sif
 *.bak
+
+docs/source/generated/

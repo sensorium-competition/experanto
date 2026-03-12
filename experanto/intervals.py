@@ -5,6 +5,24 @@ import numpy as np
 
 
 class TimeInterval(typing.NamedTuple):
+    """A time interval represented by start and end times.
+
+    Parameters
+    ----------
+    start : float
+        Start time in seconds.
+    end : float
+        End time in seconds.
+
+    Examples
+    --------
+    >>> interval = TimeInterval(0.0, 10.0)
+    >>> 5.0 in interval
+    True
+    >>> 15.0 in interval
+    False
+    """
+
     start: float
     end: float
 
@@ -28,18 +46,18 @@ class TimeInterval(typing.NamedTuple):
         return np.where((times >= self.start) & (times <= self.end))[0]
 
 
-def uniquefy_interval_array(
-    interval_array: List[TimeInterval],
-) -> List[TimeInterval]:
-    """
-    Takes an array of TimeIntervals and returns a new array where no intervals overlap.
-    If intervals overlap or are adjacent, they are merged into a single interval.
+def uniquefy_interval_array(interval_array: List[TimeInterval]) -> List[TimeInterval]:
+    """Merge overlapping or adjacent intervals into non-overlapping intervals.
 
-    Args:
-        interval_array: List of TimeInterval objects
+    Parameters
+    ----------
+    interval_array : list of TimeInterval
+        Input intervals, may overlap or be adjacent.
 
-    Returns:
-        List of non-overlapping TimeInterval objects sorted by start time
+    Returns
+    -------
+    list of TimeInterval
+        Non-overlapping intervals sorted by start time.
     """
     if not interval_array:
         return []
@@ -66,6 +84,20 @@ def uniquefy_interval_array(
 def find_intersection_between_two_interval_arrays(
     interval_array_1: List[TimeInterval], interval_array_2: List[TimeInterval]
 ) -> List[TimeInterval]:
+    """Find the intersection of two interval arrays.
+
+    Parameters
+    ----------
+    interval_array_1 : list of TimeInterval
+        First set of intervals.
+    interval_array_2 : list of TimeInterval
+        Second set of intervals.
+
+    Returns
+    -------
+    list of TimeInterval
+        Intervals where both input arrays overlap.
+    """
     # Sort both arrays by start time
     sorted_1 = sorted(interval_array_1, key=lambda x: x.start)
     sorted_2 = sorted(interval_array_2, key=lambda x: x.start)
@@ -94,6 +126,18 @@ def find_intersection_between_two_interval_arrays(
 def find_intersection_across_arrays_of_intervals(
     intervals_array: List[List[TimeInterval]],
 ) -> List[TimeInterval]:
+    """Find the common intersection across multiple interval arrays.
+
+    Parameters
+    ----------
+    intervals_array : list of list of TimeInterval
+        Multiple sets of intervals.
+
+    Returns
+    -------
+    list of TimeInterval
+        Intervals where all input arrays overlap.
+    """
     common_interval_array = intervals_array[0]
 
     for interval_array in intervals_array[1:]:
@@ -107,6 +151,18 @@ def find_intersection_across_arrays_of_intervals(
 def find_union_across_arrays_of_intervals(
     intervals_array: List[List[TimeInterval]],
 ) -> List[TimeInterval]:
+    """Find the union of multiple interval arrays.
+
+    Parameters
+    ----------
+    intervals_array : list of list of TimeInterval
+        Multiple sets of intervals.
+
+    Returns
+    -------
+    list of TimeInterval
+        Merged non-overlapping intervals covering all input intervals.
+    """
     union_array = []
     for interval_array in intervals_array:
         union_array.extend(interval_array)
@@ -116,17 +172,21 @@ def find_union_across_arrays_of_intervals(
 def find_complement_of_interval_array(
     start: float, end: float, interval_array: List[TimeInterval]
 ) -> List[TimeInterval]:
-    """
-    Finds the complement of an interval array within a given range [start, end].
-    Returns intervals that represent the gaps not covered by the input intervals.
+    """Find gaps not covered by intervals within a range.
 
-    Args:
-        start: Start time of the range
-        end: End time of the range
-        interval_array: List of TimeInterval objects
+    Parameters
+    ----------
+    start : float
+        Start of the range.
+    end : float
+        End of the range.
+    interval_array : list of TimeInterval
+        Intervals to find the complement of.
 
-    Returns:
-        List of TimeInterval objects representing the complement
+    Returns
+    -------
+    list of TimeInterval
+        Intervals representing uncovered gaps in ``[start, end]``.
     """
     if not interval_array:
         return [TimeInterval(start, end)]
@@ -157,16 +217,22 @@ def find_complement_of_interval_array(
 def get_stats_for_valid_interval(
     intervals: List[TimeInterval], start_time: float, end_time: float
 ) -> str:
-    """
-    Calculates and returns statistics about valid and invalid time intervals within a given range.
+    """Calculate statistics about valid and invalid intervals within a range.
 
-    Args:
-        intervals: List of TimeInterval objects representing the valid periods.
-        start_time: The beginning of the total time range to consider.
-        end_time: The end of the total time range to consider.
+    Parameters
+    ----------
+    intervals : list of TimeInterval
+        Valid time intervals.
+    start_time : float
+        Start of the analysis range.
+    end_time : float
+        End of the analysis range.
 
-    Returns:
-        A string summarizing the statistics of valid and invalid intervals.
+    Returns
+    -------
+    str
+        Formatted string with statistics (duration, mean, std) for both
+        valid and invalid intervals.
     """
     total_duration = end_time - start_time
     if total_duration <= 0:
