@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Union
 import json
 import logging
 import os
@@ -86,7 +88,9 @@ class Interpolator:
         self.close()
 
     @staticmethod
-    def create(root_folder: str, cache_data: bool = False, **kwargs) -> "Interpolator":
+    def create(
+        root_folder: Union[str, Path], cache_data: bool = False, **kwargs
+    ) -> "Interpolator":
         """Factory method to create the appropriate interpolator for a modality.
 
         Reads the ``meta.yml`` file in the folder to determine the modality type
@@ -239,12 +243,12 @@ class SequenceInterpolator(Interpolator):
     def normalize_init(self):
         self.mean = np.load(self.root_folder / "meta/means.npy")
         self.std = np.load(self.root_folder / "meta/stds.npy")
-        assert (
-            self.mean.shape[0] == self.n_signals
-        ), f"mean shape does not match: {self.mean.shape} vs {self._data.shape}"
-        assert (
-            self.std.shape[0] == self.n_signals
-        ), f"std shape does not match: {self.std.shape} vs {self._data.shape}"
+        assert self.mean.shape[0] == self.n_signals, (
+            f"mean shape does not match: {self.mean.shape} vs {self._data.shape}"
+        )
+        assert self.std.shape[0] == self.n_signals, (
+            f"std shape does not match: {self.std.shape} vs {self._data.shape}"
+        )
         self.mean = self.mean.T
         self.std = self.std.T
         if self.normalize_std_threshold:
@@ -538,12 +542,12 @@ class ScreenInterpolator(Interpolator):
         if self.rescale:
             self.mean = self.rescale_frame(self.mean.T).T
             self.std = self.rescale_frame(self.std.T).T
-        assert (
-            self.mean.shape == self._image_size
-        ), f"mean size is different: {self.mean.shape} vs {self._image_size}"
-        assert (
-            self.std.shape == self._image_size
-        ), f"std size is different: {self.std.shape} vs {self._image_size}"
+        assert self.mean.shape == self._image_size, (
+            f"mean size is different: {self.mean.shape} vs {self._image_size}"
+        )
+        assert self.std.shape == self._image_size, (
+            f"std size is different: {self.std.shape} vs {self._image_size}"
+        )
 
     def normalize_data(self, data):
         return (data - self.mean) / self.std
@@ -615,9 +619,9 @@ class ScreenInterpolator(Interpolator):
         idx = cast(
             np.ndarray, np.searchsorted(self.timestamps, valid_times) - 1
         )  # convert times to frame indices
-        assert np.all(
-            (idx >= 0) & (idx < len(self.timestamps))
-        ), "All times must be within the valid range"
+        assert np.all((idx >= 0) & (idx < len(self.timestamps))), (
+            "All times must be within the valid range"
+        )
         data_file_idx = self._data_file_idx[idx]
 
         # Go through files, load them and extract all frames
