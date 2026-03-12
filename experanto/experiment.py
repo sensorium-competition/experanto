@@ -109,17 +109,9 @@ class Experiment:
                 )
 
             self.devices[d.name] = dev
-<<<<<<< HEAD
-            if dev.start_time is not None:
-                self.start_time = min(self.start_time, dev.start_time)
-            if dev.end_time is not None:
-                self.end_time = max(self.end_time, dev.end_time)
-            log.info("Parsing finished")
-=======
             self.start_time = dev.start_time
             self.end_time = dev.end_time
             logger.info("Parsing finished")
->>>>>>> main
 
     @property
     def device_names(self):
