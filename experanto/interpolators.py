@@ -1166,7 +1166,9 @@ class SpikeInterpolator(Interpolator):
             indexes = ids_to_indexes
 
         if indexes is not None and len(indexes) > 0:
-            if max(indexes) >= self.n_signals:
+            max_index = max(indexes)
+            min_index = min(indexes)
+            if min_index < 0 or max_index >= self.n_signals:
                 raise ValueError("indexes contains invalid value")
 
         # If specific neuron indexes are requested, rebuild the spike array so that it
