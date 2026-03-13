@@ -596,6 +596,7 @@ def test_two_interval_intersection(a, b, expected):
             [TimeInterval(5.0, 7.0), TimeInterval(1.0, 3.0)],
             [TimeInterval(1.0, 3.0), TimeInterval(5.0, 7.0)],
         ),  # unsorted input non-overlapping
+        (
             [TimeInterval(3.0, 7.0), TimeInterval(1.0, 3.0)],
             [TimeInterval(1.0, 7.0)],
         ),  # unsorted input overlapping
@@ -633,6 +634,11 @@ def test_uniquefy(intervals, expected):
             [TimeInterval(3.0, 7.0)],
             [TimeInterval(3.0, 5.0)],
         ),  # partial
+        (
+            [TimeInterval(1.0, 3.0)],
+            [TimeInterval(3.0, 5.0)],
+            [TimeInterval(3.0, 3.0)],
+        ),  # touching
         (
             [TimeInterval(1.0, 4.0), TimeInterval(6.0, 9.0)],
             [TimeInterval(2.0, 7.0)],
