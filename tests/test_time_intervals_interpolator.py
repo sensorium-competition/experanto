@@ -595,7 +595,10 @@ def test_two_interval_intersection(a, b, expected):
         (
             [TimeInterval(5.0, 7.0), TimeInterval(1.0, 3.0)],
             [TimeInterval(1.0, 3.0), TimeInterval(5.0, 7.0)],
-        ),  # unsorted input
+        ),  # unsorted input non-overlapping
+            [TimeInterval(3.0, 7.0), TimeInterval(1.0, 3.0)],
+            [TimeInterval(1.0, 7.0)],
+        ),  # unsorted input overlapping
         (
             [TimeInterval(1.0, 4.0), TimeInterval(3.0, 6.0), TimeInterval(5.0, 8.0)],
             [TimeInterval(1.0, 8.0)],
