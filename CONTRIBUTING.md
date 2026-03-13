@@ -29,14 +29,17 @@ pytest tests/test_sequence_interpolator.py  # single file
 
 All sources are in the `docs/` folder. To build locally:
 
-1. Install Sphinx and the ReadTheDocs theme:
+1. Install the documentation dependencies:
    ```bash
-   pip install sphinx sphinx-rtd-theme
+   pip install -e ".[docs]"
    ```
+
 2. From inside the `docs/` folder:
    ```bash
+   cd docs
    make clean html
    ```
+
 3. Open `docs/build/html/index.html` in your browser.
 
 ## Pull Requests

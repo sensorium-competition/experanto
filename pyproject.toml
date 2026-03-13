@@ -25,6 +25,14 @@ dev = [
     "hypothesis>=6.0",
 ]
 
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+    "myst-parser",
+    "PyYAML",
+    "numpy"
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["experanto*", "configs"]
