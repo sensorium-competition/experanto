@@ -41,6 +41,8 @@ All sources are in the `docs/` folder. To build locally:
 
 ## Pull Requests
 
+Before submitting a PR, please open an issue to discuss your proposed change. PRs that merely reorganize or copy existing code without clear motivation, or that don't align with the project's direction, will be closed without review. Maintainer time is limited — please use it respectfully.
+
 - Keep PRs focused; one logical change per PR.
 - All existing tests must pass; add tests for new behavior.
 - Code style checks and type checking must pass.
