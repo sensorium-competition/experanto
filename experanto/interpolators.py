@@ -758,7 +758,9 @@ class TimeIntervalInterpolator(Interpolator):
             for start, end in intervals:
                 if start > end:
                     warnings.warn(
-                        f"Invalid interval found for label: {label}, interval: ({start}, {end})"
+                        f"Invalid interval detected for label '{label}'. "
+                        f"Start time {start} is greater than end time {end}. "
+                        "This interval will be ignored."
                     )
                     continue
                 # Half-open interval [start, end): inclusive start, exclusive end
