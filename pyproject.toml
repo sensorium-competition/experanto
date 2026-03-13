@@ -22,6 +22,7 @@ dev = [
     "pytest==8.3.5",
     "pytest-cov>=7.0.0",
     "pyright",
+    "hypothesis>=6.0",
 ]
 
 [tool.setuptools.packages.find]
