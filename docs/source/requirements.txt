@@ -1,5 +1,0 @@
-sphinx
-sphinx-rtd-theme
-PyYAML
-numpy
-myst-parser
