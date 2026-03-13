@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-import re
 import warnings
-from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional, Union
 
@@ -77,9 +75,8 @@ class Experiment:
         self._load_devices()
 
     def _load_devices(self) -> None:
-        # Populate devices by going through subfolders
         # Assumption: blocks are sorted by start time
-        device_folders = [d for d in self.root_folder.iterdir() if (d.is_dir())]
+        device_folders = [d for d in self.root_folder.iterdir() if d.is_dir()]
 
         for d in device_folders:
             if d.name not in self.modality_config:
@@ -87,37 +84,28 @@ class Experiment:
                 continue
             logger.info("Parsing %s data", d.name)
 
-            # Get interpolation config for this device
             interp_conf = self.modality_config[d.name]["interpolation"]
 
             if (
                 isinstance(interp_conf, (dict, DictConfig))
                 and "_target_" in interp_conf
             ):
-                # Custom interpolator (Hydra instantiates it)
                 dev = instantiate(
                     interp_conf, root_folder=d, cache_data=self.cache_data
                 )
-                # Check if instantiated object is proper Interpolator
                 if not isinstance(dev, Interpolator):
                     raise ValueError(
-                        "Please provide an Interpolator which inherits from experantos Interpolator class."
+                        "Instantiated object must inherit from Interpolator class."
                     )
 
             elif isinstance(interp_conf, Interpolator):
-                # Already instantiated Interpolator
                 dev = interp_conf
 
             else:
-                # Default back to original logic
-                warnings.warn(
-                    "Falling back to original Interpolator creation logic.",
-                    UserWarning,
-                )
                 dev = Interpolator.create(
-                    d,
+                    str(d),
                     cache_data=self.cache_data,
-                    **interp_conf,  # type: ignore[arg-type]
+                    **{str(k): v for k, v in dict(interp_conf).items()},
                 )
 
             self.devices[d.name] = dev
@@ -132,7 +120,7 @@ class Experiment:
     def interpolate(
         self,
         times: np.ndarray,
-        device: Union[str, Interpolator, None] = None,
+        device: Union[str, None] = None,
         return_valid: bool = False,
     ) -> Union[tuple[dict, dict], dict, tuple[np.ndarray, np.ndarray], np.ndarray]:
         """Interpolate data from one or all devices at specified time points.
@@ -187,26 +175,22 @@ class Experiment:
         dict_keys(['screen', 'responses', 'eye_tracker'])
         """
         if device is None:
-            values = {}
-            valid = {}
+            values, valid = {}, {}
             for d, interp in self.devices.items():
                 res = interp.interpolate(times, return_valid=return_valid)
                 if return_valid:
                     vals, vlds = res
-                    values[d] = vals
-                    valid[d] = vlds
+                    values[d], valid[d] = vals, vlds
                 else:
                     values[d] = res
-            if return_valid:
-                return values, valid
-            else:
-                return values
+            return (values, valid) if return_valid else values
+
         elif isinstance(device, str):
-            assert device in self.devices, "Unknown device '{}'".format(device)
-            res = self.devices[device].interpolate(times, return_valid=return_valid)
-            return res
-        else:
-            raise ValueError(f"Unsupported device type: {type(device)}")
+            if device not in self.devices:
+                raise KeyError(f"Unknown device '{device}'")
+            return self.devices[device].interpolate(times, return_valid=return_valid)
+
+        raise ValueError(f"Unsupported device type: {type(device)}")
 
     def get_valid_range(self, device_name: str) -> tuple[float, float]:
         """Get the valid time range for a specific device.

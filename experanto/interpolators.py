@@ -86,7 +86,9 @@ class Interpolator:
         self.close()
 
     @staticmethod
-    def create(root_folder: str, cache_data: bool = False, **kwargs) -> "Interpolator":
+    def create(
+        root_folder: Union[str, Path], cache_data: bool = False, **kwargs
+    ) -> "Interpolator":
         """Factory method to create the appropriate interpolator for a modality.
 
         Reads the ``meta.yml`` file in the folder to determine the modality type
