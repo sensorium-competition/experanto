@@ -12,7 +12,6 @@ from typing import Union, cast
 
 import cv2
 import numpy as np
-import numpy.lib.format as fmt
 import yaml
 from numba import njit, prange
 from scipy.ndimage import gaussian_filter1d
@@ -326,7 +325,7 @@ class SequenceInterpolator(Interpolator):
 
         else:
             raise NotImplementedError(
-                f"interpolation_mode should be linear or nearest_neighbor"
+                "interpolation_mode should be linear or nearest_neighbor"
             )
 
     def close(self) -> None:
@@ -454,7 +453,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
         else:
             raise NotImplementedError(
-                f"interpolation_mode should be linear or nearest_neighbor"
+                "interpolation_mode should be linear or nearest_neighbor"
             )
 
 
