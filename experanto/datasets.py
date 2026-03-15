@@ -26,7 +26,7 @@ from .intervals import (
 from .utils import add_behavior_as_channels
 
 # see .configs.py for the definition of DEFAULT_MODALITY_CONFIG
-#DEFAULT_MODALITY_CONFIG = dict()
+# DEFAULT_MODALITY_CONFIG = dict()
 
 logger = logging.getLogger(__name__)
 
