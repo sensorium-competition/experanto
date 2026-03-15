@@ -1,35 +1,31 @@
 from __future__ import annotations
 
-import functools
 import importlib
 import json
 import logging
 import os
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
 import torchvision
 from hydra.utils import instantiate
-from omegaconf import DictConfig, ListConfig, OmegaConf
+from omegaconf import DictConfig, ListConfig
 from torch.utils.data import Dataset
-from torchvision.transforms import v2
 from torchvision.transforms.v2 import Compose, Lambda, ToTensor
 
 from .configs import DEFAULT_MODALITY_CONFIG
 from .experiment import Experiment
-from .interpolators import ImageTrial, VideoTrial
 from .intervals import (
     TimeInterval,
     find_intersection_between_two_interval_arrays,
     get_stats_for_valid_interval,
 )
-from .utils import add_behavior_as_channels, replace_nan_with_batch_mean
+from .utils import add_behavior_as_channels
 
 # see .configs.py for the definition of DEFAULT_MODALITY_CONFIG
-DEFAULT_MODALITY_CONFIG = dict()
 
 logger = logging.getLogger(__name__)
 
@@ -768,7 +764,7 @@ class ChunkDataset(Dataset):
         for device_name in self.device_names:
             sampling_rate = self.sampling_rates[device_name]
             chunk_size = self.chunk_sizes[device_name]
-            chunk_s = chunk_size / sampling_rate
+           
 
             # convert everything to int to avoid numerical issues
             start_time = int(round(s * self.scale_precision))

@@ -1,13 +1,8 @@
 import logging
-import os
-import time
 import warnings
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Dict, List, Optional, Union
 
-import numpy as np
 from omegaconf import DictConfig
-from torch.utils.data import DataLoader
 
 from .datasets import ChunkDataset
 from .utils import (
@@ -158,7 +153,7 @@ def get_multisession_concat_dataloader(
     datasets = []
     session_names = []
 
-    start_time = time.time()
+    
     for i, (path, cfg) in enumerate(zip(paths, configs)):
         # Create dataset with deterministic seed
         path_hash = hash(path) % 10000
