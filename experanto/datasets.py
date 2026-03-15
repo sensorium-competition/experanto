@@ -764,7 +764,6 @@ class ChunkDataset(Dataset):
         for device_name in self.device_names:
             sampling_rate = self.sampling_rates[device_name]
             chunk_size = self.chunk_sizes[device_name]
-           
 
             # convert everything to int to avoid numerical issues
             start_time = int(round(s * self.scale_precision))
