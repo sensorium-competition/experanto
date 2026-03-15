@@ -1,6 +1,9 @@
 name: Ruff
 
-on: [push, pull_request]
+on:
+  push:
+    branches: ["main"]
+  pull_request:
 
 jobs:
   ruff:
@@ -8,3 +11,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.15.6"
