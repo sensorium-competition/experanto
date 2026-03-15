@@ -236,7 +236,7 @@ def get_stats_for_valid_interval(
     """
     total_duration = end_time - start_time
     if total_duration <= 0:
-        return f"Error: Invalid time range (end_time <= start_time). Total duration must be positive."
+        return "Error: Invalid time range (end_time <= start_time). Total duration must be positive."
 
     # Ensure intervals are unique and sorted, then clamp them to the analysis window
     unique_intervals = uniquefy_interval_array(intervals)

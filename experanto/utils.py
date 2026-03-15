@@ -1,28 +1,15 @@
 import bisect
 import logging
-import math
-import multiprocessing
 
 # inbuilt libraries
-import os
-import queue
-import random
-import threading
-import time
-import warnings
 from collections import defaultdict
-from copy import deepcopy
-from functools import partial
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 # third-party libraries
 import numpy as np
 import torch
-from omegaconf import DictConfig
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, Sampler
+from torch.utils.data import DataLoader, Dataset, Sampler
 
 # local libraries
-from .intervals import TimeInterval
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +45,7 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
 
     # Process eye_tracker
     if len(eye_tracker.shape) == 2:  # (t, c_eye)
-        c_eye = eye_tracker.shape[1]
+        #c_eye = eye_tracker.shape[1]
         # Reshape to (c_eye, t, h, w)
         eye_tracker = eye_tracker.transpose(0, 1)  # (c_eye, t)
         eye_tracker = eye_tracker.unsqueeze(-1).unsqueeze(-1)  # (c_eye, t, 1, 1)
@@ -69,7 +56,7 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
 
     # Process treadmill
     if len(treadmill.shape) == 2:  # (t, c_tread)
-        c_tread = treadmill.shape[1]
+        #c_tread = treadmill.shape[1]
         # Reshape to (c_tread, t, h, w)
         treadmill = treadmill.transpose(0, 1)  # (c_tread, t)
         treadmill = treadmill.unsqueeze(-1).unsqueeze(-1)  # (c_tread, t, 1, 1)
