@@ -45,7 +45,6 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
 
     # Process eye_tracker
     if len(eye_tracker.shape) == 2:  # (t, c_eye)
-        #c_eye = eye_tracker.shape[1]
         # Reshape to (c_eye, t, h, w)
         eye_tracker = eye_tracker.transpose(0, 1)  # (c_eye, t)
         eye_tracker = eye_tracker.unsqueeze(-1).unsqueeze(-1)  # (c_eye, t, 1, 1)
@@ -56,7 +55,6 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
 
     # Process treadmill
     if len(treadmill.shape) == 2:  # (t, c_tread)
-        #c_tread = treadmill.shape[1]
         # Reshape to (c_tread, t, h, w)
         treadmill = treadmill.transpose(0, 1)  # (c_tread, t)
         treadmill = treadmill.unsqueeze(-1).unsqueeze(-1)  # (c_tread, t, 1, 1)

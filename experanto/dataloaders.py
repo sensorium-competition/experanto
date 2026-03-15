@@ -153,7 +153,7 @@ def get_multisession_concat_dataloader(
     datasets = []
     session_names = []
 
-    #start_time = time.time()
+
     for i, (path, cfg) in enumerate(zip(paths, configs)):
         # Create dataset with deterministic seed
         path_hash = hash(path) % 10000
