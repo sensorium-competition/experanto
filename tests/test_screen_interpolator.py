@@ -17,8 +17,9 @@ from .create_screen_data import create_screen_data
 @pytest.mark.parametrize("num_videos", [1, 10])
 @pytest.mark.parametrize("encoded", [False, True])
 @pytest.mark.parametrize("number_channels", [1, 3])
+@pytest.mark.parametrize("cache", [True, False])
 def test_nearest_neighbor_interpolation(
-    duration, fps, image_frame_count, num_videos, encoded, number_channels
+    duration, fps, image_frame_count, num_videos, encoded, number_channels, cache
 ):
     with create_screen_data(
         duration=duration,
@@ -29,7 +30,7 @@ def test_nearest_neighbor_interpolation(
         encoded=encoded,
     ) as timestamps:
 
-        interp_obj = Interpolator.create("tests/screen_data")
+        interp_obj = Interpolator.create("tests/screen_data", cache_data=cache)
         assert isinstance(interp_obj, ScreenInterpolator), "Expected ScreenInterpolator"
         interp_obj.number_channels = number_channels
 

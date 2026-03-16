@@ -56,7 +56,7 @@ class Interpolator:
     Experiment : High-level interface that manages multiple interpolators.
     """
 
-    def __init__(self, root_folder: str) -> None:
+    def __init__(self, root_folder: Union[str, Path]) -> None:
         self.root_folder = Path(root_folder)
         self.start_time = None
         self.end_time = None
@@ -85,7 +85,9 @@ class Interpolator:
         self.close()
 
     @staticmethod
-    def create(root_folder: str, cache_data: bool = False, **kwargs) -> "Interpolator":
+    def create(
+        root_folder: Union[str, Path], cache_data: bool = False, **kwargs
+    ) -> "Interpolator":
         """Factory method to create the appropriate interpolator for a modality.
 
         Reads the ``meta.yml`` file in the folder to determine the modality type
@@ -195,7 +197,7 @@ class SequenceInterpolator(Interpolator):
 
     def __init__(
         self,
-        root_folder: str,
+        root_folder: Union[str, Path],
         cache_data: bool = False,  # already cached, put it here for consistency
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
@@ -359,7 +361,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
     def __init__(
         self,
-        root_folder: str,
+        root_folder: Union[str, Path],
         cache_data: bool = False,  # already cached, put it here for consistency
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
@@ -501,7 +503,7 @@ class ScreenInterpolator(Interpolator):
 
     def __init__(
         self,
-        root_folder: str,
+        root_folder: Union[str, Path],
         cache_data: bool = False,  # New parameter
         number_channels: int = 1,
         image_names: bool = False,
@@ -655,7 +657,7 @@ class ScreenInterpolator(Interpolator):
                 )
             )
 
-    def _initialize_decoder(self, data_file_name):
+    def _initialize_decoder(self, data_file_name: Union[str, Path]):
         decoder = VideoDecoder(
             str(data_file_name),
             num_ffmpeg_threads=self.number_threads_decoding,
@@ -857,7 +859,9 @@ class TimeIntervalInterpolator(Interpolator):
       *i*-th valid time falls within any interval for the *j*-th label.
     """
 
-    def __init__(self, root_folder: str, cache_data: bool = False, **kwargs):
+    def __init__(
+        self, root_folder: Union[str, Path], cache_data: bool = False, **kwargs
+    ):
         super().__init__(root_folder)
         self.cache_data = cache_data
 
@@ -1008,7 +1012,12 @@ class ScreenTrial:
 class ImageTrial(ScreenTrial):
     """Trial containing a single static image."""
 
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(
+        self,
+        data_file_name: Union[str, Path],
+        meta_data,
+        cache_data: bool = False,
+    ) -> None:
         super().__init__(
             data_file_name,
             meta_data,
@@ -1020,7 +1029,12 @@ class ImageTrial(ScreenTrial):
 
 
 class EncodedImageTrial(ScreenTrial):
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(
+        self,
+        data_file_name: Union[str, Path],
+        meta_data,
+        cache_data: bool = False,
+    ) -> None:
         super().__init__(
             data_file_name,
             meta_data,
@@ -1043,7 +1057,12 @@ class EncodedImageTrial(ScreenTrial):
 class VideoTrial(ScreenTrial):
     """Trial containing a multi-frame video sequence."""
 
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(
+        self,
+        data_file_name: Union[str, Path],
+        meta_data,
+        cache_data: bool = False,
+    ) -> None:
         super().__init__(
             data_file_name,
             meta_data,
@@ -1057,11 +1076,17 @@ class VideoTrial(ScreenTrial):
 class EncodedVideoTrial(ScreenTrial):
     def __init__(
         self,
-        data_file_name,
+        data_file_name: Union[str, Path],
         meta_data,
         shared_decoder: VideoDecoder,
         cache_data: bool = False,
     ) -> None:
+        self.video_decoder = shared_decoder
+        if self.video_decoder is None:
+            raise ValueError(
+                "EncodedVideoTrial requires a shared_decoder to be provided."
+            )
+
         super().__init__(
             data_file_name,
             meta_data,
@@ -1070,11 +1095,6 @@ class EncodedVideoTrial(ScreenTrial):
             meta_data.get("num_frames"),
             cache_data=cache_data,
         )
-        self.video_decoder = shared_decoder
-        if self.video_decoder is None:
-            raise ValueError(
-                "EncodedVideoTrial requires a shared_decoder to be provided."
-            )
 
     def get_data(self, frame_indices) -> np.ndarray:
         """Overwrite Wrapper to accept Frame Indices"""
@@ -1108,7 +1128,12 @@ class EncodedVideoTrial(ScreenTrial):
 class BlankTrial(ScreenTrial):
     """Trial containing a blank/gray screen (inter-stimulus interval)."""
 
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(
+        self,
+        data_file_name: Union[str, Path],
+        meta_data,
+        cache_data: bool = False,
+    ) -> None:
         self.interleave_value = meta_data.get("interleave_value")
 
         super().__init__(
@@ -1128,7 +1153,12 @@ class BlankTrial(ScreenTrial):
 class InvalidTrial(ScreenTrial):
     """Placeholder for invalid or corrupted trials."""
 
-    def __init__(self, data_file_name, meta_data, cache_data: bool = False) -> None:
+    def __init__(
+        self,
+        data_file_name: Union[str, Path],
+        meta_data,
+        cache_data: bool = False,
+    ) -> None:
         self.interleave_value = meta_data.get("interleave_value")
 
         super().__init__(
@@ -1236,7 +1266,7 @@ class SpikeInterpolator(Interpolator):
 
     def __init__(
         self,
-        root_folder: str,
+        root_folder: Union[str, Path],
         cache_data: bool = False,
         interpolation_window: float = 0.3,
         interpolation_align: str = "center",

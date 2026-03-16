@@ -29,8 +29,8 @@ def create_screen_data(
         timestamps = np.linspace(0.0, duration, n_frames, endpoint=False)
         np.save(SCREEN_ROOT / "timestamps.npy", timestamps)
 
-        # Generate frames with values in [0, 255] for better encoding
-        frames = (np.random.rand(n_frames, *frame_shape) * 255).astype(np.float32)
+        # Generate frames
+        frames = (np.random.rand(n_frames, *frame_shape)).astype(np.float32)
 
         # Save image frames
         for i in range(min(image_frame_count, n_frames)):
