@@ -138,7 +138,7 @@ class Experiment:
                 self.root_folder,
             )
         elif (
-            not np.isfinite(self.start_time) 
+            not np.isfinite(self.start_time)
             or not np.isfinite(self.end_time)
             or self.start_time > self.end_time
         ):
