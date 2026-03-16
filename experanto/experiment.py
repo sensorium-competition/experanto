@@ -137,7 +137,8 @@ class Experiment:
                 "No devices were loaded. Please check your root folder %s",
                 self.root_folder,
             )
-        elif not np.isfinite(self.start_time) and np.isfinite(self.end_time):
+        elif (not (np.isfinite(self.start_time) and np.isfinite(self.end_time))
+              or self.start_time > self.end_time):
             raise ValueError(
                 "Experiment time range could not be determined: at least one device "
                 "must define finite start_time and end_time."
