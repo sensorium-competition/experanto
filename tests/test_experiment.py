@@ -120,12 +120,12 @@ def test_experiment_start_end_time_reflects_union():
         )
 
         # Union: start = min(1.0, 0.0) = 0.0, end = max(8.0, 10.0) = 10.0
-        assert experiment.start_time == pytest.approx(0.0), (
-            f"Expected start_time=0.0, got {experiment.start_time}"
-        )
-        assert experiment.end_time == pytest.approx(10.0), (
-            f"Expected end_time=10.0, got {experiment.end_time}"
-        )
+        assert experiment.start_time == pytest.approx(
+            0.0
+        ), f"Expected start_time=0.0, got {experiment.start_time}"
+        assert experiment.end_time == pytest.approx(
+            10.0
+        ), f"Expected end_time=10.0, got {experiment.end_time}"
 
 
 def test_experiment_single_device_time_range():
@@ -134,9 +134,7 @@ def test_experiment_single_device_time_range():
         device0_start=2.0,
         device0_end=9.0,
     ) as experiment_path:
-        config = {
-            "device_0": {"interpolation": {"sampling_rate": 10.0, "offset": 0.0}}
-        }
+        config = {"device_0": {"interpolation": {"sampling_rate": 10.0, "offset": 0.0}}}
         experiment = Experiment(
             root_folder=experiment_path,
             modality_config=config,
