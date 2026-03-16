@@ -25,6 +25,12 @@ Issues with the package can be submitted at our `GitHub Issues page <https://git
    concepts/demo_multisession
 
 .. toctree::
+   :maxdepth: 1
+   :caption: Development
+
+   contributing
+
+.. toctree::
    :maxdepth: 2
    :caption: API Reference
 
