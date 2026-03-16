@@ -53,12 +53,12 @@ def test_experiment_start_end_time_reflects_union(tmp_path):
     )
 
     # Union: start = min(1.0, 0.0) = 0.0, end = max(8.0, 10.0) = 10.0
-    assert experiment.start_time == pytest.approx(0.0), (
-        f"Expected start_time=0.0, got {experiment.start_time}"
-    )
-    assert experiment.end_time == pytest.approx(10.0), (
-        f"Expected end_time=10.0, got {experiment.end_time}"
-    )
+    assert experiment.start_time == pytest.approx(
+        0.0
+    ), f"Expected start_time=0.0, got {experiment.start_time}"
+    assert experiment.end_time == pytest.approx(
+        10.0
+    ), f"Expected end_time=10.0, got {experiment.end_time}"
 
 
 def test_experiment_single_device_time_range(tmp_path):
