@@ -121,11 +121,25 @@ class Experiment:
                 )
 
             self.devices[d.name] = dev
-            if dev.start_time is not None:
+            if dev.start_time is None or dev.end_time is None:
+                logger.warning(
+                    "Device %s has undefined start_time or end_time and will be "
+                    "excluded from the experiment-wide time range.",
+                 d.name,
+                )
+            else:
                 self.start_time = min(self.start_time, dev.start_time)
-            if dev.end_time is not None:
                 self.end_time = max(self.end_time, dev.end_time)
             logger.info("Parsing finished")
+            if not self.devices:
+                logger.warning(
+                    "No devices were loaded. Please check your root folder %s", self.root_folder
+                )
+            elif not np.isfinite(self.start_time) and np.isfinite(self.end_time):
+                raise ValueError(
+                    "Experiment time range could not be determined: at least one device "
+                    "must define finite start_time and end_time."
+                )
 
     @property
     def device_names(self):
