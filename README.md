@@ -2,6 +2,9 @@
 
 Experanto is a Python package designed for interpolating recordings and stimuli in neuroscience experiments. It enables users to load single or multiple experiments and create efficient dataloaders for machine learning applications.
 
+> [!IMPORTANT]
+> If you're interested in contributing or looking for a **Google Summer of Code** project, we discuss ideas and planned features in this [ideas thread](https://github.com/sensorium-competition/experanto/discussions/101) — please share your thoughts there before opening a PR.
+
 ## Features
 
 - **Unified Experiment Interface**: Load and query multi-modal neuroscience data (neural responses, eye tracking, treadmill, visual stimuli) through a single `Experiment` class

@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import importlib
 import json
+import logging
 import os
 from collections.abc import Iterable
 from pathlib import Path
@@ -29,6 +30,8 @@ from .utils import add_behavior_as_channels, replace_nan_with_batch_mean
 
 # see .configs.py for the definition of DEFAULT_MODALITY_CONFIG
 DEFAULT_MODALITY_CONFIG = dict()
+
+logger = logging.getLogger(__name__)
 
 
 class SimpleChunkedDataset(Dataset):
@@ -488,11 +491,11 @@ class ChunkDataset(Dataset):
                     filter_function = self._get_callable_filter(filter_config)
                     valid_intervals_: List[TimeInterval] = filter_function(device_=device)  # type: ignore[assignment]
                     if visualize:
-                        print(f"modality: {modality}, filter: {filter_name}")
+                        logger.info("modality: %s, filter: %s", modality, filter_name)
                         visualization_string = get_stats_for_valid_interval(
                             valid_intervals_, self.start_time, self.end_time
                         )
-                        print(visualization_string)
+                        logger.info("%s", visualization_string)
                     if valid_intervals is None:
                         valid_intervals = valid_intervals_
                     else:
@@ -727,15 +730,16 @@ class ChunkDataset(Dataset):
                     dataset_name = root_folder.split("_gaze")[0].split("datasets/")[1]
                     return dataset_name
                 else:
-                    print(
-                        f"No 'data_key' found in {meta_file_path}, using folder name instead"
+                    logger.info(
+                        "No 'data_key' found in %s, using folder name instead",
+                        meta_file_path,
                     )
-            except json.JSONDecodeError:
-                print(f"Error: {meta_file_path} is not a valid JSON file")
+            except json.JSONDecodeError as e:
+                logger.warning("Error loading %s: %s", meta_file_path, e)
             except Exception as e:
-                print(f"Error loading {meta_file_path}: {str(e)}")
+                logger.warning("Error loading %s: %s", meta_file_path, e)
         else:
-            print(f"No metadata file found at {meta_file_path}")
+            logger.warning("No metadata file found at %s", meta_file_path)
         return os.path.basename(root_folder)
 
     def __len__(self):

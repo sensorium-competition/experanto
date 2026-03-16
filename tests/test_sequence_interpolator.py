@@ -536,5 +536,4 @@ def test_interpolation_mode_not_implemented():
 
 
 if __name__ == "__main__":
-    print("Running tests")
     pytest.main([__file__])

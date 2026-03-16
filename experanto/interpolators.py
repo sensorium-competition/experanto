@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import typing
@@ -19,6 +20,8 @@ from scipy.ndimage import gaussian_filter1d
 from torchcodec.decoders import VideoDecoder, set_cuda_backend
 
 from .intervals import TimeInterval
+
+logger = logging.getLogger(__name__)
 
 
 class Interpolator:
@@ -590,7 +593,7 @@ class ScreenInterpolator(Interpolator):
 
     def read_combined_meta(self) -> tuple[list, list]:
         if not (self.root_folder / "combined_meta.json").exists():
-            print("Combining metadatas...")
+            logger.info("Combining metadata files...")
             self._combine_metadatas()
 
         with open(self.root_folder / "combined_meta.json", "r") as file:
