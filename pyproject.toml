@@ -28,15 +28,10 @@ dev = [
     "pyright",
     "hypothesis>=6.0",
 ]
-
 docs = [
     "sphinx==8.2.3",
     "sphinx-rtd-theme==3.0.2",
     "myst-parser==5.0.0"
-]
-docs = [
-    "sphinx",
-    "sphinx-rtd-theme",
 ]
 
 [tool.setuptools.packages.find]
