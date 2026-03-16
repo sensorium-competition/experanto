@@ -121,8 +121,8 @@ class Experiment:
                 )
 
             self.devices[d.name] = dev
-            self.start_time = dev.start_time
-            self.end_time = dev.end_time
+            self.start_time = min(self.start_time, dev.start_time)
+            self.end_time = max(self.end_time, dev.end_time)
             logger.info("Parsing finished")
 
     @property
