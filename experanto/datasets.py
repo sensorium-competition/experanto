@@ -25,7 +25,6 @@ from .intervals import (
 )
 from .utils import add_behavior_as_channels
 
-
 logger = logging.getLogger(__name__)
 
 
