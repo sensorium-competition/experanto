@@ -6,13 +6,17 @@ import yaml
 
 
 @contextmanager
-def make_sequence_device(root, name, start, end, sampling_rate=10.0, n_signals=5, override_meta=None):
+def make_sequence_device(
+    root, name, start, end, sampling_rate=10.0, n_signals=5, override_meta=None
+):
     """Create a single sequence device folder under root."""
     device_root = root / name
     try:
         (device_root / "meta").mkdir(parents=True, exist_ok=True)
 
-        n_samples = int((end - start) * sampling_rate) + 1 # +1 to include both start and end as sample points
+        n_samples = (
+            int((end - start) * sampling_rate) + 1
+        )  # +1 to include both start and end as sample points
         timestamps = np.linspace(start, end, n_samples)
         data = np.random.rand(n_samples, n_signals)
 
