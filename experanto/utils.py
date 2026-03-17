@@ -77,7 +77,7 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
     return data
 
 
-class MultiEpochsDataLoader(torch.utils.data.DataLoader):
+class MultiEpochsDataLoader(DataLoader):
     """DataLoader that keeps workers alive across epochs.
 
     Solves a bug where worker processes are re-spawned at the start of each
