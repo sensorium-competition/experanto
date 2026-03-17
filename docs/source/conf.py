@@ -74,6 +74,7 @@ autodoc_typehints_description_target = "documented"
 autodoc_mock_imports = [
     "torch",
     "torchvision",
+    "torchcodec",
     "scipy",
     "cv2",
     "pandas",
