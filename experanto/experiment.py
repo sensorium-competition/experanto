@@ -120,8 +120,7 @@ class Experiment:
                     **interp_conf,  # type: ignore[arg-type]
                 )
 
-            self.devices[d.name] = dev
-            if dev.start_time is None or dev.end_time is None:
+            if dev.start_time is None or dev.end_time is None or np.isinf(dev.start_time) or np.isinf(dev.end_time):
                 logger.warning(
                     "Device %s has undefined start_time or end_time and will be "
                     "excluded from the experiment-wide time range.",
@@ -130,18 +129,14 @@ class Experiment:
             else:
                 self.start_time = min(self.start_time, dev.start_time)
                 self.end_time = max(self.end_time, dev.end_time)
+                self.devices[d.name] = dev
             logger.info("Parsing finished")
 
         if not self.devices:
-            logger.warning(
-                "No devices were loaded. Please check your root folder %s",
-                self.root_folder,
+            raise ValueError(
+                "Experiment time range could not be determined: no devices with valid start_time and end_time were found."
             )
-        elif (
-            not np.isfinite(self.start_time)
-            or not np.isfinite(self.end_time)
-            or self.start_time > self.end_time
-        ):
+        elif self.start_time > self.end_time:
             raise ValueError(
                 "Experiment time range could not be determined: at least one device "
                 "must define finite start_time and end_time."
