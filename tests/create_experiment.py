@@ -51,12 +51,12 @@ def make_modality_config(*device_names, sampling_rates=None, offsets=None):
     if offsets is None:
         offsets = [0.0] * len(device_names)
 
-    assert len(device_names) == len(sampling_rates), (
-        f"sampling_rates length {len(sampling_rates)} does not match device_names length {len(device_names)}"
-    )
-    assert len(device_names) == len(offsets), (
-        f"offsets length {len(offsets)} does not match device_names length {len(device_names)}"
-    )
+    assert len(device_names) == len(
+        sampling_rates
+    ), f"sampling_rates length {len(sampling_rates)} does not match device_names length {len(device_names)}"
+    assert len(device_names) == len(
+        offsets
+    ), f"offsets length {len(offsets)} does not match device_names length {len(device_names)}"
 
     return {
         name: {"interpolation": {"sampling_rate": sr, "offset": off}}

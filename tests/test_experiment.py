@@ -28,7 +28,7 @@ DEVICE_TIME_RANGE_IDS = [
     "three_devices_different_ranges",
     "non_overlapping_ranges",
     "identical_ranges",
-    "large_time_stamps"
+    "large_time_stamps",
 ]
 
 # Inverted range is intentionally separate from INVALID_META_CASES —
@@ -55,13 +55,14 @@ INVALID_META_IDS = [
     "negative_infinite_start_time",
     "negative_infinite_end_time",
     "nan_start_time",
-    "nan_end_time"
+    "nan_end_time",
 ]
+
 
 # Test for union of device time ranges
 @pytest.mark.parametrize("n_signals", [5, 20])
 @pytest.mark.parametrize(
-    "device_ranges, expected_start, expected_end", 
+    "device_ranges, expected_start, expected_end",
     DEVICE_TIME_RANGE_CASES,
     ids=DEVICE_TIME_RANGE_IDS,
 )
@@ -117,24 +118,28 @@ def test_experiment_invalid_metadata(tmp_path, override_meta):
                 modality_config=make_modality_config("device_0"),
             )
 
+
 def test_experiment_inverted_time_range_raises(tmp_path):
     """
     Experiment should raise ValueError when start_time > end_time.
-    This is a separate guard from invalid metadata (None/NaN/inf) because it 
+    This is a separate guard from invalid metadata (None/NaN/inf) because it
     only becomes apparent after all devices are loaded and the overall time range is computed.
     """
     with make_sequence_device(
         tmp_path,
         "device_0",
         start=0.0,
-        end=10.0, 
+        end=10.0,
         override_meta={"start_time": 5.0, "end_time": 2.0},
     ):
-        with pytest.raises(ValueError, match="Experiment time range could not be determined"):
+        with pytest.raises(
+            ValueError, match="Experiment time range could not be determined"
+        ):
             Experiment(
                 root_folder=tmp_path,
                 modality_config=make_modality_config("device_0"),
             )
+
 
 @pytest.mark.parametrize("override_meta", INVALID_META_CASES, ids=INVALID_META_IDS)
 def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
@@ -174,12 +179,12 @@ def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
     assert "valid_device" in experiment.devices
     assert "invalid_device" not in experiment.devices
 
-    assert experiment.start_time == pytest.approx(0.0), (
-        f"Expected start_time=0.0, got {experiment.start_time}"
-    )
-    assert experiment.end_time == pytest.approx(10.0), (
-        f"Expected end_time=10.0, got {experiment.end_time}"
-    )
-    assert any("invalid_device" in message for message in caplog.messages),(
-        "Expected warning about invalid_device was skipped"
-    )
+    assert experiment.start_time == pytest.approx(
+        0.0
+    ), f"Expected start_time=0.0, got {experiment.start_time}"
+    assert experiment.end_time == pytest.approx(
+        10.0
+    ), f"Expected end_time=10.0, got {experiment.end_time}"
+    assert any(
+        "invalid_device" in message for message in caplog.messages
+    ), "Expected warning about invalid_device was skipped"
