@@ -28,6 +28,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
+    "myst_parser",
 ]
 
 # -- Autosummary settings ----------------------------------------------------

@@ -26,6 +26,12 @@ dev = [
     "ruff==0.15.6",
 ]
 
+docs = [
+    "sphinx==8.2.3",
+    "sphinx-rtd-theme==3.0.2",
+    "myst-parser==5.0.0"
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["experanto*", "configs"]
