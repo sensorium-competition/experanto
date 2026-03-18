@@ -45,8 +45,20 @@ def make_sequence_device(
         shutil.rmtree(device_root)
 
 
-def make_modality_config(*device_names, sampling_rate=10.0, offset=0.0):
+def make_modality_config(*device_names, sampling_rates=None, offsets=None):
+    if sampling_rates is None:
+        sampling_rates = [10.0] * len(device_names)
+    if offsets is None:
+        offsets = [0.0] * len(device_names)
+
+    assert len(device_names) == len(sampling_rates), (
+        f"sampling_rates length {len(sampling_rates)} does not match device_names length {len(device_names)}"
+    )
+    assert len(device_names) == len(offsets), (
+        f"offsets length {len(offsets)} does not match device_names length {len(device_names)}"
+    )
+
     return {
-        name: {"interpolation": {"sampling_rate": sampling_rate, "offset": offset}}
-        for name in device_names
+        name: {"interpolation": {"sampling_rate": sr, "offset": off}}
+        for name, sr, off in zip(device_names, sampling_rates, offsets)
     }
