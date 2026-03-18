@@ -1,5 +1,5 @@
 import typing
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
 
@@ -46,7 +46,7 @@ class TimeInterval(typing.NamedTuple):
         return np.where((times >= self.start) & (times <= self.end))[0]
 
 
-def uniquefy_interval_array(interval_array: List[TimeInterval]) -> List[TimeInterval]:
+def uniquefy_interval_array(interval_array: list[TimeInterval]) -> list[TimeInterval]:
     """Merge overlapping or adjacent intervals into non-overlapping intervals.
 
     Parameters
@@ -82,8 +82,8 @@ def uniquefy_interval_array(interval_array: List[TimeInterval]) -> List[TimeInte
 
 
 def find_intersection_between_two_interval_arrays(
-    interval_array_1: List[TimeInterval], interval_array_2: List[TimeInterval]
-) -> List[TimeInterval]:
+    interval_array_1: list[TimeInterval], interval_array_2: list[TimeInterval]
+) -> list[TimeInterval]:
     """Find the intersection of two interval arrays.
 
     Parameters
@@ -124,8 +124,8 @@ def find_intersection_between_two_interval_arrays(
 
 
 def find_intersection_across_arrays_of_intervals(
-    intervals_array: List[List[TimeInterval]],
-) -> List[TimeInterval]:
+    intervals_array: list[list[TimeInterval]],
+) -> list[TimeInterval]:
     """Find the common intersection across multiple interval arrays.
 
     Parameters
@@ -149,8 +149,8 @@ def find_intersection_across_arrays_of_intervals(
 
 
 def find_union_across_arrays_of_intervals(
-    intervals_array: List[List[TimeInterval]],
-) -> List[TimeInterval]:
+    intervals_array: list[list[TimeInterval]],
+) -> list[TimeInterval]:
     """Find the union of multiple interval arrays.
 
     Parameters
@@ -170,8 +170,8 @@ def find_union_across_arrays_of_intervals(
 
 
 def find_complement_of_interval_array(
-    start: float, end: float, interval_array: List[TimeInterval]
-) -> List[TimeInterval]:
+    start: float, end: float, interval_array: list[TimeInterval]
+) -> list[TimeInterval]:
     """Find gaps not covered by intervals within a range.
 
     Parameters
@@ -215,7 +215,7 @@ def find_complement_of_interval_array(
 
 
 def get_stats_for_valid_interval(
-    intervals: List[TimeInterval], start_time: float, end_time: float
+    intervals: list[TimeInterval], start_time: float, end_time: float
 ) -> str:
     """Calculate statistics about valid and invalid intervals within a range.
 

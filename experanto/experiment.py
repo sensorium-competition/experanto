@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import warnings
 from pathlib import Path
-from typing import Union
 
 import numpy as np
 from hydra.utils import instantiate
@@ -130,9 +129,9 @@ class Experiment:
     def interpolate(
         self,
         times: np.ndarray,
-        device: Union[str, Interpolator, None] = None,
+        device: str | Interpolator | None = None,
         return_valid: bool = False,
-    ) -> Union[tuple[dict, dict], dict, tuple[np.ndarray, np.ndarray], np.ndarray]:
+    ) -> tuple[dict, dict] | dict | tuple[np.ndarray, np.ndarray] | np.ndarray:
         """Interpolate data from one or all devices at specified time points.
 
         Parameters
@@ -200,7 +199,7 @@ class Experiment:
             else:
                 return values
         elif isinstance(device, str):
-            assert device in self.devices, "Unknown device '{}'".format(device)
+            assert device in self.devices, f"Unknown device '{device}'"
             res = self.devices[device].interpolate(times, return_valid=return_valid)
             return res
         else:

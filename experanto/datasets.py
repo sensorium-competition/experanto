@@ -6,7 +6,7 @@ import logging
 import os
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import torch
@@ -212,15 +212,15 @@ class ChunkDataset(Dataset):
     def __init__(
         self,
         root_folder: str,
-        global_sampling_rate: Optional[float] = None,
-        global_chunk_size: Optional[int] = None,
+        global_sampling_rate: float | None = None,
+        global_chunk_size: int | None = None,
         add_behavior_as_channels: bool = False,
         replace_nans_with_means: bool = False,
         cache_data: bool = False,
-        out_keys: Optional[Iterable] = None,
+        out_keys: Iterable | None = None,
         normalize_timestamps: bool = True,
         modality_config: dict = DEFAULT_MODALITY_CONFIG,
-        seed: Optional[int] = None,
+        seed: int | None = None,
         safe_interval_threshold: float = 0.5,
         interpolate_precision: int = 5,
     ) -> None:
@@ -362,8 +362,8 @@ class ChunkDataset(Dataset):
                         None, ...
                     ]
                 elif mode == "screen_default":
-                    means = np.array((80))
-                    stds = np.array((60))
+                    means = np.array(80)
+                    stds = np.array(60)
 
                 self._statistics[device_name]["mean"] = means.reshape(
                     1, -1
@@ -385,7 +385,7 @@ class ChunkDataset(Dataset):
         for device_name in self.device_names:
             if device_name == "screen":
                 add_channel = Lambda(self.add_channel_function)
-                transform_list: List[Any] = []
+                transform_list: list[Any] = []
 
                 for v in self.modality_config.screen.transforms.values():  # type: ignore[union-attr]
                     if isinstance(v, dict):  # config dict
@@ -395,7 +395,7 @@ class ChunkDataset(Dataset):
 
                 transform_list.insert(0, add_channel)
             else:
-                transform_list: List[Any] = [ToTensor()]
+                transform_list: list[Any] = [ToTensor()]
 
             # Normalization.
             if self.modality_config[device_name].transforms.get("normalization", False):
@@ -468,8 +468,8 @@ class ChunkDataset(Dataset):
 
     def get_valid_intervals_from_filters(
         self, visualize: bool = False
-    ) -> List[TimeInterval]:
-        valid_intervals: Optional[List[TimeInterval]] = None
+    ) -> list[TimeInterval]:
+        valid_intervals: list[TimeInterval] | None = None
         for modality in self.modality_config:
             if "filters" in self.modality_config[modality]:
                 device = self._experiment.devices[modality]
@@ -478,7 +478,7 @@ class ChunkDataset(Dataset):
                 ].items():
                     # Get the final callable filter function
                     filter_function = self._get_callable_filter(filter_config)
-                    valid_intervals_: List[TimeInterval] = filter_function(device_=device)  # type: ignore[assignment]
+                    valid_intervals_: list[TimeInterval] = filter_function(device_=device)  # type: ignore[assignment]
                     if visualize:
                         logger.info("modality: %s, filter: %s", modality, filter_name)
                         visualization_string = get_stats_for_valid_interval(
@@ -495,7 +495,7 @@ class ChunkDataset(Dataset):
         return valid_intervals if valid_intervals is not None else []
 
     def get_condition_mask_from_meta_conditions(
-        self, valid_conditions_sum_of_product: List[dict]
+        self, valid_conditions_sum_of_product: list[dict]
     ) -> np.ndarray:
         """Create a boolean mask for trials satisfying given conditions.
 
@@ -517,7 +517,7 @@ class ChunkDataset(Dataset):
         ``[{'tier': 'train', 'stim_type': 'natural'}, {'tier': 'blank'}]``
         matches trials that are either (train AND natural) OR blank.
         """
-        all_conditions: Optional[np.ndarray] = None
+        all_conditions: np.ndarray | None = None
         for valid_conditions_product in valid_conditions_sum_of_product:
             conditions_of_product = None
             for k, valid_condition in valid_conditions_product.items():
@@ -540,7 +540,7 @@ class ChunkDataset(Dataset):
     def get_screen_sample_mask_from_meta_conditions(
         self,
         satisfy_for_next: int,
-        valid_conditions_sum_of_product: List[dict],
+        valid_conditions_sum_of_product: list[dict],
         filter_for_valid_intervals: bool = True,
     ) -> np.ndarray:
         """Create a boolean mask for screen samples satisfying given conditions.
@@ -702,7 +702,7 @@ class ChunkDataset(Dataset):
         # Check if the file exists before trying to open it
         if os.path.isfile(meta_file_path):
             try:
-                with open(meta_file_path, "r") as file:
+                with open(meta_file_path) as file:
                     meta = json.load(file)
 
                 # Get data_key from meta if it exists
@@ -811,14 +811,14 @@ class ChunkDataset(Dataset):
 
         return final_out
 
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         """Return the current state of the dataset's RNG."""
         return {
             "rng_state": self._rng.get_state() if self.seed is not None else None,
             "valid_screen_times": self._valid_screen_times.copy(),
         }
 
-    def set_state(self, state: Dict[str, Any]) -> None:
+    def set_state(self, state: dict[str, Any]) -> None:
         """Restore the dataset's RNG state."""
         if state["rng_state"] is not None and self.seed is not None:
             self._rng.set_state(state["rng_state"])

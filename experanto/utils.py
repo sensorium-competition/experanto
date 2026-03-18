@@ -232,7 +232,7 @@ class ShortCycler:
         return len(self.loaders) * self.min_batches
 
 
-class _RepeatSampler(object):
+class _RepeatSampler:
     """Simple sampler that repeats indefinitely."""
 
     def __init__(self, sampler):
@@ -537,7 +537,7 @@ class FastSessionDataLoader:
         # State tracking variables
         self.current_batch = 0
         self.epoch = 0
-        self.session_positions = {name: 0 for name in self.session_names}
+        self.session_positions = dict.fromkeys(self.session_names, 0)
         self.batches_from_session = defaultdict(
             int
         )  # Tracks batches yielded per session in the current epoch iteration

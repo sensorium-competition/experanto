@@ -1,6 +1,6 @@
 import logging
 import warnings
-from typing import Dict, List, Optional, Union
+from typing import Optional
 
 from omegaconf import DictConfig
 
@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 def get_multisession_dataloader(
-    paths: List[str],
-    configs: Optional[Union[DictConfig, Dict, List[Union[DictConfig, Dict]]]] = None,
+    paths: list[str],
+    configs: DictConfig | dict | list[DictConfig | dict] | None = None,
     shuffle_keys: bool = False,
     **kwargs,
 ) -> LongCycler:
@@ -90,10 +90,10 @@ def get_multisession_dataloader(
 
 
 def get_multisession_concat_dataloader(
-    paths: List[str],
-    configs: Optional[Union[Dict, List[Dict]]] = None,
-    seed: Optional[int] = 0,
-    dataloader_config: Optional[Dict] = None,
+    paths: list[str],
+    configs: dict | list[dict] | None = None,
+    seed: int | None = 0,
+    dataloader_config: dict | None = None,
     **kwargs,
 ) -> Optional["FastSessionDataLoader"]:
     """Create a concatenated multi-session dataloader.

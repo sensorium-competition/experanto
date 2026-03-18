@@ -4,11 +4,10 @@ import json
 import logging
 import os
 import re
-import typing
 import warnings
 from abc import abstractmethod
 from pathlib import Path
-from typing import Union, cast
+from typing import cast
 
 import cv2
 import numpy as np
@@ -71,7 +70,7 @@ class Interpolator:
     @abstractmethod
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
-    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray] | np.ndarray:
         """Map an array of time points to interpolated data values."""
         ...
 
@@ -85,7 +84,7 @@ class Interpolator:
         self.close()
 
     @staticmethod
-    def create(root_folder: str, cache_data: bool = False, **kwargs) -> "Interpolator":
+    def create(root_folder: str, cache_data: bool = False, **kwargs) -> Interpolator:
         """Factory method to create the appropriate interpolator for a modality.
 
         Reads the ``meta.yml`` file in the folder to determine the modality type
@@ -110,7 +109,7 @@ class Interpolator:
         ValueError
             If the modality type is not supported.
         """
-        with open(Path(root_folder) / "meta.yml", "r") as file:
+        with open(Path(root_folder) / "meta.yml") as file:
             meta_data = yaml.safe_load(file)
         modality = meta_data.get("modality")
 
@@ -197,7 +196,7 @@ class SequenceInterpolator(Interpolator):
         interpolation_mode: str = "nearest_neighbor",
         normalize: bool = False,
         normalize_subtract_mean: bool = False,
-        normalize_std_threshold: typing.Optional[float] = None,  # or 0.01
+        normalize_std_threshold: float | None = None,  # or 0.01
         **kwargs,
     ) -> None:
         super().__init__(root_folder)
@@ -262,7 +261,7 @@ class SequenceInterpolator(Interpolator):
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
-    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray] | np.ndarray:
         valid = self.valid_times(times)
         valid_times = times[valid]
 
@@ -361,7 +360,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
         interpolation_mode: str = "nearest_neighbor",
         normalize: bool = False,
         normalize_subtract_mean: bool = False,
-        normalize_std_threshold: typing.Optional[float] = None,  # or 0.01
+        normalize_std_threshold: float | None = None,  # or 0.01
         **kwargs,
     ) -> None:
         super().__init__(
@@ -385,7 +384,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
-    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray] | np.ndarray:
         valid = self.valid_times(times)
         valid_times = times[valid]
 
@@ -500,7 +499,7 @@ class ScreenInterpolator(Interpolator):
         root_folder: str,
         cache_data: bool = False,  # New parameter
         rescale: bool = False,
-        rescale_size: typing.Optional[tuple[int, int]] = None,
+        rescale_size: tuple[int, int] | None = None,
         normalize: bool = False,
         **kwargs,
     ) -> None:
@@ -565,7 +564,7 @@ class ScreenInterpolator(Interpolator):
 
         # Read each YAML file and store under its filename
         for meta_file in meta_files:
-            with open(meta_file, "r") as file:
+            with open(meta_file) as file:
                 file_base_name = meta_file.stem
                 yaml_content = yaml.safe_load(file)
                 all_data[file_base_name] = yaml_content
@@ -579,7 +578,7 @@ class ScreenInterpolator(Interpolator):
             logger.info("Combining metadata files...")
             self._combine_metadatas()
 
-        with open(self.root_folder / "combined_meta.json", "r") as file:
+        with open(self.root_folder / "combined_meta.json") as file:
             self.combined_meta = json.load(file)
 
         metadatas = []
@@ -605,7 +604,7 @@ class ScreenInterpolator(Interpolator):
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
-    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray] | np.ndarray:
         valid = self.valid_times(times)
         valid_times = times[valid]
         valid_times += 1e-4  # add small offset to avoid numerical issues
@@ -724,7 +723,7 @@ class TimeIntervalInterpolator(Interpolator):
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
-    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray] | np.ndarray:
         valid = self.valid_times(times)
         valid_times = times[valid]
 
@@ -791,7 +790,7 @@ class ScreenTrial:
 
     def __init__(
         self,
-        data_file_name: Union[str, Path],
+        data_file_name: str | Path,
         meta_data: dict,
         image_size: tuple,
         first_frame_idx: int,
@@ -811,10 +810,10 @@ class ScreenTrial:
 
     @staticmethod
     def create(
-        data_file_name: Union[str, Path],
+        data_file_name: str | Path,
         meta_data: dict,
         cache_data: bool = False,
-    ) -> "ScreenTrial":
+    ) -> ScreenTrial:
         modality = meta_data.get("modality")
         assert modality is not None
         class_name = modality.lower().capitalize() + "Trial"
@@ -1050,7 +1049,7 @@ class SpikeInterpolator(Interpolator):
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
-    ) -> Union[tuple[np.ndarray, np.ndarray], np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray] | np.ndarray:
         # 1. Filter for valid times
         valid = self.valid_times(times)
         valid_times = times[valid]
