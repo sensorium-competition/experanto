@@ -121,8 +121,8 @@ class Experiment:
             if (
                 dev.start_time is None
                 or dev.end_time is None
-                or np.isinf(dev.start_time)
-                or np.isinf(dev.end_time)
+                or not np.isfinite(dev.start_time)
+                or not np.isfinite(dev.end_time)
             ):
                 logger.warning(
                     "Device %s has undefined start_time or end_time and will be "
