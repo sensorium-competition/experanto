@@ -66,7 +66,7 @@ class Experiment:
         cache_data: bool = False,
     ) -> None:
         self.root_folder = Path(root_folder)
-        self.devices = dict()
+        self.devices = {}
         self.start_time = np.inf
         self.end_time = -np.inf
         self.modality_config = modality_config
@@ -110,6 +110,7 @@ class Experiment:
                 warnings.warn(
                     "Falling back to original Interpolator creation logic.",
                     UserWarning,
+                    stacklevel=2,
                 )
                 dev = Interpolator.create(
                     d,

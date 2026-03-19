@@ -235,7 +235,7 @@ def test_linear_interpolation(
         seq_interp.interpolation_mode = "linear"
 
         delta_t = 1.0 / sampling_rate
-        idx = [i for i in range(1, DEFAULT_SEQUENCE_LENGTH + 1)]
+        idx = list(range(1, DEFAULT_SEQUENCE_LENGTH + 1))
         times = timestamps[idx] + 0.5 * delta_t
 
         t1, t2 = (

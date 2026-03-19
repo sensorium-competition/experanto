@@ -267,7 +267,9 @@ class SequenceInterpolator(Interpolator):
 
         if len(valid_times) == 0:
             warnings.warn(
-                "Sequence interpolation returns empty array, no valid times queried"
+                "Sequence interpolation returns empty array, no valid times queried",
+                UserWarning,
+                stacklevel=2,
             )
             return (
                 (np.empty((0, self._data.shape[1])), valid)
@@ -290,7 +292,10 @@ class SequenceInterpolator(Interpolator):
 
             if np.any(idx_lower < 0):  # should not be possible
                 warnings.warn(
-                    f"Interpolation index {idx_lower} is negative. This should not happen."
+                    f"Interpolation index {idx_lower} is negative. This should not happen.",
+                    UserWarning,
+                    stacklevel=2
+
                 )
                 overflow_mask = overflow_mask | idx_lower < 0
 
@@ -390,7 +395,10 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
         if len(valid_times) == 0:
             warnings.warn(
-                "Sequence interpolation returns empty array, no valid times queried"
+                "Sequence interpolation returns empty array, no valid times queried",
+                UserWarning,
+                stacklevel=2
+
             )
             return (
                 (np.empty((0, self._data.shape[1])), valid)
@@ -417,7 +425,9 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
             if np.any(idx_lower < 0):  # should not be possible
                 warnings.warn(
-                    f"Interpolation index {idx_lower} is negative. This should not happen."
+                    f"Interpolation index {idx_lower} is negative. This should not happen.",
+                    UserWarning,
+                    stacklevel=2,
                 )
                 overflow_mask = overflow_mask | idx_lower < 0
 
@@ -593,7 +603,7 @@ class ScreenInterpolator(Interpolator):
         self.trials = []
         metadatas, keys = self.read_combined_meta()
 
-        for key, metadata in zip(keys, metadatas):
+        for key, metadata in zip(keys, metadatas, strict=False):
             data_file_name = self.root_folder / "data" / f"{key}.npy"
             # Pass the cache_trials parameter when creating trials
             self.trials.append(
@@ -732,7 +742,9 @@ class TimeIntervalInterpolator(Interpolator):
 
         if n_times == 0:
             warnings.warn(
-                "TimeIntervalInterpolator returns an empty array, no valid times queried."
+                "TimeIntervalInterpolator returns an empty array, no valid times queried.",
+                UserWarning,
+                stacklevel=2,
             )
             return (
                 (np.empty((0, n_labels), dtype=bool), valid)
@@ -749,14 +761,19 @@ class TimeIntervalInterpolator(Interpolator):
 
             if len(intervals) == 0:
                 warnings.warn(
-                    f"TimeIntervalInterpolator found no intervals for label: {label}"
+                    f"TimeIntervalInterpolator found no intervals for label: {label}",
+                    UserWarning,
+                    stacklevel=2
+
                 )
                 continue
 
             for start, end in intervals:
                 if start > end:
                     warnings.warn(
-                        f"Invalid interval found for label: {label}, interval: ({start}, {end})"
+                        f"Invalid interval found for label: {label}, interval: ({start}, {end})",
+                        UserWarning,
+                        stacklevel=2
                     )
                     continue
                 # Half-open interval [start, end): inclusive start, exclusive end

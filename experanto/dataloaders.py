@@ -72,7 +72,7 @@ def get_multisession_dataloader(
 
     assert configs is not None
     dataloaders = {}
-    for i, (path, cfg) in enumerate(zip(paths, configs)):
+    for i, (path, cfg) in enumerate(zip(paths, configs, strict=False)):
         # TODO use saved meta dict to find data key
         if "dynamic" in path:
             dataset_name = path.split("dynamic")[1].split("-Video")[0]
@@ -153,7 +153,7 @@ def get_multisession_concat_dataloader(
     datasets = []
     session_names = []
 
-    for i, (path, cfg) in enumerate(zip(paths, configs)):
+    for _i, (path, cfg) in enumerate(zip(paths, configs, strict=False)):
         # Create dataset with deterministic seed
         path_hash = hash(path) % 10000
         dataset_seed = seed + path_hash if seed is not None else None
@@ -173,7 +173,7 @@ def get_multisession_concat_dataloader(
                 datasets.append(dataset)
                 session_names.append(session_name)
         except Exception as e:
-            warnings.warn(f"Error creating dataset for {path}: {str(e)}")
+            warnings.warn(f"Error creating dataset for {path}: {str(e)}",UserWarning, stacklevel=2)
 
     if not datasets:
         return None

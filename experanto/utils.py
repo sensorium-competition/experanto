@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def replace_nan_with_batch_mean(data: np.ndarray) -> np.ndarray:
     row, col = np.where(np.isnan(data))
-    for i, j in zip(row, col):
+    for i, j in zip(row, col, strict=False):
         new_value = np.nanmean(data[:, j])
         data[i, j] = new_value if not np.isnan(new_value) else 0
     return data
@@ -122,7 +122,7 @@ class MultiEpochsDataLoader(DataLoader):
             self.dataset, "shuffle_valid_screen_times"
         ):
             self.dataset.shuffle_valid_screen_times()  # type: ignore[union-attr]
-        for i in range(len(self)):
+        for _i in range(len(self)):
             yield next(self.iterator)
 
 
@@ -191,6 +191,7 @@ class LongCycler:
             cycle(self.loaders.keys()),
             (cycle(cycles)),
             range(len(self.loaders) * self.max_batches),
+            strict=False,
         ):
             yield k, next(loader)
 
@@ -225,6 +226,7 @@ class ShortCycler:
             cycle(self.loaders.keys()),
             (cycle(cycles)),
             range(len(self.loaders) * self.min_batches),
+            strict=False,
         ):
             yield k, next(loader)
 
@@ -264,7 +266,7 @@ class SessionConcatDataset(Dataset):
         self.session_names = session_names
 
         # Log dataset sizes for debugging
-        for i, (name, dataset) in enumerate(zip(session_names, datasets)):
+        for i, (name, dataset) in enumerate(zip(session_names, datasets, strict=False)):
             logger.debug("Dataset %s: %s, length = %s", i, name, len(dataset))
 
         # Compute cumulative sizes for efficient indexing

@@ -304,7 +304,7 @@ class ChunkDataset(Dataset):
 
     def _read_trials(self) -> None:
         screen = self._experiment.devices["screen"]
-        self._trials = [t for t in screen.trials]
+        self._trials = list(screen.trials)
         start_idx = np.array([t.first_frame_idx for t in self._trials])
         self._start_times = screen.timestamps[start_idx]
         self._end_times = np.append(screen.timestamps[start_idx[1:]], np.inf)
@@ -460,7 +460,7 @@ class ChunkDataset(Dataset):
             except (ImportError, AttributeError, KeyError, TypeError) as e:
                 raise TypeError(
                     f"Failed to manually instantiate filter from config {filter_config}: {e}"
-                )
+                ) from e
 
         raise TypeError(
             f"Filter config must be either callable or a valid config dict with __target__, got {type(filter_config)}"
@@ -579,7 +579,7 @@ class ChunkDataset(Dataset):
 
             # Create TimeIntervals from starts and ends
             trial_intervals = [
-                TimeInterval(start, end) for start, end in zip(starts, ends)
+                TimeInterval(start, end) for start, end in zip(starts, ends, strict=False)
             ]
 
             # If we have filter_valid_intervals, find intersection with trial intervals
