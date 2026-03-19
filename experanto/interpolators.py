@@ -601,7 +601,7 @@ class ScreenInterpolator(Interpolator):
         self.trials = []
         metadatas, keys = self.read_combined_meta()
 
-        for key, metadata in zip(keys, metadatas, strict=False):
+        for key, metadata in zip(keys, metadatas, strict=True):
             data_file_name = self.root_folder / "data" / f"{key}.npy"
             # Pass the cache_trials parameter when creating trials
             self.trials.append(
