@@ -268,11 +268,13 @@ class SequenceInterpolator(Interpolator):
         valid_times = times[valid]
 
         if len(valid_times) == 0:
-            warnings.warn("Sequence interpolation returns empty array, no valid times queried")
+            warnings.warn(
+                "Sequence interpolation returns empty array, no valid times queried"
+            )
             return (
-                (np.empty((0, self._data.shape[1]), dtype = self._data.dtype), valid)
+                (np.empty((0, self._data.shape[1]), dtype=self._data.dtype), valid)
                 if return_valid
-                else np.empty((0, self._data.shape[1]), dtype = self._data.dtype)
+                else np.empty((0, self._data.shape[1]), dtype=self._data.dtype)
             )
 
         idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
@@ -389,11 +391,13 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
         valid_times = times[valid]
 
         if len(valid_times) == 0:
-            warnings.warn("Sequence interpolation returns empty array, no valid times queried")
+            warnings.warn(
+                "Sequence interpolation returns empty array, no valid times queried"
+            )
             return (
-                (np.empty((0, self._data.shape[1]), dtype = self._data.dtype), valid)
+                (np.empty((0, self._data.shape[1]), dtype=self._data.dtype), valid)
                 if return_valid
-                else np.empty((0, self._data.shape[1]), dtype = self._data.dtype)
+                else np.empty((0, self._data.shape[1]), dtype=self._data.dtype)
             )
 
         idx_lower = np.floor(
@@ -595,9 +599,7 @@ class ScreenInterpolator(Interpolator):
             data_file_name = self.root_folder / "data" / f"{key}.npy"
             # Pass the cache_data parameter when creating trials
             self.trials.append(
-                ScreenTrial.create(
-                    data_file_name, metadata, cache_data=self.cache_data
-                )
+                ScreenTrial.create(data_file_name, metadata, cache_data=self.cache_data)
             )
 
     def interpolate(
@@ -1054,9 +1056,9 @@ class SpikeInterpolator(Interpolator):
         if len(valid_times) == 0:
             warnings.warn("No valid times provided for interpolation.")
             return (
-                (np.empty((0, self.n_signals), dtype = np.float64), valid)
+                (np.empty((0, self.n_signals), dtype=np.float64), valid)
                 if return_valid
-                else np.empty((0, self.n_signals), dtype = np.float64)
+                else np.empty((0, self.n_signals), dtype=np.float64)
             )
 
         # 2. Prepare boundaries
