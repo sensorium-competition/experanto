@@ -112,10 +112,10 @@ def test_time_interval_interpolation():
     interval it falls within.
     """
     with time_interval_data_and_interpolator(
-        data_kwargs=dict(
-            duration=10.0,
-            sampling_rate=30.0,
-        )
+        data_kwargs={
+            "duration": 10.0,
+            "sampling_rate": 30.0,
+        }
     ) as (timestamps, intervals_dict, time_interp):
         run_interval_interpolation_test(timestamps, intervals_dict, time_interp)
 
@@ -135,13 +135,13 @@ def test_time_interval_interpolation_overlap2():
     The overlap region [2.0, 2.5) should be marked as True for both test and train.
     """
     with time_interval_data_and_interpolator(
-        data_kwargs=dict(
-            duration=10.0,
-            sampling_rate=30.0,
-            test_intervals=[[0.0, 2.5]],
-            train_intervals=[[2.0, 4.0], [6.0, 8.0]],
-            validation_intervals=[[4.0, 6.0], [8.0, 10.0]],
-        )
+        data_kwargs={
+            "duration": 10.0,
+            "sampling_rate": 30.0,
+            "test_intervals": [[0.0, 2.5]],
+            "train_intervals": [[2.0, 4.0], [6.0, 8.0]],
+            "validation_intervals": [[4.0, 6.0], [8.0, 10.0]],
+        }
     ) as (timestamps, intervals_dict, time_interp):
         run_interval_interpolation_test(timestamps, intervals_dict, time_interp)
 
@@ -160,13 +160,13 @@ def test_time_interval_interpolation_overlap3():
     Multiple overlap regions exist between different label pairs.
     """
     with time_interval_data_and_interpolator(
-        data_kwargs=dict(
-            duration=10.0,
-            sampling_rate=30.0,
-            test_intervals=[[0.0, 2.5]],
-            train_intervals=[[1.78, 4.03], [5.57, 8.23]],
-            validation_intervals=[[3.75, 6.01], [7.89, 10.0]],
-        )
+        data_kwargs={
+            "duration": 10.0,
+            "sampling_rate": 30.0,
+            "test_intervals": [[0.0, 2.5]],
+            "train_intervals": [[1.78, 4.03], [5.57, 8.23]],
+            "validation_intervals": [[3.75, 6.01], [7.89, 10.0]],
+        }
     ) as (timestamps, intervals_dict, time_interp):
         run_interval_interpolation_test(timestamps, intervals_dict, time_interp)
 
@@ -186,13 +186,13 @@ def test_time_interval_interpolation_gap():
     Timestamps in the gaps should be marked as False for all labels.
     """
     with time_interval_data_and_interpolator(
-        data_kwargs=dict(
-            duration=10.0,
-            sampling_rate=30.0,
-            test_intervals=[[0.0, 1.8]],
-            train_intervals=[[2.0, 4.0], [6.32, 8.0]],
-            validation_intervals=[[4.2, 6.0], [8.27, 10.0]],
-        )
+        data_kwargs={
+            "duration": 10.0,
+            "sampling_rate": 30.0,
+            "test_intervals": [[0.0, 1.8]],
+            "train_intervals": [[2.0, 4.0], [6.32, 8.0]],
+            "validation_intervals": [[4.2, 6.0], [8.27, 10.0]],
+        }
     ) as (timestamps, intervals_dict, time_interp):
         run_interval_interpolation_test(timestamps, intervals_dict, time_interp)
 
@@ -212,13 +212,13 @@ def test_time_interval_interpolation_gap_and_overlap():
     Gap from [3.9, 4.0) and overlap from [2.0, 2.5).
     """
     with time_interval_data_and_interpolator(
-        data_kwargs=dict(
-            duration=10.0,
-            sampling_rate=30.0,
-            test_intervals=[[0.0, 2.5]],
-            train_intervals=[[2.0, 3.9], [6.0, 8.0]],
-            validation_intervals=[[4.0, 6.0], [8.0, 10.0]],
-        )
+        data_kwargs={
+            "duration": 10.0,
+            "sampling_rate": 30.0,
+            "test_intervals": [[0.0, 2.5]],
+            "train_intervals": [[2.0, 3.9], [6.0, 8.0]],
+            "validation_intervals": [[4.0, 6.0], [8.0, 10.0]],
+        }
     ) as (timestamps, intervals_dict, time_interp):
         run_interval_interpolation_test(timestamps, intervals_dict, time_interp)
 
@@ -248,13 +248,13 @@ def test_time_interval_interpolation_nans():
     timestamps[nan_start_idx:nan_end_idx] = np.nan
 
     with time_interval_data_and_interpolator(
-        data_kwargs=dict(
-            duration=duration,
-            sampling_rate=sampling_rate,
-            test_intervals=[[0.0, 1.5]],
-            train_intervals=[[2.0, 4.0], [6.0, 8.0]],
-            validation_intervals=[[4.0, 6.0], [8.0, 10.0]],
-        )
+        data_kwargs={
+            "duration": duration,
+            "sampling_rate": sampling_rate,
+            "test_intervals": [[0.0, 1.5]],
+            "train_intervals": [[2.0, 4.0], [6.0, 8.0]],
+            "validation_intervals": [[4.0, 6.0], [8.0, 10.0]],
+        }
     ) as (_, intervals_dict, time_interp):
         assert isinstance(time_interp, TimeIntervalInterpolator)
 
@@ -296,13 +296,13 @@ def test_time_interval_interpolation_zero_length():
     - validation: [4.0, 6.0) and [8.0, 10.0)
     """
     with time_interval_data_and_interpolator(
-        data_kwargs=dict(
-            duration=10.0,
-            sampling_rate=30.0,
-            test_intervals=[[1.0, 1.0]],
-            train_intervals=[[2.0, 4.0], [6.0, 8.0]],
-            validation_intervals=[[4.0, 6.0], [8.0, 10.0]],
-        )
+        data_kwargs={
+            "duration": 10.0,
+            "sampling_rate": 30.0,
+            "test_intervals": [[1.0, 1.0]],
+            "train_intervals": [[2.0, 4.0], [6.0, 8.0]],
+            "validation_intervals": [[4.0, 6.0], [8.0, 10.0]],
+        }
     ) as (timestamps, intervals_dict, time_interp):
         assert isinstance(time_interp, TimeIntervalInterpolator)
 
@@ -336,13 +336,13 @@ def test_time_interval_interpolation_multi_zero_length():
     - validation: [2.0, 2.0) and [8.0, 10.0) - one zero-length, one normal
     """
     with time_interval_data_and_interpolator(
-        data_kwargs=dict(
-            duration=10.0,
-            sampling_rate=30.0,
-            test_intervals=[[1.0, 1.0], [5.0, 6.0]],
-            train_intervals=[[4.0, 4.0], [6.0, 6.0]],
-            validation_intervals=[[2.0, 2.0], [8.0, 10.0]],
-        )
+        data_kwargs={
+            "duration": 10.0,
+            "sampling_rate": 30.0,
+            "test_intervals": [[1.0, 1.0], [5.0, 6.0]],
+            "train_intervals": [[4.0, 4.0], [6.0, 6.0]],
+            "validation_intervals": [[2.0, 2.0], [8.0, 10.0]],
+        }
     ) as (timestamps, intervals_dict, time_interp):
         assert isinstance(time_interp, TimeIntervalInterpolator)
 
@@ -376,13 +376,13 @@ def test_time_interval_interpolation_full_range():
     All timestamps should be marked True for the test label.
     """
     with time_interval_data_and_interpolator(
-        data_kwargs=dict(
-            duration=10.0,
-            sampling_rate=30.0,
-            test_intervals=[[0.0, 10.0]],
-            train_intervals=[[2.0, 4.0], [6.0, 8.0]],
-            validation_intervals=[[4.0, 6.0], [8.0, 10.0]],
-        )
+        data_kwargs={
+            "duration": 10.0,
+            "sampling_rate": 30.0,
+            "test_intervals": [[0.0, 10.0]],
+            "train_intervals": [[2.0, 4.0], [6.0, 8.0]],
+            "validation_intervals": [[4.0, 6.0], [8.0, 10.0]],
+        }
     ) as (timestamps, intervals_dict, time_interp):
         run_interval_interpolation_test(timestamps, intervals_dict, time_interp)
 
@@ -404,13 +404,13 @@ def test_time_interval_interpolation_inverted_interval():
     interval for the test label.
     """
     with time_interval_data_and_interpolator(
-        data_kwargs=dict(
-            duration=10.0,
-            sampling_rate=30.0,
-            test_intervals=[[5.0, 2.0]],
-            train_intervals=[[2.0, 4.0], [6.0, 8.0]],
-            validation_intervals=[[4.0, 6.0], [8.0, 10.0]],
-        )
+        data_kwargs={
+            "duration": 10.0,
+            "sampling_rate": 30.0,
+            "test_intervals": [[5.0, 2.0]],
+            "train_intervals": [[2.0, 4.0], [6.0, 8.0]],
+            "validation_intervals": [[4.0, 6.0], [8.0, 10.0]],
+        }
     ) as (timestamps, intervals_dict, time_interp):
         assert isinstance(time_interp, TimeIntervalInterpolator)
 
@@ -447,13 +447,13 @@ def test_time_interval_interpolation_multi_inverted():
     intervals for test, train (two warnings), and validation labels.
     """
     with time_interval_data_and_interpolator(
-        data_kwargs=dict(
-            duration=10.0,
-            sampling_rate=30.0,
-            test_intervals=[[8.0, 3.0], [5.0, 6.0]],
-            train_intervals=[[7.0, 2.0], [9.0, 1.0]],
-            validation_intervals=[[6.0, 4.0], [8.0, 10.0]],
-        )
+        data_kwargs={
+            "duration": 10.0,
+            "sampling_rate": 30.0,
+            "test_intervals": [[8.0, 3.0], [5.0, 6.0]],
+            "train_intervals": [[7.0, 2.0], [9.0, 1.0]],
+            "validation_intervals": [[6.0, 4.0], [8.0, 10.0]],
+        }
     ) as (timestamps, intervals_dict, time_interp):
         assert isinstance(time_interp, TimeIntervalInterpolator)
 

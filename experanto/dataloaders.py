@@ -1,13 +1,8 @@
 import logging
-import os
-import time
 import warnings
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Optional
 
-import numpy as np
 from omegaconf import DictConfig
-from torch.utils.data import DataLoader
 
 from .datasets import ChunkDataset
 from .utils import (
@@ -21,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 def get_multisession_dataloader(
-    paths: List[str],
-    configs: Optional[Union[DictConfig, Dict, List[Union[DictConfig, Dict]]]] = None,
+    paths: list[str],
+    configs: DictConfig | dict | list[DictConfig | dict] | None = None,
     shuffle_keys: bool = False,
     **kwargs,
 ) -> LongCycler:
@@ -77,7 +72,7 @@ def get_multisession_dataloader(
 
     assert configs is not None
     dataloaders = {}
-    for i, (path, cfg) in enumerate(zip(paths, configs)):
+    for i, (path, cfg) in enumerate(zip(paths, configs, strict=True)):
         # TODO use saved meta dict to find data key
         if "dynamic" in path:
             dataset_name = path.split("dynamic")[1].split("-Video")[0]
@@ -95,10 +90,10 @@ def get_multisession_dataloader(
 
 
 def get_multisession_concat_dataloader(
-    paths: List[str],
-    configs: Optional[Union[Dict, List[Dict]]] = None,
-    seed: Optional[int] = 0,
-    dataloader_config: Optional[Dict] = None,
+    paths: list[str],
+    configs: dict | list[dict] | None = None,
+    seed: int | None = 0,
+    dataloader_config: dict | None = None,
     **kwargs,
 ) -> Optional["FastSessionDataLoader"]:
     """Create a concatenated multi-session dataloader.
@@ -158,8 +153,7 @@ def get_multisession_concat_dataloader(
     datasets = []
     session_names = []
 
-    start_time = time.time()
-    for i, (path, cfg) in enumerate(zip(paths, configs)):
+    for _i, (path, cfg) in enumerate(zip(paths, configs, strict=True)):
         # Create dataset with deterministic seed
         path_hash = hash(path) % 10000
         dataset_seed = seed + path_hash if seed is not None else None
@@ -179,7 +173,11 @@ def get_multisession_concat_dataloader(
                 datasets.append(dataset)
                 session_names.append(session_name)
         except Exception as e:
-            warnings.warn(f"Error creating dataset for {path}: {str(e)}")
+            warnings.warn(
+                f"Error creating dataset for {path}: {str(e)}",
+                UserWarning,
+                stacklevel=2,
+            )
 
     if not datasets:
         return None
