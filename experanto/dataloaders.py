@@ -72,7 +72,7 @@ def get_multisession_dataloader(
 
     assert configs is not None
     dataloaders = {}
-    for i, (path, cfg) in enumerate(zip(paths, configs, strict=False)):
+    for i, (path, cfg) in enumerate(zip(paths, configs, strict=True)):
         # TODO use saved meta dict to find data key
         if "dynamic" in path:
             dataset_name = path.split("dynamic")[1].split("-Video")[0]
