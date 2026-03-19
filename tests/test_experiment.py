@@ -1,6 +1,7 @@
 import logging
 from contextlib import ExitStack
 
+import numpy as np
 import pytest
 
 from experanto.experiment import Experiment
@@ -76,22 +77,23 @@ def test_experiment_start_end_time_reflects_union(
     device_names = [f"device_{i}" for i in range(len(device_ranges))]
 
     with ExitStack() as stack:
-        for name, (start, end) in zip(device_names, device_ranges):
+        for name, (start, end) in zip(device_names, device_ranges, strict=True):
             stack.enter_context(
                 make_sequence_device(
-                    tmp_path, name, start=start, end=end, n_signals=n_signals
+                    tmp_path, name, start=start, end=end, n_signals=n_signals,
+                    sampling_rate=float(np.random.randint(5, 30)),
                 )
             )
 
         experiment = Experiment(
             root_folder=tmp_path,
-            modality_config=make_modality_config(*device_names),
+            modality_config=make_modality_config(*device_names, offsets=[float(np.random.rand()) for _ in device_names]),
         )
 
-    assert experiment.start_time == pytest.approx(
+    assert experiment.start_time == (
         expected_start
     ), f"Expected start_time={expected_start}, got {experiment.start_time}"
-    assert experiment.end_time == pytest.approx(
+    assert experiment.end_time == (
         expected_end
     ), f"Expected end_time={expected_end}, got {experiment.end_time}"
 
@@ -149,14 +151,22 @@ def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
     device is present. The experiment time range should reflect only the
     valid device.
     """
+    start_val = np.random.lognormal(mean=0.0, sigma=1.0) # Strictly positive float
+    duration_val = np.random.lognormal(mean=0.0, sigma=1.0) 
+    end_val = start_val + duration_val
+
+    start_nonval = np.random.lognormal(mean=0.0, sigma=1.0) 
+    duration_nonval = np.random.lognormal(mean=0.0, sigma=1.0)
+    end_nonval = start_nonval + duration_nonval
+
     with ExitStack() as stack:
         # Valid device with proper metadata
         stack.enter_context(
             make_sequence_device(
                 tmp_path,
                 "valid_device",
-                start=0.0,
-                end=10.0,
+                start=start_val,
+                end=end_val,
             )
         )
         # Invalid device with missing start_time and end_time
@@ -164,8 +174,8 @@ def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
             make_sequence_device(
                 tmp_path,
                 "invalid_device",
-                start=0.0,
-                end=10.0,
+                start=start_nonval,
+                end=end_nonval,
                 override_meta=override_meta,
             )
         )
@@ -179,12 +189,12 @@ def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
     assert "valid_device" in experiment.devices
     assert "invalid_device" not in experiment.devices
 
-    assert experiment.start_time == pytest.approx(
-        0.0
-    ), f"Expected start_time=0.0, got {experiment.start_time}"
-    assert experiment.end_time == pytest.approx(
-        10.0
-    ), f"Expected end_time=10.0, got {experiment.end_time}"
+    assert experiment.start_time == (
+        start_val
+    ), f"Expected start_time={start_val}, got {experiment.start_time}"
+    assert experiment.end_time == (
+        end_val
+    ), f"Expected end_time={end_val}, got {experiment.end_time}"
     assert any(
         "invalid_device" in message for message in caplog.messages
     ), "Expected warning about invalid_device was skipped"

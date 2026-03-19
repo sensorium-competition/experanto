@@ -48,8 +48,13 @@ def make_sequence_device(
 def make_modality_config(*device_names, sampling_rates=None, offsets=None):
     if sampling_rates is None:
         sampling_rates = [10.0] * len(device_names)
+    elif isinstance(sampling_rates, (int, float)):
+        sampling_rates = [sampling_rates] * len(device_names)
+
     if offsets is None:
         offsets = [0.0] * len(device_names)
+    elif isinstance(offsets, (int, float)):
+        offsets = [offsets] * len(device_names)
 
     assert len(device_names) == len(
         sampling_rates
@@ -60,5 +65,5 @@ def make_modality_config(*device_names, sampling_rates=None, offsets=None):
 
     return {
         name: {"interpolation": {"sampling_rate": sr, "offset": off}}
-        for name, sr, off in zip(device_names, sampling_rates, offsets)
+        for name, sr, off in zip(device_names, sampling_rates, offsets, strict=True)
     }
