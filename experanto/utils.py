@@ -191,6 +191,7 @@ class LongCycler:
             cycle(self.loaders.keys()),
             (cycle(cycles)),
             range(len(self.loaders) * self.max_batches),
+            strict=True,
         ):
             yield k, next(loader)
 
@@ -225,6 +226,7 @@ class ShortCycler:
             cycle(self.loaders.keys()),
             (cycle(cycles)),
             range(len(self.loaders) * self.min_batches),
+            strict=True,
         ):
             yield k, next(loader)
 
