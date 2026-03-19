@@ -191,7 +191,6 @@ class LongCycler:
             cycle(self.loaders.keys()),
             (cycle(cycles)),
             range(len(self.loaders) * self.max_batches),
-            strict=False,
         ):
             yield k, next(loader)
 
