@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import logging
-import re
 import warnings
-from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Union
 
 import numpy as np
 from hydra.utils import instantiate
@@ -69,7 +66,7 @@ class Experiment:
         cache_data: bool = False,
     ) -> None:
         self.root_folder = Path(root_folder)
-        self.devices = dict()
+        self.devices = {}
         self.start_time = np.inf
         self.end_time = -np.inf
         self.modality_config = modality_config
@@ -113,6 +110,7 @@ class Experiment:
                 warnings.warn(
                     "Falling back to original Interpolator creation logic.",
                     UserWarning,
+                    stacklevel=2,
                 )
                 dev = Interpolator.create(
                     d,
@@ -132,9 +130,9 @@ class Experiment:
     def interpolate(
         self,
         times: np.ndarray,
-        device: Union[str, Interpolator, None] = None,
+        device: str | Interpolator | None = None,
         return_valid: bool = False,
-    ) -> Union[tuple[dict, dict], dict, tuple[np.ndarray, np.ndarray], np.ndarray]:
+    ) -> tuple[dict, dict] | dict | tuple[np.ndarray, np.ndarray] | np.ndarray:
         """Interpolate data from one or all devices at specified time points.
 
         Parameters
@@ -202,7 +200,7 @@ class Experiment:
             else:
                 return values
         elif isinstance(device, str):
-            assert device in self.devices, "Unknown device '{}'".format(device)
+            assert device in self.devices, f"Unknown device '{device}'"
             res = self.devices[device].interpolate(times, return_valid=return_valid)
             return res
         else:
