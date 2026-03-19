@@ -153,7 +153,7 @@ def get_multisession_concat_dataloader(
     datasets = []
     session_names = []
 
-    for _i, (path, cfg) in enumerate(zip(paths, configs, strict=False)):
+    for _i, (path, cfg) in enumerate(zip(paths, configs, strict=True)):
         # Create dataset with deterministic seed
         path_hash = hash(path) % 10000
         dataset_seed = seed + path_hash if seed is not None else None
