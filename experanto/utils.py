@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def replace_nan_with_batch_mean(data: np.ndarray) -> np.ndarray:
     row, col = np.where(np.isnan(data))
-    for i, j in zip(row, col, strict=False):
+    for i, j in zip(row, col, strict=True):
         new_value = np.nanmean(data[:, j])
         data[i, j] = new_value if not np.isnan(new_value) else 0
     return data
