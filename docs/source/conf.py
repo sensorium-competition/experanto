@@ -78,7 +78,6 @@ autodoc_mock_imports = [
     "cv2",
     "pandas",
     "hydra",
-    "omegaconf",
     "jaxtyping",
     "plotly",
     "optree",

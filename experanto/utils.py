@@ -1,35 +1,22 @@
 import bisect
 import logging
-import math
-import multiprocessing
 
 # inbuilt libraries
-import os
-import queue
-import random
-import threading
-import time
-import warnings
 from collections import defaultdict
-from copy import deepcopy
-from functools import partial
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 # third-party libraries
 import numpy as np
 import torch
-from omegaconf import DictConfig
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, Sampler
+from torch.utils.data import DataLoader, Dataset, Sampler
 
 # local libraries
-from .intervals import TimeInterval
 
 logger = logging.getLogger(__name__)
 
 
 def replace_nan_with_batch_mean(data: np.ndarray) -> np.ndarray:
     row, col = np.where(np.isnan(data))
-    for i, j in zip(row, col):
+    for i, j in zip(row, col, strict=True):
         new_value = np.nanmean(data[:, j])
         data[i, j] = new_value if not np.isnan(new_value) else 0
     return data
@@ -58,7 +45,7 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
 
     # Process eye_tracker
     if len(eye_tracker.shape) == 2:  # (t, c_eye)
-        c_eye = eye_tracker.shape[1]
+
         # Reshape to (c_eye, t, h, w)
         eye_tracker = eye_tracker.transpose(0, 1)  # (c_eye, t)
         eye_tracker = eye_tracker.unsqueeze(-1).unsqueeze(-1)  # (c_eye, t, 1, 1)
@@ -69,7 +56,7 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
 
     # Process treadmill
     if len(treadmill.shape) == 2:  # (t, c_tread)
-        c_tread = treadmill.shape[1]
+
         # Reshape to (c_tread, t, h, w)
         treadmill = treadmill.transpose(0, 1)  # (c_tread, t)
         treadmill = treadmill.unsqueeze(-1).unsqueeze(-1)  # (c_tread, t, 1, 1)
@@ -90,7 +77,7 @@ def add_behavior_as_channels(data: dict[str, torch.Tensor]) -> dict:
     return data
 
 
-class MultiEpochsDataLoader(torch.utils.data.DataLoader):
+class MultiEpochsDataLoader(DataLoader):
     """DataLoader that keeps workers alive across epochs.
 
     Solves a bug where worker processes are re-spawned at the start of each
@@ -135,7 +122,7 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
             self.dataset, "shuffle_valid_screen_times"
         ):
             self.dataset.shuffle_valid_screen_times()  # type: ignore[union-attr]
-        for i in range(len(self)):
+        for _i in range(len(self)):
             yield next(self.iterator)
 
 
@@ -204,6 +191,7 @@ class LongCycler:
             cycle(self.loaders.keys()),
             (cycle(cycles)),
             range(len(self.loaders) * self.max_batches),
+            strict=True,
         ):
             yield k, next(loader)
 
@@ -238,6 +226,7 @@ class ShortCycler:
             cycle(self.loaders.keys()),
             (cycle(cycles)),
             range(len(self.loaders) * self.min_batches),
+            strict=True,
         ):
             yield k, next(loader)
 
@@ -245,7 +234,7 @@ class ShortCycler:
         return len(self.loaders) * self.min_batches
 
 
-class _RepeatSampler(object):
+class _RepeatSampler:
     """Simple sampler that repeats indefinitely."""
 
     def __init__(self, sampler):
@@ -277,7 +266,7 @@ class SessionConcatDataset(Dataset):
         self.session_names = session_names
 
         # Log dataset sizes for debugging
-        for i, (name, dataset) in enumerate(zip(session_names, datasets)):
+        for i, (name, dataset) in enumerate(zip(session_names, datasets, strict=True)):
             logger.debug("Dataset %s: %s, length = %s", i, name, len(dataset))
 
         # Compute cumulative sizes for efficient indexing
@@ -550,7 +539,7 @@ class FastSessionDataLoader:
         # State tracking variables
         self.current_batch = 0
         self.epoch = 0
-        self.session_positions = {name: 0 for name in self.session_names}
+        self.session_positions = dict.fromkeys(self.session_names, 0)
         self.batches_from_session = defaultdict(
             int
         )  # Tracks batches yielded per session in the current epoch iteration

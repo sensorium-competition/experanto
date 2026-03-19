@@ -16,12 +16,12 @@ DEFAULT_SEQUENCE_LENGTH = 10
 @pytest.mark.parametrize("use_mem_mapped", [False, True])
 def test_nearest_neighbor_interpolation(n_signals, sampling_rate, use_mem_mapped):
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=n_signals,
-            use_mem_mapped=use_mem_mapped,
-            t_end=5.0,
-            sampling_rate=sampling_rate,
-        )
+        data_kwargs={
+            "n_signals": n_signals,
+            "use_mem_mapped": use_mem_mapped,
+            "t_end": 5.0,
+            "sampling_rate": sampling_rate,
+        }
     ) as (timestamps, data, _, seq_interp):
         assert isinstance(
             seq_interp, SequenceInterpolator
@@ -51,14 +51,14 @@ def test_nearest_neighbor_interpolation(n_signals, sampling_rate, use_mem_mapped
 @pytest.mark.parametrize("keep_nans", [False, True])
 def test_nearest_neighbor_interpolation_handles_nans(n_signals, keep_nans):
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=n_signals,
-            use_mem_mapped=True,
-            t_end=5.0,
-            sampling_rate=10.0,
-            contain_nans=True,
-        ),
-        interp_kwargs=dict(keep_nans=keep_nans),
+        data_kwargs={
+            "n_signals": n_signals,
+            "use_mem_mapped": True,
+            "t_end": 5.0,
+            "sampling_rate": 10.0,
+            "contain_nans": True,
+        },
+        interp_kwargs={"keep_nans": keep_nans},
     ) as (timestamps, data, _, seq_interp):
         assert isinstance(
             seq_interp, SequenceInterpolator
@@ -85,12 +85,12 @@ def test_nearest_neighbor_interpolation_handles_nans(n_signals, keep_nans):
 @pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
 def test_nearest_neighbor_interpolation_with_inbetween_times(n_signals, sampling_rate):
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=n_signals,
-            use_mem_mapped=True,
-            t_end=5.0,
-            sampling_rate=sampling_rate,
-        )
+        data_kwargs={
+            "n_signals": n_signals,
+            "use_mem_mapped": True,
+            "t_end": 5.0,
+            "sampling_rate": sampling_rate,
+        }
     ) as (timestamps, data, _, seq_interp):
         assert isinstance(
             seq_interp, SequenceInterpolator
@@ -122,13 +122,13 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(
     n_signals, sampling_rate, use_mem_mapped
 ):
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=n_signals,
-            use_mem_mapped=use_mem_mapped,
-            t_end=5.0,
-            sampling_rate=sampling_rate,
-            shifts_per_signal=True,
-        )
+        data_kwargs={
+            "n_signals": n_signals,
+            "use_mem_mapped": use_mem_mapped,
+            "t_end": 5.0,
+            "sampling_rate": sampling_rate,
+            "shifts_per_signal": True,
+        }
     ) as (timestamps, data, shift, seq_interp):
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
@@ -180,15 +180,15 @@ def test_nearest_neighbor_interpolation_with_phase_shifts_handles_nans(
     n_signals, keep_nans
 ):
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=n_signals,
-            use_mem_mapped=True,
-            t_end=5.0,
-            sampling_rate=10.0,
-            shifts_per_signal=True,
-            contain_nans=True,
-        ),
-        interp_kwargs=dict(keep_nans=keep_nans),
+        data_kwargs={
+            "n_signals": n_signals,
+            "use_mem_mapped": True,
+            "t_end": 5.0,
+            "sampling_rate": 10.0,
+            "shifts_per_signal": True,
+            "contain_nans": True,
+        },
+        interp_kwargs={"keep_nans": keep_nans},
     ) as (timestamps, data, _, seq_interp):
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
@@ -220,14 +220,14 @@ def test_linear_interpolation(
     n_signals, sampling_rate, use_mem_mapped, contain_nans, keep_nans
 ):
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=n_signals,
-            use_mem_mapped=use_mem_mapped,
-            t_end=5.0,
-            sampling_rate=sampling_rate,
-            contain_nans=contain_nans,
-        ),
-        interp_kwargs=dict(keep_nans=keep_nans),
+        data_kwargs={
+            "n_signals": n_signals,
+            "use_mem_mapped": use_mem_mapped,
+            "t_end": 5.0,
+            "sampling_rate": sampling_rate,
+            "contain_nans": contain_nans,
+        },
+        interp_kwargs={"keep_nans": keep_nans},
     ) as (timestamps, data, _, seq_interp):
         assert isinstance(
             seq_interp, SequenceInterpolator
@@ -235,7 +235,7 @@ def test_linear_interpolation(
         seq_interp.interpolation_mode = "linear"
 
         delta_t = 1.0 / sampling_rate
-        idx = [i for i in range(1, DEFAULT_SEQUENCE_LENGTH + 1)]
+        idx = list(range(1, DEFAULT_SEQUENCE_LENGTH + 1))
         times = timestamps[idx] + 0.5 * delta_t
 
         t1, t2 = (
@@ -273,14 +273,14 @@ def test_linear_interpolation_with_phase_shifts(
     n_signals, sampling_rate, use_mem_mapped, keep_nans
 ):
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=n_signals,
-            use_mem_mapped=use_mem_mapped,
-            t_end=5.0,
-            sampling_rate=sampling_rate,
-            shifts_per_signal=True,
-        ),
-        interp_kwargs=dict(keep_nans=keep_nans),
+        data_kwargs={
+            "n_signals": n_signals,
+            "use_mem_mapped": use_mem_mapped,
+            "t_end": 5.0,
+            "sampling_rate": sampling_rate,
+            "shifts_per_signal": True,
+        },
+        interp_kwargs={"keep_nans": keep_nans},
     ) as (timestamps, data, shift, seq_interp):
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
@@ -339,13 +339,13 @@ def test_linear_interpolation_with_phase_shifts(
 def test_interpolation_for_invalid_times(interpolation_mode, end_time, keep_nans):
     n_signals = 10
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=n_signals,
-            use_mem_mapped=True,
-            t_end=end_time,
-            sampling_rate=10.0,
-        ),
-        interp_kwargs=dict(keep_nans=keep_nans),
+        data_kwargs={
+            "n_signals": n_signals,
+            "use_mem_mapped": True,
+            "t_end": end_time,
+            "sampling_rate": 10.0,
+        },
+        interp_kwargs={"keep_nans": keep_nans},
     ) as (_, _, _, seq_interp):
         assert isinstance(
             seq_interp, SequenceInterpolator
@@ -380,14 +380,14 @@ def test_interpolation_with_phase_shifts_for_invalid_times(
 ):
     n_signals = 10
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=n_signals,
-            use_mem_mapped=True,
-            t_end=end_time,
-            sampling_rate=10.0,
-            shifts_per_signal=True,
-        ),
-        interp_kwargs=dict(keep_nans=keep_nans),
+        data_kwargs={
+            "n_signals": n_signals,
+            "use_mem_mapped": True,
+            "t_end": end_time,
+            "sampling_rate": 10.0,
+            "shifts_per_signal": True,
+        },
+        interp_kwargs={"keep_nans": keep_nans},
     ) as (_, _, phase_shifts, seq_interp):
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
@@ -414,13 +414,13 @@ def test_interpolation_with_phase_shifts_for_invalid_times(
 @pytest.mark.parametrize("phase_shifts", [True, False])
 def test_interpolation_for_empty_times(interpolation_mode, phase_shifts):
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=10,
-            use_mem_mapped=True,
-            t_end=5.0,
-            sampling_rate=10.0,
-            shifts_per_signal=phase_shifts,
-        )
+        data_kwargs={
+            "n_signals": 10,
+            "use_mem_mapped": True,
+            "t_end": 5.0,
+            "sampling_rate": 10.0,
+            "shifts_per_signal": phase_shifts,
+        }
     ) as (_, _, _, seq_interp):
         assert isinstance(
             seq_interp, SequenceInterpolator
@@ -440,12 +440,12 @@ def test_interpolation_for_empty_times(interpolation_mode, phase_shifts):
 
 def test_nearest_neighbor_interpolation_return_valid_false():
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=10,
-            use_mem_mapped=False,
-            t_end=5.0,
-            sampling_rate=10.0,
-        )
+        data_kwargs={
+            "n_signals": 10,
+            "use_mem_mapped": False,
+            "t_end": 5.0,
+            "sampling_rate": 10.0,
+        }
     ) as (timestamps, data, _, seq_interp):
         times = timestamps[:DEFAULT_SEQUENCE_LENGTH] + 1e-9
 
@@ -464,12 +464,12 @@ def test_nearest_neighbor_interpolation_return_valid_false():
 
 def test_nearest_neighbor_interpolation_default_return_valid():
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=10,
-            use_mem_mapped=False,
-            t_end=5.0,
-            sampling_rate=10.0,
-        )
+        data_kwargs={
+            "n_signals": 10,
+            "use_mem_mapped": False,
+            "t_end": 5.0,
+            "sampling_rate": 10.0,
+        }
     ) as (timestamps, data, _, seq_interp):
         times = timestamps[:DEFAULT_SEQUENCE_LENGTH] + 1e-9
 
@@ -488,12 +488,12 @@ def test_nearest_neighbor_interpolation_default_return_valid():
 
 def test_linear_interpolation_return_valid_false():
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=10,
-            use_mem_mapped=False,
-            t_end=5.0,
-            sampling_rate=10.0,
-        )
+        data_kwargs={
+            "n_signals": 10,
+            "use_mem_mapped": False,
+            "t_end": 5.0,
+            "sampling_rate": 10.0,
+        }
     ) as (timestamps, data, _, seq_interp):
         seq_interp.interpolation_mode = "linear"
 
@@ -515,12 +515,12 @@ def test_linear_interpolation_return_valid_false():
 
 def test_linear_interpolation_default_return_valid():
     with sequence_data_and_interpolator(
-        data_kwargs=dict(
-            n_signals=10,
-            use_mem_mapped=False,
-            t_end=5.0,
-            sampling_rate=10.0,
-        )
+        data_kwargs={
+            "n_signals": 10,
+            "use_mem_mapped": False,
+            "t_end": 5.0,
+            "sampling_rate": 10.0,
+        }
     ) as (timestamps, data, _, seq_interp):
         seq_interp.interpolation_mode = "linear"
 
