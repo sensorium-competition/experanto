@@ -270,9 +270,9 @@ class SequenceInterpolator(Interpolator):
         if len(valid_times) == 0:
             warnings.warn("Sequence interpolation returns empty array, no valid times queried")
             return (
-                (np.empty((0, self._data.shape[1]), dtype = bool), valid)
+                (np.empty((0, self._data.shape[1]), dtype = self._data.dtype), valid)
                 if return_valid
-                else np.empty((0, self._data.shape[1]), dtype = bool)
+                else np.empty((0, self._data.shape[1]), dtype = self._data.dtype)
             )
 
         idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
@@ -391,9 +391,9 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
         if len(valid_times) == 0:
             warnings.warn("Sequence interpolation returns empty array, no valid times queried")
             return (
-                (np.empty((0, self._data.shape[1]), dtype = bool), valid)
+                (np.empty((0, self._data.shape[1]), dtype = self._data.dtype), valid)
                 if return_valid
-                else np.empty((0, self._data.shape[1]), dtype = bool)
+                else np.empty((0, self._data.shape[1]), dtype = self._data.dtype)
             )
 
         idx_lower = np.floor(
@@ -1054,9 +1054,9 @@ class SpikeInterpolator(Interpolator):
         if len(valid_times) == 0:
             warnings.warn("No valid times provided for interpolation.")
             return (
-                (np.empty((0, self.n_signals), dtype = bool), valid)
+                (np.empty((0, self.n_signals), dtype = np.float64), valid)
                 if return_valid
-                else np.empty((0, self.n_signals), dtype = bool)
+                else np.empty((0, self.n_signals), dtype = np.float64)
             )
 
         # 2. Prepare boundaries
