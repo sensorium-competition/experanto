@@ -225,7 +225,6 @@ class ShortCycler:
             cycle(self.loaders.keys()),
             (cycle(cycles)),
             range(len(self.loaders) * self.min_batches),
-            strict=False,
         ):
             yield k, next(loader)
 
