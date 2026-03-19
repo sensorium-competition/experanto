@@ -173,7 +173,11 @@ def get_multisession_concat_dataloader(
                 datasets.append(dataset)
                 session_names.append(session_name)
         except Exception as e:
-            warnings.warn(f"Error creating dataset for {path}: {str(e)}",UserWarning, stacklevel=2)
+            warnings.warn(
+                f"Error creating dataset for {path}: {str(e)}",
+                UserWarning,
+                stacklevel=2,
+            )
 
     if not datasets:
         return None
