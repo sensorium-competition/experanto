@@ -86,6 +86,3 @@ exclude = [
 [tool.ruff.lint]
 select = ["E", "F", "B", "UP", "C4"]
 ignore = ["E501"]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["C408"]
