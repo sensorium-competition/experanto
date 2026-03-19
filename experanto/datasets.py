@@ -580,7 +580,7 @@ class ChunkDataset(Dataset):
             # Create TimeIntervals from starts and ends
             trial_intervals = [
                 TimeInterval(start, end)
-                for start, end in zip(starts, ends, strict=False)
+                for start, end in zip(starts, ends, strict=True)
             ]
 
             # If we have filter_valid_intervals, find intersection with trial intervals
