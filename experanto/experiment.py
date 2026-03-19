@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import re
 import warnings
+from collections.abc import Sequence 
 from pathlib import Path
 from typing import Union
 
