@@ -737,15 +737,13 @@ class TimeIntervalInterpolator(Interpolator):
         n_times = len(valid_times)
 
         if n_times == 0:
-          warnings.warn("No valid times provided for interpolation.")
+            warnings.warn("No valid times provided for interpolation.")
 
-          return (
-            (np.empty((0, n_labels), dtype=np.float64), valid)
-            if return_valid
-            else np.empty((0, n_labels), dtype=np.float64)
-    )
-
-            
+            return (
+                (np.empty((0, n_labels), dtype=np.float64), valid)
+                if return_valid
+                else np.empty((0, n_labels), dtype=np.float64)
+            )
 
         out = np.zeros((n_times, n_labels), dtype=bool)
         for i, (label, filename) in enumerate(self.meta_labels.items()):
