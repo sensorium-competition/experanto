@@ -84,7 +84,7 @@ autodoc_mock_imports = [
     "rootutils",
     "numba",
     "numpy",
-    "PyYAML",
+    "yaml",
 ]
 
 # -- Intersphinx settings (cross-references to external docs) ----------------
