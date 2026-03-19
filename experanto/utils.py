@@ -266,7 +266,7 @@ class SessionConcatDataset(Dataset):
         self.session_names = session_names
 
         # Log dataset sizes for debugging
-        for i, (name, dataset) in enumerate(zip(session_names, datasets, strict=False)):
+        for i, (name, dataset) in enumerate(zip(session_names, datasets, strict=True)):
             logger.debug("Dataset %s: %s, length = %s", i, name, len(dataset))
 
         # Compute cumulative sizes for efficient indexing
