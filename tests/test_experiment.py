@@ -80,14 +80,20 @@ def test_experiment_start_end_time_reflects_union(
         for name, (start, end) in zip(device_names, device_ranges, strict=True):
             stack.enter_context(
                 make_sequence_device(
-                    tmp_path, name, start=start, end=end, n_signals=n_signals,
+                    tmp_path,
+                    name,
+                    start=start,
+                    end=end,
+                    n_signals=n_signals,
                     sampling_rate=float(np.random.randint(5, 30)),
                 )
             )
 
         experiment = Experiment(
             root_folder=tmp_path,
-            modality_config=make_modality_config(*device_names, offsets=[float(np.random.rand()) for _ in device_names]),
+            modality_config=make_modality_config(
+                *device_names, offsets=[float(np.random.rand()) for _ in device_names]
+            ),
         )
 
     assert experiment.start_time == (
@@ -151,11 +157,11 @@ def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
     device is present. The experiment time range should reflect only the
     valid device.
     """
-    start_val = np.random.lognormal(mean=0.0, sigma=1.0) # Strictly positive float
-    duration_val = np.random.lognormal(mean=0.0, sigma=1.0) 
+    start_val = np.random.lognormal(mean=0.0, sigma=1.0)  # Strictly positive float
+    duration_val = np.random.lognormal(mean=0.0, sigma=1.0)
     end_val = start_val + duration_val
 
-    start_nonval = np.random.lognormal(mean=0.0, sigma=1.0) 
+    start_nonval = np.random.lognormal(mean=0.0, sigma=1.0)
     duration_nonval = np.random.lognormal(mean=0.0, sigma=1.0)
     end_nonval = start_nonval + duration_nonval
 
