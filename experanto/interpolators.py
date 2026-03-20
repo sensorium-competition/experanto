@@ -121,8 +121,8 @@ class Interpolator:
             else:
                 return SequenceInterpolator(root_folder, cache_data, **kwargs)
         elif modality == "screen":
-            image_names = meta_data.get("image_names", False)
-            return ScreenInterpolator(root_folder, cache_data, image_names, **kwargs)
+            stimuli_names = kwargs.pop("stimuli_names", meta_data.get("image_names", False))
+            return ScreenInterpolator(root_folder, cache_data, stimuli_names, **kwargs)
         elif modality == "time_interval":
             return TimeIntervalInterpolator(root_folder, cache_data, **kwargs)
         elif modality == "spikes":
@@ -486,6 +486,8 @@ class ScreenInterpolator(Interpolator):
         native image size from metadata.
     normalize : bool, default=False
         If True, normalizes frames using stored mean/std statistics.
+    stimuli_names : bool, default=False
+        If True, uses ``stimuli_name`` from metadata to locate data files instead of trial keys.
     **kwargs
         Additional keyword arguments (ignored).
 
@@ -507,10 +509,10 @@ class ScreenInterpolator(Interpolator):
         self,
         root_folder: str,
         cache_data: bool = False,
-        image_names: bool = False,
         rescale: bool = False,
         rescale_size: tuple[int, int] | None = None,
         normalize: bool = False,
+        stimuli_names: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(root_folder)
@@ -520,7 +522,7 @@ class ScreenInterpolator(Interpolator):
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
         self.rescale = rescale
         self.cache_trials = cache_data  # Store the cache preference
-        self.image_names = image_names
+        self.stimuli_names = stimuli_names
         self._parse_trials()
 
         # create mapping from image index to file index
@@ -605,10 +607,11 @@ class ScreenInterpolator(Interpolator):
         metadatas, keys = self.read_combined_meta()
 
         for key, metadata in zip(keys, metadatas, strict=True):
-            if self.image_names:
-                image_name = metadata.get("image_name")
+            if self.stimuli_names:
+                stimuli_name = metadata.get("image_name")
+                assert stimuli_name is not None, f"stimuli_name is required in metadata when stimuli_names is True, but not found for key: {key}"
                 data_file_name = (
-                    self.root_folder / "data" / f"{image_name}.npy"
+                    self.root_folder / "data" / f"{stimuli_name}.npy"
                 )
             else:
                 data_file_name = self.root_folder / "data" / f"{key}.npy"
