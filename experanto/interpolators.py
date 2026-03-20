@@ -331,6 +331,12 @@ class SequenceInterpolator(Interpolator):
 
     def close(self) -> None:
         super().close()
+
+        if hasattr(self, "_data") and isinstance(self._data, np.memmap):
+            mmap_obj = getattr(self._data, "_mmap", None)
+            if mmap_obj is not None:
+                mmap_obj.close()
+
         del self._data
 
 
@@ -453,11 +459,13 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
                 np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
 
             return (interpolated, valid) if return_valid else interpolated
-
         else:
             raise NotImplementedError(
                 "interpolation_mode should be linear or nearest_neighbor"
             )
+    
+
+        
 
 
 class ScreenInterpolator(Interpolator):
@@ -662,6 +670,16 @@ class ScreenInterpolator(Interpolator):
         return cv2.resize(frame, self._image_size, interpolation=cv2.INTER_AREA).astype(
             np.float32
         )
+    def close(self) -> None:
+        super().close()
+
+        if hasattr(self, "trials"):
+            for trial in self.trials:
+                if hasattr(trial, "_cached_data") and isinstance(trial._cached_data, np.memmap):
+                    mmap_obj = getattr(trial._cached_data, "_mmap", None)
+                    if mmap_obj is not None:
+                        mmap_obj.close()
+                    del trial._cached_data
 
 
 class TimeIntervalInterpolator(Interpolator):
