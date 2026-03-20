@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import logging
-import re
 import warnings
-from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Union
 
 import numpy as np
 from hydra.utils import instantiate
@@ -69,7 +66,7 @@ class Experiment:
         cache_data: bool = False,
     ) -> None:
         self.root_folder = Path(root_folder)
-        self.devices = dict()
+        self.devices = {}
         self.start_time = np.inf
         self.end_time = -np.inf
         self.modality_config = modality_config
@@ -113,6 +110,7 @@ class Experiment:
                 warnings.warn(
                     "Falling back to original Interpolator creation logic.",
                     UserWarning,
+                    stacklevel=2,
                 )
                 dev = Interpolator.create(
                     d,
@@ -120,10 +118,32 @@ class Experiment:
                     **interp_conf,  # type: ignore[arg-type]
                 )
 
-            self.devices[d.name] = dev
-            self.start_time = dev.start_time
-            self.end_time = dev.end_time
+            if (
+                dev.start_time is None
+                or dev.end_time is None
+                or not np.isfinite(dev.start_time)
+                or not np.isfinite(dev.end_time)
+            ):
+                logger.warning(
+                    "Device %s has undefined start_time or end_time and will be "
+                    "excluded from the experiment-wide time range.",
+                    d.name,
+                )
+            else:
+                self.start_time = min(self.start_time, dev.start_time)
+                self.end_time = max(self.end_time, dev.end_time)
+                self.devices[d.name] = dev
             logger.info("Parsing finished")
+
+        if not self.devices:
+            raise ValueError(
+                "Experiment time range could not be determined: no devices with valid start_time and end_time were found."
+            )
+        elif self.start_time > self.end_time:
+            raise ValueError(
+                "Experiment time range could not be determined: at least one device "
+                "must define finite start_time and end_time."
+            )
 
     @property
     def device_names(self):
@@ -132,9 +152,9 @@ class Experiment:
     def interpolate(
         self,
         times: np.ndarray,
-        device: Union[str, Interpolator, None] = None,
+        device: str | Interpolator | None = None,
         return_valid: bool = False,
-    ) -> Union[tuple[dict, dict], dict, tuple[np.ndarray, np.ndarray], np.ndarray]:
+    ) -> tuple[dict, dict] | dict | tuple[np.ndarray, np.ndarray] | np.ndarray:
         """Interpolate data from one or all devices at specified time points.
 
         Parameters
@@ -202,7 +222,7 @@ class Experiment:
             else:
                 return values
         elif isinstance(device, str):
-            assert device in self.devices, "Unknown device '{}'".format(device)
+            assert device in self.devices, f"Unknown device '{device}'"
             res = self.devices[device].interpolate(times, return_valid=return_valid)
             return res
         else:

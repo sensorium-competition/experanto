@@ -23,6 +23,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "pyright",
     "hypothesis>=6.0",
+    "ruff==0.15.6",
 ]
 
 docs = [
@@ -69,3 +70,19 @@ known_first_party = ["experanto"]
 include = ["experanto"]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+src = ["experanto"]
+exclude = [
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+    ".ipynb_checkpoints",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "UP", "C4"]
+ignore = ["E501"]
