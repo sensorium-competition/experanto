@@ -607,9 +607,7 @@ class ScreenInterpolator(Interpolator):
         for key, metadata in zip(keys, metadatas, strict=True):
             if self.image_names:
                 image_name = metadata.get("image_name")
-                data_file_name = (
-                    self.root_folder / "data" / f"{image_name}.npy"
-                )
+                data_file_name = self.root_folder / "data" / f"{image_name}.npy"
             else:
                 data_file_name = self.root_folder / "data" / f"{key}.npy"
             self.trials.append(
