@@ -121,7 +121,9 @@ class Interpolator:
             else:
                 return SequenceInterpolator(root_folder, cache_data, **kwargs)
         elif modality == "screen":
-            stimuli_names = kwargs.pop("stimuli_names", meta_data.get("image_names", False))
+            stimuli_names = kwargs.pop(
+                "stimuli_names", meta_data.get("image_names", False)
+            )
             return ScreenInterpolator(root_folder, cache_data, stimuli_names, **kwargs)
         elif modality == "time_interval":
             return TimeIntervalInterpolator(root_folder, cache_data, **kwargs)
@@ -609,10 +611,10 @@ class ScreenInterpolator(Interpolator):
         for key, metadata in zip(keys, metadatas, strict=True):
             if self.stimuli_names:
                 stimuli_name = metadata.get("image_name")
-                assert stimuli_name is not None, f"stimuli_name is required in metadata when stimuli_names is True, but not found for key: {key}"
-                data_file_name = (
-                    self.root_folder / "data" / f"{stimuli_name}.npy"
-                )
+                assert (
+                    stimuli_name is not None
+                ), f"stimuli_name is required in metadata when stimuli_names is True, but not found for key: {key}"
+                data_file_name = self.root_folder / "data" / f"{stimuli_name}.npy"
             else:
                 data_file_name = self.root_folder / "data" / f"{key}.npy"
             self.trials.append(
