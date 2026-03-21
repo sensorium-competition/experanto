@@ -583,7 +583,7 @@ def test_sequence_interpolator_neuron_ids_selection(tmp_path):
 
 
 def test_sequence_interpolator_neuron_ids_indexes_mismatch():
-    with sequence_data_and_interpolator(data_kwargs={"n_signals":5}) as (
+    with sequence_data_and_interpolator(data_kwargs={"n_signals": 5}) as (
         _,
         _,
         _,
@@ -601,7 +601,7 @@ def test_sequence_interpolator_neuron_ids_indexes_mismatch():
 
 def test_phase_shift_interpolator_indexes_filtering():
     with sequence_data_and_interpolator(
-        data_kwargs={"n_signals":6, "shifts_per_signal":True}
+        data_kwargs={"n_signals": 6, "shifts_per_signal": True}
     ) as (_, _, phase_shifts, seq_interp):
 
         interp = PhaseShiftedSequenceInterpolator(
