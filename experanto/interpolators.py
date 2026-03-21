@@ -57,6 +57,7 @@ class Interpolator:
 
     def __init__(self, root_folder: str) -> None:
         self.root_folder = Path(root_folder)
+        self.n_signals: int = 0
         self.start_time = None
         self.end_time = None
         # Valid interval can be different to start time and end time.
