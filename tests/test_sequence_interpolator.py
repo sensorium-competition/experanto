@@ -552,7 +552,9 @@ def test_sequence_interpolator_indexes_selection():
         data_kwargs=dict(n_signals=10, use_mem_mapped=False)
     ) as (_, data, _, seq_interp):
 
-        seq_interp = SequenceInterpolator(seq_interp.root_folder, indexes=[1, 3, 5])
+        seq_interp = SequenceInterpolator(
+            seq_interp.root_folder, neuron_indices=[1, 3, 5]
+        )
 
         assert seq_interp.n_signals == 3
         assert seq_interp._data.shape[1] == 3
@@ -589,7 +591,9 @@ def test_sequence_interpolator_neuron_ids_indexes_mismatch():
         np.save(meta_folder / "unit_ids.npy", np.arange(5))
 
         with pytest.raises(ValueError):
-            SequenceInterpolator(seq_interp.root_folder, neuron_ids=[1], indexes=[2])
+            SequenceInterpolator(
+                seq_interp.root_folder, neuron_ids=[1], neuron_indices=[2]
+            )
 
 
 def test_phase_shift_interpolator_indexes_filtering():
@@ -598,7 +602,7 @@ def test_phase_shift_interpolator_indexes_filtering():
     ) as (_, _, phase_shifts, seq_interp):
 
         interp = PhaseShiftedSequenceInterpolator(
-            seq_interp.root_folder, indexes=[0, 2, 4]
+            seq_interp.root_folder, neuron_indices=[0, 2, 4]
         )
 
         assert len(interp._phase_shifts) == 3
