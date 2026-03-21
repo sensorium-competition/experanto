@@ -130,6 +130,7 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(
             "shifts_per_signal": True,
         }
     ) as (timestamps, data, shift, seq_interp):
+        assert shift is not None
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"
@@ -282,6 +283,7 @@ def test_linear_interpolation_with_phase_shifts(
         },
         interp_kwargs={"keep_nans": keep_nans},
     ) as (timestamps, data, shift, seq_interp):
+        assert shift is not None
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Not a PhaseShiftedSequenceInterpolator"
@@ -389,6 +391,7 @@ def test_interpolation_with_phase_shifts_for_invalid_times(
         },
         interp_kwargs={"keep_nans": keep_nans},
     ) as (_, _, phase_shifts, seq_interp):
+        assert phase_shifts is not None
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"
@@ -549,7 +552,7 @@ def test_interpolation_mode_not_implemented():
 
 def test_sequence_interpolator_indexes_selection():
     with sequence_data_and_interpolator(
-        data_kwargs=dict(n_signals=10, use_mem_mapped=False)
+        data_kwargs={"n_signals": 10, "use_mem_mapped": False}
     ) as (_, data, _, seq_interp):
 
         seq_interp = SequenceInterpolator(
@@ -561,7 +564,7 @@ def test_sequence_interpolator_indexes_selection():
 
 
 def test_sequence_interpolator_neuron_ids_selection(tmp_path):
-    with sequence_data_and_interpolator(data_kwargs=dict(n_signals=4)) as (
+    with sequence_data_and_interpolator(data_kwargs={"n_signals": 4}) as (
         _,
         _,
         _,
@@ -580,7 +583,7 @@ def test_sequence_interpolator_neuron_ids_selection(tmp_path):
 
 
 def test_sequence_interpolator_neuron_ids_indexes_mismatch():
-    with sequence_data_and_interpolator(data_kwargs=dict(n_signals=5)) as (
+    with sequence_data_and_interpolator(data_kwargs={"n_signals":5}) as (
         _,
         _,
         _,
@@ -598,7 +601,7 @@ def test_sequence_interpolator_neuron_ids_indexes_mismatch():
 
 def test_phase_shift_interpolator_indexes_filtering():
     with sequence_data_and_interpolator(
-        data_kwargs=dict(n_signals=6, shifts_per_signal=True)
+        data_kwargs={"n_signals":6, "shifts_per_signal":True}
     ) as (_, _, phase_shifts, seq_interp):
 
         interp = PhaseShiftedSequenceInterpolator(

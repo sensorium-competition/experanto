@@ -55,9 +55,10 @@ class Interpolator:
     Experiment : High-level interface that manages multiple interpolators.
     """
 
-    def __init__(self, root_folder: str) -> None:
+    def __init__(self, root_folder: str | Path) -> None:
         self.root_folder = Path(root_folder)
         self.n_signals: int = 0
+        self.interpolation_mode: str | None = None
         self.start_time = None
         self.end_time = None
         # Valid interval can be different to start time and end time.
@@ -242,7 +243,7 @@ class SequenceInterpolator(Interpolator):
 
     def __init__(
         self,
-        root_folder: str,
+        root_folder: str | Path,
         cache_data: bool = False,  # already cached, put it here for consistency
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
@@ -429,7 +430,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
     def __init__(
         self,
-        root_folder: str,
+        root_folder: str | Path,
         cache_data: bool = False,  # already cached, put it here for consistency
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
@@ -579,7 +580,7 @@ class ScreenInterpolator(Interpolator):
 
     def __init__(
         self,
-        root_folder: str,
+        root_folder: str | Path,
         cache_data: bool = False,  # New parameter
         rescale: bool = False,
         rescale_size: tuple[int, int] | None = None,
@@ -788,7 +789,7 @@ class TimeIntervalInterpolator(Interpolator):
       *i*-th valid time falls within any interval for the *j*-th label.
     """
 
-    def __init__(self, root_folder: str, cache_data: bool = False, **kwargs):
+    def __init__(self, root_folder: str | Path, cache_data: bool = False, **kwargs):
         super().__init__(root_folder)
         self.cache_data = cache_data
 
@@ -1082,7 +1083,7 @@ class SpikeInterpolator(Interpolator):
 
     def __init__(
         self,
-        root_folder: str,
+        root_folder: str | Path,
         cache_data: bool = False,
         interpolation_window: float = 0.3,
         interpolation_align: str = "center",

@@ -124,7 +124,7 @@ def test_spikes_cache_data():
         data_kwargs={"duration": 5.0, "n_neurons": 2},
         interp_kwargs={"cache_data": True},
     ) as (gt_spikes, interp):
-
+        assert isinstance(interp, SpikeInterpolator)
         assert isinstance(interp.spikes, np.ndarray)
         assert not isinstance(interp.spikes, np.memmap)
 
@@ -169,6 +169,7 @@ def test_memmap_loading():
         },
         interp_kwargs={"cache_data": False},
     ) as (gt_spikes, interp):
+        assert isinstance(interp, SpikeInterpolator)
         assert isinstance(interp.spikes, np.memmap), "Expected a memmap object"
 
         # Verify content matches ground truth
@@ -186,6 +187,7 @@ def test_memmap_loading():
         },
         interp_kwargs={"cache_data": True},
     ) as (gt_spikes, interp):
+        assert isinstance(interp, SpikeInterpolator)
         assert isinstance(
             interp.spikes, np.ndarray
         ), "Expected a numpy array (loaded into RAM)"
