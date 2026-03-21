@@ -267,8 +267,7 @@ class SequenceInterpolator(Interpolator):
 
         if len(valid_times) == 0:
             warnings.warn(
-                "Sequence interpolation returns empty array, no valid times queried",
-                stacklevel=2,
+                "No valid times provided for interpolation.", UserWarning, stacklevel=2
             )
             return (
                 (np.empty((0, self._data.shape[1]), dtype=self._data.dtype), valid)
@@ -393,8 +392,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
         if len(valid_times) == 0:
             warnings.warn(
-                "Sequence interpolation returns empty array, no valid times queried",
-                stacklevel=2,
+                "No valid times provided for interpolation.", UserWarning, stacklevel=2
             )
             return (
                 (np.empty((0, self._data.shape[1]), dtype=self._data.dtype), valid)
@@ -735,11 +733,13 @@ class TimeIntervalInterpolator(Interpolator):
         n_times = len(valid_times)
 
         if n_times == 0:
-            warnings.warn("No valid times provided for interpolation.", stacklevel=2)
+            warnings.warn(
+                "No valid times provided for interpolation.", UserWarning, stacklevel=2
+            )
             return (
-                (np.empty((0, n_labels), dtype=np.float64), valid)
+                (np.empty((0, n_labels), dtype=bool), valid)
                 if return_valid
-                else np.empty((0, n_labels), dtype=np.float64)
+                else np.empty((0, n_labels), dtype=bool)
             )
 
         out = np.zeros((n_times, n_labels), dtype=bool)
@@ -1062,7 +1062,9 @@ class SpikeInterpolator(Interpolator):
 
         # Handle edge case where no times are valid
         if len(valid_times) == 0:
-            warnings.warn("No valid times provided for interpolation.", stacklevel=2)
+            warnings.warn(
+                "No valid times provided for interpolation.", UserWarning, stacklevel=2
+            )
             return (
                 (np.empty((0, self.n_signals), dtype=np.float64), valid)
                 if return_valid
