@@ -119,14 +119,23 @@ class Interpolator:
                     root_folder, cache_data=cache_data, **kwargs
                 )
             else:
-                return SequenceInterpolator(root_folder, cache_data=cache_data, **kwargs)
+                return SequenceInterpolator(
+                    root_folder, cache_data=cache_data, **kwargs
+                )
         elif modality == "screen":
             use_stimuli_names = kwargs.pop(
                 "use_stimuli_names", meta_data.get("use_stimuli_names", False)
             )
-            return ScreenInterpolator(root_folder, cache_data=cache_data, use_stimuli_names=use_stimuli_names, **kwargs)
+            return ScreenInterpolator(
+                root_folder,
+                cache_data=cache_data,
+                use_stimuli_names=use_stimuli_names,
+                **kwargs,
+            )
         elif modality == "time_interval":
-            return TimeIntervalInterpolator(root_folder, cache_data=cache_data, **kwargs)
+            return TimeIntervalInterpolator(
+                root_folder, cache_data=cache_data, **kwargs
+            )
         elif modality == "spikes":
             return SpikeInterpolator(root_folder, cache_data=cache_data, **kwargs)
         else:
