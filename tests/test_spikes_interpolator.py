@@ -124,7 +124,7 @@ def test_spikes_cache_data():
         data_kwargs={"duration": 5.0, "n_neurons": 2},
         interp_kwargs={"cache_data": True},
     ) as (gt_spikes, interp):
-
+        assert isinstance(interp, SpikeInterpolator)
         assert isinstance(interp.spikes, np.ndarray)
         assert not isinstance(interp.spikes, np.memmap)
 
@@ -169,6 +169,7 @@ def test_memmap_loading():
         },
         interp_kwargs={"cache_data": False},
     ) as (gt_spikes, interp):
+        assert isinstance(interp, SpikeInterpolator)
         assert isinstance(interp.spikes, np.memmap), "Expected a memmap object"
 
         # Verify content matches ground truth
@@ -186,6 +187,7 @@ def test_memmap_loading():
         },
         interp_kwargs={"cache_data": True},
     ) as (gt_spikes, interp):
+        assert isinstance(interp, SpikeInterpolator)
         assert isinstance(
             interp.spikes, np.ndarray
         ), "Expected a numpy array (loaded into RAM)"
@@ -193,3 +195,44 @@ def test_memmap_loading():
 
         flat_gt = np.concatenate(gt_spikes)
         np.testing.assert_allclose(interp.spikes, flat_gt)
+
+
+def test_spikes_neuron_indices_filtering():
+    with spikes_data_and_interpolator(data_kwargs={"n_neurons": 5}) as (
+        gt_spikes,
+        interp,
+    ):
+
+        interp = SpikeInterpolator(interp.root_folder, neuron_indices=[1, 3])
+
+        assert interp.n_signals == 2
+
+        # verify spikes correspond to selected neurons
+        selected = [gt_spikes[1], gt_spikes[3]]
+        flat_selected = np.concatenate(selected)
+
+        np.testing.assert_allclose(interp.spikes, flat_selected)
+
+
+def test_spikes_neuron_ids_indices_mismatch():
+    with spikes_data_and_interpolator(data_kwargs={"n_neurons": 5}) as (_, interp):
+
+        meta_folder = interp.root_folder / "meta"
+        meta_folder.mkdir(parents=True, exist_ok=True)
+        np.save(meta_folder / "unit_ids.npy", np.arange(5))
+
+        with pytest.raises(ValueError):
+            SpikeInterpolator(
+                interp.root_folder,
+                neuron_ids=[0, 1],
+                neuron_indices=[2, 3],
+            )
+
+
+def test_spikes_empty_selection():
+    with spikes_data_and_interpolator(data_kwargs={"n_neurons": 5}) as (_, interp):
+
+        interp = SpikeInterpolator(interp.root_folder, neuron_indices=[])
+
+        assert interp.n_signals == 0
+        assert interp.spikes.shape == (0,)
