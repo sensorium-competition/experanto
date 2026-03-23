@@ -331,7 +331,7 @@ def test_linear_interpolation_with_phase_shifts(
 
 
 @pytest.mark.filterwarnings(
-    "ignore:No valid times provided for interpolation.:UserWarning"
+    "ignore:Sequence interpolation returns empty array, no valid times queried.:UserWarning"
 )
 @pytest.mark.parametrize("interpolation_mode", ["nearest_neighbor", "linear"])
 @pytest.mark.parametrize("end_time", [0.05, 1.0, 5.0, 12.0])
@@ -370,7 +370,7 @@ def test_interpolation_for_invalid_times(interpolation_mode, end_time, keep_nans
 
 
 @pytest.mark.filterwarnings(
-    "ignore:No valid times provided for interpolation.:UserWarning"
+    "ignore:Sequence interpolation returns empty array, no valid times queried.:UserWarning"
 )
 @pytest.mark.parametrize("interpolation_mode", ["nearest_neighbor", "linear"])
 @pytest.mark.parametrize("end_time", [0.05, 1.0, 5.0, 12.0])
@@ -429,7 +429,7 @@ def test_interpolation_for_empty_times(interpolation_mode, phase_shifts):
 
         with pytest.warns(
             UserWarning,
-            match="No valid times provided for interpolation.",
+            match="Sequence interpolation returns empty array, no valid times queried.",
         ):
             interp, valid = seq_interp.interpolate(
                 times=np.array([]), return_valid=True

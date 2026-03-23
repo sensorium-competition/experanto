@@ -398,7 +398,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
         if len(valid_times) == 0:
             warnings.warn(
-                "No valid times provided for interpolation.", UserWarning, stacklevel=2
+                "Sequence interpolation returns empty array, no valid times queried.", UserWarning, stacklevel=2
             )
             return (
                 (np.empty((0, self._data.shape[1]), dtype=self._data.dtype), valid)
