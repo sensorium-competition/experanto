@@ -271,8 +271,7 @@ class SequenceInterpolator(Interpolator):
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
 
         self.n_signals = meta["n_signals"]
-        neuron_indices = self._resolve_indices(neuron_ids, neuron_indices)
-        self.neuron_indices = neuron_indices
+        self.neuron_indices = self._resolve_indices(neuron_ids, neuron_indices)
 
         # read .mem (memmap) or .npy file
         if self.is_mem_mapped:
