@@ -121,10 +121,10 @@ class Interpolator:
             else:
                 return SequenceInterpolator(root_folder, cache_data, **kwargs)
         elif modality == "screen":
-            stimuli_names = kwargs.pop(
-                "stimuli_names", meta_data.get("image_names", False)
+            use_stimuli_names = kwargs.pop(
+                "use_stimuli_names", meta_data.get("use_stimuli_names", False)
             )
-            return ScreenInterpolator(root_folder, cache_data, stimuli_names, **kwargs)
+            return ScreenInterpolator(root_folder, cache_data, use_stimuli_names, **kwargs)
         elif modality == "time_interval":
             return TimeIntervalInterpolator(root_folder, cache_data, **kwargs)
         elif modality == "spikes":
@@ -514,7 +514,7 @@ class ScreenInterpolator(Interpolator):
         rescale: bool = False,
         rescale_size: tuple[int, int] | None = None,
         normalize: bool = False,
-        stimuli_names: bool = False,
+        use_stimuli_names: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(root_folder)
@@ -524,7 +524,7 @@ class ScreenInterpolator(Interpolator):
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
         self.rescale = rescale
         self.cache_trials = cache_data  # Store the cache preference
-        self.stimuli_names = stimuli_names
+        self.use_stimuli_names = use_stimuli_names
         self._parse_trials()
 
         # create mapping from image index to file index
@@ -609,11 +609,11 @@ class ScreenInterpolator(Interpolator):
         metadatas, keys = self.read_combined_meta()
 
         for key, metadata in zip(keys, metadatas, strict=True):
-            if self.stimuli_names:
-                stimuli_name = metadata.get("image_name")
+            if self.use_stimuli_names:
+                stimuli_name = metadata.get("stimuli_name")
                 assert (
                     stimuli_name is not None
-                ), f"stimuli_name is required in metadata when stimuli_names is True, but not found for key: {key}"
+                ), f"stimuli_name is required in metadata when use_stimuli_names is True, but not found for key: {key}"
                 data_file_name = self.root_folder / "data" / f"{stimuli_name}.npy"
             else:
                 data_file_name = self.root_folder / "data" / f"{key}.npy"
