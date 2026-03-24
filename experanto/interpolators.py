@@ -267,14 +267,14 @@ class SequenceInterpolator(Interpolator):
 
         if len(valid_times) == 0:
             warnings.warn(
-                "Sequence interpolation returns empty array, no valid times queried",
+                "Interpolation returns empty array, no valid times queried.",
                 UserWarning,
                 stacklevel=2,
             )
             return (
-                (np.empty((0, self._data.shape[1])), valid)
+                (np.empty((0, self._data.shape[1]), dtype=self._data.dtype), valid)
                 if return_valid
-                else np.empty((0, self._data.shape[1]))
+                else np.empty((0, self._data.shape[1]), dtype=self._data.dtype)
             )
 
         idx_lower = np.floor((valid_times - self.start_time) / self.time_delta).astype(
@@ -333,6 +333,12 @@ class SequenceInterpolator(Interpolator):
 
     def close(self) -> None:
         super().close()
+
+        if hasattr(self, "_data") and isinstance(self._data, np.memmap):
+            mmap_obj = getattr(self._data, "_mmap", None)
+            if mmap_obj is not None:
+                mmap_obj.close()
+
         del self._data
 
 
@@ -394,14 +400,14 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
         if len(valid_times) == 0:
             warnings.warn(
-                "Sequence interpolation returns empty array, no valid times queried",
+                "Interpolation returns empty array, no valid times queried.",
                 UserWarning,
                 stacklevel=2,
             )
             return (
-                (np.empty((0, self._data.shape[1])), valid)
+                (np.empty((0, self._data.shape[1]), dtype=self._data.dtype), valid)
                 if return_valid
-                else np.empty((0, self._data.shape[1]))
+                else np.empty((0, self._data.shape[1]), dtype=self._data.dtype)
             )
 
         idx_lower = np.floor(
@@ -457,7 +463,6 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
                 np.copyto(interpolated, neuron_means, where=np.isnan(interpolated))
 
             return (interpolated, valid) if return_valid else interpolated
-
         else:
             raise NotImplementedError(
                 "interpolation_mode should be linear or nearest_neighbor"
@@ -517,7 +522,7 @@ class ScreenInterpolator(Interpolator):
         self.end_time = self.timestamps[-1]
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
         self.rescale = rescale
-        self.cache_trials = cache_data  # Store the cache preference
+        self.cache_data = cache_data  # Store the cache preference
         self._parse_trials()
 
         # create mapping from image index to file index
@@ -603,11 +608,9 @@ class ScreenInterpolator(Interpolator):
 
         for key, metadata in zip(keys, metadatas, strict=True):
             data_file_name = self.root_folder / "data" / f"{key}.npy"
-            # Pass the cache_trials parameter when creating trials
+            # Pass the cache_data parameter when creating trials
             self.trials.append(
-                ScreenTrial.create(
-                    data_file_name, metadata, cache_data=self.cache_trials
-                )
+                ScreenTrial.create(data_file_name, metadata, cache_data=self.cache_data)
             )
 
     def interpolate(
@@ -668,6 +671,20 @@ class ScreenInterpolator(Interpolator):
         return cv2.resize(frame, self._image_size, interpolation=cv2.INTER_AREA).astype(
             np.float32
         )
+
+    def close(self) -> None:
+        super().close()
+
+        if hasattr(self, "trials"):
+            for trial in self.trials:
+                if hasattr(trial, "_cached_data") and isinstance(
+                    trial._cached_data, np.memmap
+                ):
+                    mmap_obj = getattr(trial._cached_data, "_mmap", None)
+                    if mmap_obj is not None:
+                        mmap_obj.close()
+                    del trial._cached_data
+            del self.trials
 
 
 class TimeIntervalInterpolator(Interpolator):
@@ -740,7 +757,7 @@ class TimeIntervalInterpolator(Interpolator):
 
         if n_times == 0:
             warnings.warn(
-                "TimeIntervalInterpolator returns an empty array, no valid times queried.",
+                "Interpolation returns empty array, no valid times queried.",
                 UserWarning,
                 stacklevel=2,
             )
@@ -1070,10 +1087,15 @@ class SpikeInterpolator(Interpolator):
 
         # Handle edge case where no times are valid
         if len(valid_times) == 0:
+            warnings.warn(
+                "Interpolation returns empty array, no valid times queried.",
+                UserWarning,
+                stacklevel=2,
+            )
             return (
-                (np.empty((0, self.n_signals)), valid)
+                (np.empty((0, self.n_signals), dtype=np.float64), valid)
                 if return_valid
-                else np.empty((0, self.n_signals))
+                else np.empty((0, self.n_signals), dtype=np.float64)
             )
 
         # 2. Prepare boundaries
