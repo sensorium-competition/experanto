@@ -267,7 +267,9 @@ class SequenceInterpolator(Interpolator):
 
         if len(valid_times) == 0:
             warnings.warn(
-                "Interpolation returns empty array, no valid times queried.", UserWarning, stacklevel=2
+                "Interpolation returns empty array, no valid times queried.",
+                UserWarning,
+                stacklevel=2,
             )
             return (
                 (np.empty((0, self._data.shape[1]), dtype=self._data.dtype), valid)
@@ -398,7 +400,9 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
         if len(valid_times) == 0:
             warnings.warn(
-                "Interpolation returns empty array, no valid times queried.", UserWarning, stacklevel=2
+                "Interpolation returns empty array, no valid times queried.",
+                UserWarning,
+                stacklevel=2,
             )
             return (
                 (np.empty((0, self._data.shape[1]), dtype=self._data.dtype), valid)
@@ -753,7 +757,9 @@ class TimeIntervalInterpolator(Interpolator):
 
         if n_times == 0:
             warnings.warn(
-                "Interpolation returns empty array, no valid times queried.", UserWarning, stacklevel=2
+                "Interpolation returns empty array, no valid times queried.",
+                UserWarning,
+                stacklevel=2,
             )
             return (
                 (np.empty((0, n_labels), dtype=bool), valid)
@@ -1082,7 +1088,9 @@ class SpikeInterpolator(Interpolator):
         # Handle edge case where no times are valid
         if len(valid_times) == 0:
             warnings.warn(
-                "Interpolation returns empty array, no valid times queried.", UserWarning, stacklevel=2
+                "Interpolation returns empty array, no valid times queried.",
+                UserWarning,
+                stacklevel=2,
             )
             return (
                 (np.empty((0, self.n_signals), dtype=np.float64), valid)
