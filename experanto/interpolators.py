@@ -488,8 +488,8 @@ class ScreenInterpolator(Interpolator):
         native image size from metadata.
     normalize : bool, default=False
         If True, normalizes frames using stored mean/std statistics.
-    stimuli_names : bool, default=False
-        If True, uses ``stimuli_name`` from metadata to locate data files instead of trial keys.
+    use_stimuli_names : bool, default=False
+        If True, uses ``stimulus_name`` from metadata to locate data files instead of trial keys.
     **kwargs
         Additional keyword arguments (ignored).
 
@@ -610,11 +610,11 @@ class ScreenInterpolator(Interpolator):
 
         for key, metadata in zip(keys, metadatas, strict=True):
             if self.use_stimuli_names:
-                stimuli_name = metadata.get("stimuli_name")
+                stimulus_name = metadata.get("stimulus_name")
                 assert (
-                    stimuli_name is not None
-                ), f"stimuli_name is required in metadata when use_stimuli_names is True, but not found for key: {key}"
-                data_file_name = self.root_folder / "data" / f"{stimuli_name}.npy"
+                    stimulus_name is not None
+                ), f"stimulus_name is required in metadata when use_stimuli_names is True, but not found for key: {key}"
+                data_file_name = self.root_folder / "data" / f"{stimulus_name}.npy"
             else:
                 data_file_name = self.root_folder / "data" / f"{key}.npy"
             self.trials.append(
