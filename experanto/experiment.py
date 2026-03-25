@@ -7,7 +7,6 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
-
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
