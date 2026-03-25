@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.abspath("../.."))
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "Experanto"
+project = "experanto"
 copyright = f"{datetime.today().strftime('%Y')}, sinzlab"
 author = "sinzlab"
 release = "0.1"
@@ -83,8 +83,6 @@ autodoc_mock_imports = [
     "optree",
     "rootutils",
     "numba",
-    "numpy",
-    "yaml",
 ]
 
 # -- Intersphinx settings (cross-references to external docs) ----------------

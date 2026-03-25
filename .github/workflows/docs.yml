@@ -7,7 +7,6 @@ on:
   pull_request:
     branches:
       - '**'
-  workflow_dispatch:
 
 jobs:
   build-docs:
@@ -15,7 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
       (
         github.event_name == 'pull_request' &&
         github.repository != github.event.pull_request.head.repo.full_name

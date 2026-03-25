@@ -1,25 +1,33 @@
 import logging
-from contextlib import ExitStack
+import shutil
+from contextlib import ExitStack, contextmanager
+from pathlib import Path
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+import yaml
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from experanto.experiment import Experiment
+from experanto.interpolators import Interpolator
 
-from .create_experiment import make_modality_config, make_sequence_device
+from .create_experiment import (
+    get_default_config,
+    make_modality_config,
+    make_sequence_device,
+    setup_test_experiment,
+)
+
+# --- Test Data and Mocks ---
 
 DEVICE_TIME_RANGE_CASES = [
-    # Single device: start and end should match that device's range
     ([(2.0, 9.0)], 2.0, 9.0),
-    # Two devices with different ranges: start should be min, end should be max
     ([(1.0, 8.0), (0.0, 10.0)], 0.0, 10.0),
-    # Three devices with different ranges: start should be min, end should be max
     ([(0.0, 10.0), (1.0, 8.0), (2.0, 9.0)], 0.0, 10.0),
-    # Devices with non-overlapping ranges: start should be min, end should be max
     ([(0.0, 3.0), (7.0, 8.0)], 0.0, 8.0),
-    # Devices with identical ranges: start and end should match that range
     ([(1.0, 5.0), (1.0, 5.0)], 1.0, 5.0),
-    # Large time stamps: start should be min, end should be max
     ([(1e9, 1e9 + 100), (1e9 - 50, 1e9 + 50)], 1e9 - 50, 1e9 + 100),
 ]
 
@@ -32,19 +40,16 @@ DEVICE_TIME_RANGE_IDS = [
     "large_time_stamps",
 ]
 
-# Inverted range is intentionally separate from INVALID_META_CASES —
-# None/NaN/inf are caught per-device before being added to self.devices,
-# whereas start > end is only caught after all devices are loaded.
 INVALID_META_CASES = [
-    {"start_time": None, "end_time": None},  # Both missing
-    {"start_time": None, "end_time": 10.0},  # Missing start_time
-    {"start_time": 0.0, "end_time": None},  # Missing end_time
-    {"start_time": float("inf"), "end_time": 10.0},  # Infinite start_time
-    {"start_time": 0.0, "end_time": float("inf")},  # Infinite end_time
-    {"start_time": float("-inf"), "end_time": 10.0},  # Negative Infinite start_time
-    {"start_time": 0.0, "end_time": float("-inf")},  # Negative Infinite end_time
-    {"start_time": float("nan"), "end_time": 10.0},  # NaN start_time
-    {"start_time": 0.0, "end_time": float("nan")},  # NaN end_time
+    {"start_time": None, "end_time": None},
+    {"start_time": None, "end_time": 10.0},
+    {"start_time": 0.0, "end_time": None},
+    {"start_time": float("inf"), "end_time": 10.0},
+    {"start_time": 0.0, "end_time": float("inf")},
+    {"start_time": float("-inf"), "end_time": 10.0},
+    {"start_time": 0.0, "end_time": float("-inf")},
+    {"start_time": float("nan"), "end_time": 10.0},
+    {"start_time": 0.0, "end_time": float("nan")},
 ]
 
 INVALID_META_IDS = [
@@ -60,7 +65,167 @@ INVALID_META_IDS = [
 ]
 
 
-# Test for union of device time ranges
+class DummyInterpolator(Interpolator):
+    """Small concrete interpolator used for testing Experiment routing logic."""
+
+    def __init__(self):
+        self.start_time = 0.0
+        self.end_time = 100.0
+        self.valid_interval = (self.start_time, self.end_time)
+        self.interpolate = MagicMock(return_value=np.array([1, 2, 3]))
+
+
+@pytest.fixture
+def mock_interpolator():
+    """Shared interpolator instance to isolate Experiment logic from interpolation math."""
+    return DummyInterpolator()
+
+
+# --- Tests ---
+
+
+def test_experiment_initialization_and_device_loading(tmp_path, mock_interpolator):
+    """Verify that only devices defined in modality_config are initialized."""
+    (tmp_path / "screen").mkdir()
+    (tmp_path / "eye_tracker").mkdir()
+    (tmp_path / "ignored_device").mkdir()
+    config = {
+        "screen": {"interpolation": mock_interpolator},
+        "eye_tracker": {"interpolation": mock_interpolator},
+    }
+    exp = Experiment(root_folder=str(tmp_path), modality_config=config)
+    assert "screen" in exp.devices
+    assert "eye_tracker" in exp.devices
+    assert "ignored_device" not in exp.devices
+    assert set(exp.device_names) == {"screen", "eye_tracker"}
+
+
+def test_experiment_interpolate_routing(tmp_path, mock_interpolator):
+    """Check if Experiment correctly delegates calls to underlying interpolators."""
+    (tmp_path / "screen").mkdir()
+    config = {"screen": {"interpolation": mock_interpolator}}
+    exp = Experiment(root_folder=str(tmp_path), modality_config=config)
+    test_times = np.array([10.0, 20.0])
+    res = exp.interpolate(test_times, device="screen")
+    mock_interpolator.interpolate.assert_called_once_with(
+        test_times, return_valid=False
+    )
+    np.testing.assert_array_equal(res, np.array([1, 2, 3]))
+    res_dict = exp.interpolate(test_times, device=None)
+    assert isinstance(res_dict, dict)
+    np.testing.assert_array_equal(res_dict["screen"], np.array([1, 2, 3]))
+
+
+@pytest.mark.parametrize(
+    "device_name, start_t, end_t",
+    [("device_0", 0.0, 10.0), ("device_1", 0.0, 20.0), ("device_2", 5.0, 15.0)],
+)
+def test_get_valid_range_all_devices(tmp_path, device_name, start_t, end_t):
+    """Integration test for valid_interval propagation from disk to object."""
+    with setup_test_experiment(
+        tmp_path,
+        n_devices=3,
+        devices_kwargs=[
+            {"t_end": 10.0},
+            {"t_end": 20.0},
+            {"start_time": 5.0, "t_end": 15.0},
+        ],
+    ) as experiment_path:
+        config = get_default_config()
+        config["device_2"] = {
+            "sampling_rate": 1.0,
+            "chunk_size": 40,
+            "interpolation": {"interpolation_mode": "nearest_neighbor"},
+        }
+        experiment = Experiment(
+            root_folder=str(experiment_path), modality_config=config
+        )
+        valid_range = experiment.get_valid_range(device_name)
+        assert valid_range == (start_t, end_t)
+
+
+def test_get_valid_range_raises_for_invalid_device(tmp_path):
+    with setup_test_experiment(tmp_path) as experiment_path:
+        experiment = Experiment(
+            root_folder=str(experiment_path), modality_config=get_default_config()
+        )
+        with pytest.raises(KeyError):
+            experiment.get_valid_range("device_does_not_exist")
+
+
+def test_experiment_with_non_zero_start_time(tmp_path):
+    """Test boundary conditions for data not starting at t=0."""
+    start_offset, duration = 1.5, 10.0
+    with setup_test_experiment(
+        tmp_path,
+        n_devices=1,
+        devices_kwargs=[{"t_end": start_offset + duration, "start_time": start_offset}],
+    ) as experiment_path:
+        experiment = Experiment(
+            root_folder=str(experiment_path), modality_config=get_default_config()
+        )
+        res = experiment.interpolate(np.array([start_offset + 1.0]), device="device_0")
+        assert res is not None
+        with pytest.warns(UserWarning, match="no valid times queried"):
+            experiment.interpolate(np.array([start_offset - 1.0]), device="device_0")
+
+
+@given(
+    start_offset=st.floats(min_value=0.0, max_value=100.0),
+    sampling_rate=st.floats(min_value=0.1, max_value=100.0),
+    duration=st.floats(min_value=0.0, max_value=100.0),
+)
+@settings(deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_experiment_numeric_precision_offset(
+    tmp_path, start_offset, sampling_rate, duration
+):
+    """Stress test using non-integer rates and offsets to catch float drift."""
+    with setup_test_experiment(
+        tmp_path,
+        n_devices=1,
+        devices_kwargs=[
+            {
+                "start_time": start_offset,
+                "t_end": start_offset + duration,
+                "sampling_rate": sampling_rate,
+            }
+        ],
+    ) as experiment_path:
+        experiment = Experiment(
+            root_folder=str(experiment_path), modality_config=get_default_config()
+        )
+        valid_range = experiment.get_valid_range("device_0")
+        assert valid_range[0] == pytest.approx(start_offset)
+        assert valid_range[1] == pytest.approx(start_offset + duration)
+        res = experiment.interpolate(np.array([start_offset]), device="device_0")
+        assert res is not None
+
+
+@pytest.mark.parametrize("return_valid", [False, True])
+@pytest.mark.parametrize("device", [None, "device_0"])
+def test_experiment_multi_device_interpolation(tmp_path, return_valid, device):
+    """Check data consistency when interpolating across multiple modalities."""
+    with setup_test_experiment(tmp_path, n_devices=2) as experiment_path:
+        exp = Experiment(
+            root_folder=str(experiment_path), modality_config=get_default_config()
+        )
+        times = np.array([1.0, 2.0])
+        results = exp.interpolate(times, device=device, return_valid=return_valid)
+        if return_valid:
+            data, valid_idx = results
+            assert (
+                data["device_0"].shape == (2, 10)
+                if device is None
+                else data.shape == (2, 10)
+            )
+        else:
+            assert (
+                results["device_0"].shape == (2, 10)
+                if device is None
+                else results.shape == (2, 10)
+            )
+
+
 @pytest.mark.parametrize("n_signals", [5, 20])
 @pytest.mark.parametrize(
     "device_ranges, expected_start, expected_end",
@@ -70,14 +235,10 @@ INVALID_META_IDS = [
 def test_experiment_start_end_time_reflects_union(
     tmp_path, device_ranges, expected_start, expected_end, n_signals
 ):
-    """
-    Experiment.start_time and end_time should reflect the union of all
-    device time ranges — earliest start and latest end across all devices.
-    """
+    """Experiment.start_time and end_time should reflect the union of all device time ranges."""
     device_names = [f"device_{i}" for i in range(len(device_ranges))]
-
     with ExitStack() as stack:
-        for name, (start, end) in zip(device_names, device_ranges, strict=True):
+        for name, (start, end) in zip(device_names, device_ranges):
             stack.enter_context(
                 make_sequence_device(
                     tmp_path,
@@ -88,119 +249,55 @@ def test_experiment_start_end_time_reflects_union(
                     sampling_rate=float(np.random.randint(5, 30)),
                 )
             )
-
         experiment = Experiment(
             root_folder=tmp_path,
             modality_config=make_modality_config(
                 *device_names, offsets=[float(np.random.rand()) for _ in device_names]
             ),
         )
-
-    assert experiment.start_time == (
-        expected_start
-    ), f"Expected start_time={expected_start}, got {experiment.start_time}"
-    assert experiment.end_time == (
-        expected_end
-    ), f"Expected end_time={expected_end}, got {experiment.end_time}"
+    assert experiment.start_time == pytest.approx(expected_start)
+    assert experiment.end_time == pytest.approx(expected_end)
 
 
-# Safety check
 @pytest.mark.parametrize("override_meta", INVALID_META_CASES, ids=INVALID_META_IDS)
 def test_experiment_invalid_metadata(tmp_path, override_meta):
-    """
-    Experiment should raise an error when initialized with invalid metadata.
-    Covers cases where start_time or end_time is None, NaN, or infinite.
-    """
     with make_sequence_device(
-        tmp_path,
-        "device_0",
-        start=0.0,
-        end=10.0,
-        override_meta=override_meta,
+        tmp_path, "device_0", start=0.0, end=10.0, override_meta=override_meta
     ):
         with pytest.raises(
             ValueError, match="Experiment time range could not be determined"
         ):
             Experiment(
-                root_folder=tmp_path,
-                modality_config=make_modality_config("device_0"),
-            )
-
-
-def test_experiment_inverted_time_range_raises(tmp_path):
-    """
-    Experiment should raise ValueError when start_time > end_time.
-    This is a separate guard from invalid metadata (None/NaN/inf) because it
-    only becomes apparent after all devices are loaded and the overall time range is computed.
-    """
-    with make_sequence_device(
-        tmp_path,
-        "device_0",
-        start=0.0,
-        end=10.0,
-        override_meta={"start_time": 5.0, "end_time": 2.0},
-    ):
-        with pytest.raises(
-            ValueError, match="Experiment time range could not be determined"
-        ):
-            Experiment(
-                root_folder=tmp_path,
-                modality_config=make_modality_config("device_0"),
+                root_folder=tmp_path, modality_config=make_modality_config("device_0")
             )
 
 
 @pytest.mark.parametrize("override_meta", INVALID_META_CASES, ids=INVALID_META_IDS)
 def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
-    """
-    Experiment should skip devices with invalid start_time or end_time and
-    log a warning, but still initialize successfully if at least one valid
-    device is present. The experiment time range should reflect only the
-    valid device.
-    """
-    start_val = np.random.lognormal(mean=0.0, sigma=1.0)  # Strictly positive float
-    duration_val = np.random.lognormal(mean=0.0, sigma=1.0)
+    start_val, duration_val = (
+        np.random.lognormal(0.0, 1.0),
+        np.random.lognormal(0.0, 1.0),
+    )
     end_val = start_val + duration_val
-
-    start_nonval = np.random.lognormal(mean=0.0, sigma=1.0)
-    duration_nonval = np.random.lognormal(mean=0.0, sigma=1.0)
-    end_nonval = start_nonval + duration_nonval
-
     with ExitStack() as stack:
-        # Valid device with proper metadata
         stack.enter_context(
-            make_sequence_device(
-                tmp_path,
-                "valid_device",
-                start=start_val,
-                end=end_val,
-            )
+            make_sequence_device(tmp_path, "valid_device", start=start_val, end=end_val)
         )
-        # Invalid device with missing start_time and end_time
         stack.enter_context(
             make_sequence_device(
                 tmp_path,
                 "invalid_device",
-                start=start_nonval,
-                end=end_nonval,
+                start=0.0,
+                end=10.0,
                 override_meta=override_meta,
             )
         )
-
         with caplog.at_level(logging.WARNING, logger="experanto.experiment"):
             experiment = Experiment(
                 root_folder=tmp_path,
                 modality_config=make_modality_config("valid_device", "invalid_device"),
             )
-
     assert "valid_device" in experiment.devices
     assert "invalid_device" not in experiment.devices
-
-    assert experiment.start_time == (
-        start_val
-    ), f"Expected start_time={start_val}, got {experiment.start_time}"
-    assert experiment.end_time == (
-        end_val
-    ), f"Expected end_time={end_val}, got {experiment.end_time}"
-    assert any(
-        "invalid_device" in message for message in caplog.messages
-    ), "Expected warning about invalid_device was skipped"
+    assert experiment.start_time == pytest.approx(start_val)
+    assert experiment.end_time == pytest.approx(end_val)

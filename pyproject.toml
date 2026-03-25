@@ -4,7 +4,6 @@ version = "0.1"
 description = "Python package to interpolate recordings and stimuli of neuroscience experiments"
 readme = "README.md"
 requires-python = ">=3.9"
-# When adding or removing dependencies, also update autodoc_mock_imports in docs/source/conf.py if necessary.
 dependencies = [
     "scipy>=1.13.1",
     "jaxtyping>=0.2.30",
@@ -22,9 +21,7 @@ dependencies = [
 dev = [
     "pytest==8.3.5",
     "pytest-cov>=7.0.0",
-    "pyright==1.1.408",
-    "black[jupyter]==25.1.0",
-    "isort==6.0.1",
+    "pyright",
     "hypothesis>=6.0",
     "ruff==0.15.6",
 ]
