@@ -1,7 +1,4 @@
 import logging
-import shutil
-from contextlib import ExitStack, contextmanager
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -15,8 +12,6 @@ from experanto.interpolators import Interpolator
 
 from .create_experiment import (
     get_default_config,
-    make_modality_config,
-    make_sequence_device,
     setup_test_experiment,
 )
 
@@ -236,40 +231,56 @@ def test_experiment_start_end_time_reflects_union(
     tmp_path, device_ranges, expected_start, expected_end, n_signals
 ):
     """Experiment.start_time and end_time should reflect the union of all device time ranges."""
-    device_names = [f"device_{i}" for i in range(len(device_ranges))]
-    with ExitStack() as stack:
-        for name, (start, end) in zip(device_names, device_ranges):
-            stack.enter_context(
-                make_sequence_device(
-                    tmp_path,
-                    name,
-                    start=start,
-                    end=end,
-                    n_signals=n_signals,
-                    sampling_rate=float(np.random.randint(5, 30)),
-                )
-            )
+    devices_kwargs = [
+        {
+            "start_time": start,
+            "t_end": end,
+            "n_signals": n_signals,
+            "sampling_rate": float(np.random.randint(5, 30)),
+        }
+        for start, end in device_ranges
+    ]
+
+    with setup_test_experiment(
+        tmp_path, n_devices=len(device_ranges), devices_kwargs=devices_kwargs
+    ) as experiment_path:
+        # Manually build the config dict for however many devices were generated
+        config = {}
+        for i in range(len(device_ranges)):
+            config[f"device_{i}"] = {
+                "interpolation": {
+                    "sampling_rate": 10.0,
+                    "offset": float(np.random.rand()),
+                }
+            }
+
         experiment = Experiment(
-            root_folder=tmp_path,
-            modality_config=make_modality_config(
-                *device_names, offsets=[float(np.random.rand()) for _ in device_names]
-            ),
+            root_folder=str(experiment_path), modality_config=config
         )
+
     assert experiment.start_time == pytest.approx(expected_start)
     assert experiment.end_time == pytest.approx(expected_end)
 
 
 @pytest.mark.parametrize("override_meta", INVALID_META_CASES, ids=INVALID_META_IDS)
 def test_experiment_invalid_metadata(tmp_path, override_meta):
-    with make_sequence_device(
-        tmp_path, "device_0", start=0.0, end=10.0, override_meta=override_meta
-    ):
+    with setup_test_experiment(
+        tmp_path, n_devices=1, devices_kwargs=[{"start_time": 0.0, "t_end": 10.0}]
+    ) as experiment_path:
+        # Explicitly corrupt the generated metadata file
+        meta_file = experiment_path / "device_0" / "meta.yml"
+        with open(meta_file, "r") as f:
+            meta = yaml.safe_load(f)
+        meta.update(override_meta)
+        with open(meta_file, "w") as f:
+            yaml.safe_dump(meta, f)
+
+        config = {"device_0": {"interpolation": {"sampling_rate": 10.0}}}
+
         with pytest.raises(
             ValueError, match="Experiment time range could not be determined"
         ):
-            Experiment(
-                root_folder=tmp_path, modality_config=make_modality_config("device_0")
-            )
+            Experiment(root_folder=str(experiment_path), modality_config=config)
 
 
 @pytest.mark.parametrize("override_meta", INVALID_META_CASES, ids=INVALID_META_IDS)
@@ -279,24 +290,37 @@ def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
         np.random.lognormal(0.0, 1.0),
     )
     end_val = start_val + duration_val
-    with ExitStack() as stack:
-        stack.enter_context(
-            make_sequence_device(tmp_path, "valid_device", start=start_val, end=end_val)
-        )
-        stack.enter_context(
-            make_sequence_device(
-                tmp_path,
-                "invalid_device",
-                start=0.0,
-                end=10.0,
-                override_meta=override_meta,
-            )
-        )
+
+    devices_kwargs = [
+        {"start_time": start_val, "t_end": end_val},  # valid device
+        {"start_time": 0.0, "t_end": 10.0},  # invalid device
+    ]
+
+    with setup_test_experiment(
+        tmp_path, n_devices=2, devices_kwargs=devices_kwargs
+    ) as experiment_path:
+        # Rename the folders to match what the old test expected
+        (experiment_path / "device_0").rename(experiment_path / "valid_device")
+        (experiment_path / "device_1").rename(experiment_path / "invalid_device")
+
+        # Explicitly corrupt the metadata file for the invalid device
+        meta_file = experiment_path / "invalid_device" / "meta.yml"
+        with open(meta_file, "r") as f:
+            meta = yaml.safe_load(f)
+        meta.update(override_meta)
+        with open(meta_file, "w") as f:
+            yaml.safe_dump(meta, f)
+
+        config = {
+            "valid_device": {"interpolation": {"sampling_rate": 10.0}},
+            "invalid_device": {"interpolation": {"sampling_rate": 10.0}},
+        }
+
         with caplog.at_level(logging.WARNING, logger="experanto.experiment"):
             experiment = Experiment(
-                root_folder=tmp_path,
-                modality_config=make_modality_config("valid_device", "invalid_device"),
+                root_folder=str(experiment_path), modality_config=config
             )
+
     assert "valid_device" in experiment.devices
     assert "invalid_device" not in experiment.devices
     assert experiment.start_time == pytest.approx(start_val)
