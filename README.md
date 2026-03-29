@@ -82,6 +82,46 @@ dataloader:
   batch_size: 16
   num_workers: 2
 ```
+### Creating a DataLoader for Training
+
+Here's a complete example showing how to create a PyTorch DataLoader for model training:
+```python
+from pathlib import Path
+from experanto.experiment import Experiment
+from experanto.datasets import ChunkDataset
+from torch.utils.data import DataLoader
+
+# Load experiments
+experiment_paths = [
+    "/path/to/experiment1",
+    "/path/to/experiment2",
+]
+experiments = [Experiment(p) for p in experiment_paths]
+
+# Create dataset
+dataset = ChunkDataset(
+    experiments=experiments,
+    modalities=["responses", "screen"],  # neural responses + visual stimuli
+    chunk_size=16,  # temporal window size
+    sampling_rate=30,  # Hz
+)
+
+# Create DataLoader
+dataloader = DataLoader(
+    dataset,
+    batch_size=32,
+    shuffle=True,
+    num_workers=4,
+)
+
+# Use in training loop
+for batch in dataloader:
+    responses = batch["responses"]  # shape: (batch, time, neurons)
+    stimuli = batch["screen"]       # shape: (batch, time, height, width)
+    # Your model training code here
+```
+
+For configuration options and advanced usage, see the [Configuration Options](https://experanto.readthedocs.io/en/latest/concepts/demo_configs.html) documentation.
 
 ## Documentation
 
