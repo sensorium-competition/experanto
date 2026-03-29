@@ -177,6 +177,12 @@ class SequenceInterpolator(Interpolator):
         If True, subtracts mean during normalization.
     normalize_std_threshold : float, optional
         Minimum std threshold to prevent division by near-zero values.
+    unit_ids : list, optional
+        List of unit IDs to select from unit_ids.npy. If provided, only these
+        neurons will be returned.
+    neuron_indexes : list, optional
+        List of neuron indexes (positions) to select. If provided, only these
+        neurons will be returned.
     **kwargs
         Additional keyword arguments (ignored).
 
@@ -205,6 +211,8 @@ class SequenceInterpolator(Interpolator):
         root_folder: str,
         cache_data: bool = False,  # already cached, put it here for consistency
         keep_nans: bool = False,
+        unit_ids=None,
+        neuron_indexes=None,
         interpolation_mode: str = "nearest_neighbor",
         normalize: bool = False,
         normalize_subtract_mean: bool = False,
@@ -227,6 +235,17 @@ class SequenceInterpolator(Interpolator):
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
 
         self.n_signals = meta["n_signals"]
+
+        # Filter by unit_ids or neuron_indexes if provided
+        if unit_ids is not None:
+            available_ids = np.load(self.root_folder / "meta/unit_ids.npy")
+            neuron_indexes = [np.where(available_ids == uid)[0][0] for uid in unit_ids]
+
+        if neuron_indexes is not None:
+            self._neuron_indexes = np.array(neuron_indexes)
+        else:
+            self._neuron_indexes = None
+
         # read .mem (memmap) or .npy file
         if self.is_mem_mapped:
             self._data = np.memmap(
@@ -295,6 +314,8 @@ class SequenceInterpolator(Interpolator):
 
         if self.interpolation_mode == "nearest_neighbor":
             data = self._data[idx_lower]
+            if self._neuron_indexes is not None:
+                data = data[:, self._neuron_indexes]
 
             return (data, valid) if return_valid else data
 
@@ -326,6 +347,10 @@ class SequenceInterpolator(Interpolator):
 
             data_lower = self._data[idx_lower]
             data_upper = self._data[idx_upper]
+
+            if self._neuron_indexes is not None:
+                data_lower = data_lower[:, self._neuron_indexes]
+                data_upper = data_upper[:, self._neuron_indexes]
 
             interpolated = (
                 lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
@@ -1025,6 +1050,12 @@ class SpikeInterpolator(Interpolator):
         sigma should be ~3.
         Set to 0.0 to disable smoothing.
         Default is 0.0.
+    unit_ids : list, optional
+        List of unit IDs to select from unit_ids.npy. If provided, only these
+        neurons will be returned.
+    neuron_indexes : list, optional
+        List of neuron indexes (positions) to select. If provided, only these
+        neurons will be returned.
     """
 
     def __init__(
@@ -1034,6 +1065,8 @@ class SpikeInterpolator(Interpolator):
         interpolation_window: float = 0.3,
         interpolation_align: str = "center",
         smoothing_sigma: float = 0.0,
+        unit_ids=None,
+        neuron_indexes=None,
     ):
         super().__init__(root_folder)
 
@@ -1056,6 +1089,17 @@ class SpikeInterpolator(Interpolator):
         # Ensure indices are typed correctly for Numba
         self.indices = np.array(meta["spike_indices"]).astype(np.int64)
         self.n_signals = len(self.indices) - 1
+
+        # Filter by unit_ids or neuron_indexes if provided
+        if unit_ids is not None:
+            available_ids = np.load(self.root_folder / "meta/unit_ids.npy")
+            neuron_indexes = [np.where(available_ids == uid)[0][0] for uid in unit_ids]
+
+        if neuron_indexes is not None:
+            self._neuron_indexes = np.array(neuron_indexes)
+        else:
+            self._neuron_indexes = None
+
         meta_n_signals = meta.get("n_signals")
         if meta_n_signals is not None and meta_n_signals != self.n_signals:
             raise ValueError(
@@ -1131,6 +1175,9 @@ class SpikeInterpolator(Interpolator):
                 # If your times are 30Hz (33ms) and you want 100ms smoothing,
                 # sigma should be ~3.
                 counts = gaussian_filter1d(counts, sigma=self.smoothing_sigma, axis=0)
+
+        if self._neuron_indexes is not None:
+            counts = counts[:, self._neuron_indexes]
 
         return (counts, valid) if return_valid else counts
 
