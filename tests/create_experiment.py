@@ -1,30 +1,7 @@
-import copy
 import shutil
 from contextlib import contextmanager
 
 from .create_sequence_data import _generate_sequence_data
-
-DEFAULT_CONFIG = {
-    "device_0": {
-        "sampling_rate": 1.0,
-        "chunk_size": 40,
-        "interpolation": {
-            "interpolation_mode": "nearest_neighbor",
-        },
-    },
-    "device_1": {
-        "sampling_rate": 1.0,
-        "chunk_size": 60,
-        "interpolation": {
-            "interpolation_mode": "linear",
-        },
-    },
-}
-
-
-def get_default_config():
-    """Return a fresh copy of the default modality configuration."""
-    return copy.deepcopy(DEFAULT_CONFIG)
 
 
 @contextmanager
@@ -48,3 +25,27 @@ def setup_test_experiment(
     finally:
         if tmp_path.exists():
             shutil.rmtree(tmp_path)
+
+
+def make_modality_config(*device_names, sampling_rates=None, offsets=None):
+    if sampling_rates is None:
+        sampling_rates = [10.0] * len(device_names)
+    elif isinstance(sampling_rates, (int, float)):
+        sampling_rates = [sampling_rates] * len(device_names)
+
+    if offsets is None:
+        offsets = [0.0] * len(device_names)
+    elif isinstance(offsets, (int, float)):
+        offsets = [offsets] * len(device_names)
+
+    assert len(device_names) == len(sampling_rates), (
+        f"sampling_rates length {len(sampling_rates)} does not match device_names length {len(device_names)}"
+    )
+    assert len(device_names) == len(offsets), (
+        f"offsets length {len(offsets)} does not match device_names length {len(device_names)}"
+    )
+
+    return {
+        name: {"interpolation": {"sampling_rate": sr, "offset": off}}
+        for name, sr, off in zip(device_names, sampling_rates, offsets, strict=True)
+    }
