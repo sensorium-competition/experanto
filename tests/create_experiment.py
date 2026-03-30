@@ -1,48 +1,30 @@
 import shutil
 from contextlib import contextmanager
 
-import numpy as np
-import yaml
+from .create_sequence_data import _generate_sequence_data
 
 
 @contextmanager
-def make_sequence_device(
-    root, name, start, end, sampling_rate=10.0, n_signals=5, override_meta=None
+def setup_test_experiment(
+    tmp_path,
+    n_devices=2,
+    devices_kwargs=None,
+    default_sampling_rate=1.0,
 ):
-    """Create a single sequence device folder under root."""
-    device_root = root / name
+    devices_kwargs = devices_kwargs or [{}] * n_devices
+    default_params = {"sampling_rate": default_sampling_rate}
+
+    devices_kwargs = [default_params | kwargs for kwargs in devices_kwargs]
+
     try:
-        (device_root / "meta").mkdir(parents=True, exist_ok=True)
-
-        n_samples = (
-            int((end - start) * sampling_rate) + 1
-        )  # +1 to include both start and end as sample points
-        timestamps = np.linspace(start, end, n_samples)
-        data = np.random.rand(n_samples, n_signals)
-
-        np.save(device_root / "timestamps.npy", timestamps)
-        np.save(device_root / "data.npy", data)
-
-        meta = {
-            "start_time": start,
-            "end_time": end,
-            "modality": "sequence",
-            "sampling_rate": sampling_rate,
-            "phase_shift_per_signal": False,
-            "is_mem_mapped": False,
-            "n_signals": n_signals,
-            "n_timestamps": n_samples,
-            "dtype": "float64",
-        }
-        if override_meta:
-            meta.update(override_meta)
-        with open(device_root / "meta.yml", "w") as f:
-            yaml.safe_dump(meta, f)
-
-        yield device_root
-
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        for device_id, device_kwargs in enumerate(devices_kwargs):
+            device_path = tmp_path / f"device_{device_id}"
+            _generate_sequence_data(device_path, **device_kwargs)
+        yield tmp_path
     finally:
-        shutil.rmtree(device_root)
+        if tmp_path.exists():
+            shutil.rmtree(tmp_path)
 
 
 def make_modality_config(*device_names, sampling_rates=None, offsets=None):
