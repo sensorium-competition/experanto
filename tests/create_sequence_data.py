@@ -1,10 +1,11 @@
 import shutil
-from contextlib import contextmanager, closing
+from contextlib import closing, contextmanager
 from pathlib import Path
-from experanto.interpolators import Interpolator
 
 import numpy as np
 import yaml
+
+from experanto.interpolators import Interpolator
 
 SEQUENCE_ROOT = Path("tests/sequence_data")
 
