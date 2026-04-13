@@ -116,16 +116,28 @@ class Interpolator:
         if modality == "sequence":
             if meta_data.get("phase_shift_per_signal", False):
                 return PhaseShiftedSequenceInterpolator(
-                    root_folder, cache_data, **kwargs
+                    root_folder, cache_data=cache_data, **kwargs
                 )
             else:
-                return SequenceInterpolator(root_folder, cache_data, **kwargs)
+                return SequenceInterpolator(
+                    root_folder, cache_data=cache_data, **kwargs
+                )
         elif modality == "screen":
-            return ScreenInterpolator(root_folder, cache_data, **kwargs)
+            use_stimuli_names = kwargs.pop(
+                "use_stimuli_names", meta_data.get("use_stimuli_names", False)
+            )
+            return ScreenInterpolator(
+                root_folder,
+                cache_data=cache_data,
+                use_stimuli_names=use_stimuli_names,
+                **kwargs,
+            )
         elif modality == "time_interval":
-            return TimeIntervalInterpolator(root_folder, cache_data, **kwargs)
+            return TimeIntervalInterpolator(
+                root_folder, cache_data=cache_data, **kwargs
+            )
         elif modality == "spikes":
-            return SpikeInterpolator(root_folder, cache_data, **kwargs)
+            return SpikeInterpolator(root_folder, cache_data=cache_data, **kwargs)
         else:
             raise ValueError(
                 f"There is no interpolator for {modality}. Please use 'sequence', 'screen', 'time_interval' as modality or provide a custom interpolator."
@@ -490,6 +502,8 @@ class ScreenInterpolator(Interpolator):
         native image size from metadata.
     normalize : bool, default=False
         If True, normalizes frames using stored mean/std statistics.
+    use_stimuli_names : bool, default=False
+        If True, uses ``stimulus_name`` from metadata to locate data files instead of trial keys.
     **kwargs
         Additional keyword arguments (ignored).
 
@@ -510,10 +524,11 @@ class ScreenInterpolator(Interpolator):
     def __init__(
         self,
         root_folder: str,
-        cache_data: bool = False,  # New parameter
+        cache_data: bool = False,
         rescale: bool = False,
         rescale_size: tuple[int, int] | None = None,
         normalize: bool = False,
+        use_stimuli_names: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(root_folder)
@@ -523,6 +538,7 @@ class ScreenInterpolator(Interpolator):
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
         self.rescale = rescale
         self.cache_data = cache_data  # Store the cache preference
+        self.use_stimuli_names = use_stimuli_names
         self._parse_trials()
 
         # create mapping from image index to file index
@@ -607,8 +623,14 @@ class ScreenInterpolator(Interpolator):
         metadatas, keys = self.read_combined_meta()
 
         for key, metadata in zip(keys, metadatas, strict=True):
-            data_file_name = self.root_folder / "data" / f"{key}.npy"
-            # Pass the cache_data parameter when creating trials
+            if self.use_stimuli_names:
+                stimulus_name = metadata.get("stimulus_name")
+                assert (
+                    stimulus_name is not None
+                ), f"stimulus_name is required in metadata when use_stimuli_names is True, but not found for key: {key}"
+                data_file_name = self.root_folder / "data" / f"{stimulus_name}.npy"
+            else:
+                data_file_name = self.root_folder / "data" / f"{key}.npy"
             self.trials.append(
                 ScreenTrial.create(data_file_name, metadata, cache_data=self.cache_data)
             )
