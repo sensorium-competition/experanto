@@ -35,16 +35,19 @@ DEVICE_TIME_RANGE_IDS = [
     "large_time_stamps",
 ]
 
+# Inverted range is intentionally separate from INVALID_META_CASES -
+# None/NaN/inf are caught per-device before being added to self.devices,
+# whereas start > end is only caught after all devices are loaded.
 INVALID_META_CASES = [
-    {"start_time": None, "end_time": None},
-    {"start_time": None, "end_time": 10.0},
-    {"start_time": 0.0, "end_time": None},
-    {"start_time": float("inf"), "end_time": 10.0},
-    {"start_time": 0.0, "end_time": float("inf")},
-    {"start_time": float("-inf"), "end_time": 10.0},
-    {"start_time": 0.0, "end_time": float("-inf")},
-    {"start_time": float("nan"), "end_time": 10.0},
-    {"start_time": 0.0, "end_time": float("nan")},
+    {"start_time": None, "end_time": None},  # Both missing
+    {"start_time": None, "end_time": 10.0},  # Missing start_time
+    {"start_time": 0.0, "end_time": None},  # Missing end_time
+    {"start_time": float("inf"), "end_time": 10.0},  # Infinite start_time
+    {"start_time": 0.0, "end_time": float("inf")},  # Infinite end_time
+    {"start_time": float("-inf"), "end_time": 10.0},  # Negative Infinite start_time
+    {"start_time": 0.0, "end_time": float("-inf")},  # Negative Infinite end_time
+    {"start_time": float("nan"), "end_time": 10.0},  # NaN start_time
+    {"start_time": 0.0, "end_time": float("nan")},  # NaN end_time
 ]
 
 INVALID_META_IDS = [
@@ -89,10 +92,14 @@ def test_experiment_initialization_and_device_loading(tmp_path, mock_interpolato
         "eye_tracker": {"interpolation": mock_interpolator},
     }
     exp = Experiment(root_folder=str(tmp_path), modality_config=config)
-    assert "screen" in exp.devices
-    assert "eye_tracker" in exp.devices
-    assert "ignored_device" not in exp.devices
-    assert set(exp.device_names) == {"screen", "eye_tracker"}
+    assert "screen" in exp.devices, "Expected 'screen' in experiment devices"
+    assert "eye_tracker" in exp.devices, "Expected 'eye_tracker' in experiment devices"
+    assert "ignored_device" not in exp.devices, (
+        "Expected 'ignored_device' to be excluded"
+    )
+    assert set(exp.device_names) == {"screen", "eye_tracker"}, (
+        f"Expected {{'screen', 'eye_tracker'}}, got {set(exp.device_names)}"
+    )
 
 
 def test_experiment_interpolate_routing(tmp_path, mock_interpolator):
@@ -105,10 +112,20 @@ def test_experiment_interpolate_routing(tmp_path, mock_interpolator):
     mock_interpolator.interpolate.assert_called_once_with(
         test_times, return_valid=False
     )
-    np.testing.assert_array_equal(res, np.array([1, 2, 3]))
+    np.testing.assert_array_equal(
+        res,
+        np.array([1, 2, 3]),
+        err_msg="Interpolated result does not match mock output",
+    )
     res_dict = exp.interpolate(test_times, device=None)
-    assert isinstance(res_dict, dict)
-    np.testing.assert_array_equal(res_dict["screen"], np.array([1, 2, 3]))
+    assert isinstance(res_dict, dict), (
+        f"Expected dict return for device=None, got {type(res_dict)}"
+    )
+    np.testing.assert_array_equal(
+        res_dict["screen"],
+        np.array([1, 2, 3]),
+        err_msg="Interpolated dict result does not match mock output",
+    )
 
 
 @pytest.mark.parametrize(
@@ -136,7 +153,9 @@ def test_get_valid_range_all_devices(tmp_path, device_name, start_t, end_t):
             root_folder=str(experiment_path), modality_config=config
         )
         valid_range = experiment.get_valid_range(device_name)
-        assert valid_range == (start_t, end_t)
+        assert valid_range == (start_t, end_t), (
+            f"Expected valid range {(start_t, end_t)} for {device_name}, got {valid_range}"
+        )
 
 
 def test_get_valid_range_raises_for_invalid_device(tmp_path):
@@ -259,8 +278,12 @@ def test_experiment_start_end_time_reflects_union(
         )
 
     # Removed pytest.approx here
-    assert experiment.start_time == expected_start
-    assert experiment.end_time == expected_end
+    assert experiment.start_time == (expected_start), (
+        f"Expected start_time={expected_start}, got {experiment.start_time}"
+    )
+    assert experiment.end_time == (expected_end), (
+        f"Expected end_time={expected_end}, got {experiment.end_time}"
+    )
 
 
 @pytest.mark.parametrize("override_meta", INVALID_META_CASES, ids=INVALID_META_IDS)
@@ -270,7 +293,7 @@ def test_experiment_invalid_metadata(tmp_path, override_meta):
     ) as experiment_path:
         # Explicitly corrupt the generated metadata file
         meta_file = experiment_path / "device_0" / "meta.yml"
-        with open(meta_file, "r") as f:
+        with open(meta_file) as f:
             meta = yaml.safe_load(f)
         meta.update(override_meta)
         with open(meta_file, "w") as f:
@@ -286,10 +309,14 @@ def test_experiment_invalid_metadata(tmp_path, override_meta):
 
 @pytest.mark.parametrize("override_meta", INVALID_META_CASES, ids=INVALID_META_IDS)
 def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
-    start_val, duration_val = (
-        np.random.lognormal(0.0, 1.0),
-        np.random.lognormal(0.0, 1.0),
-    )
+    """
+    Experiment should skip devices with invalid start_time or end_time and
+    log a warning, but still initialize successfully if at least one valid
+    device is present. The experiment time range should reflect only the
+    valid device.
+    """
+    start_val = np.random.lognormal(mean=0.0, sigma=1.0)  # Strictly positive float
+    duration_val = np.random.lognormal(mean=0.0, sigma=1.0)
     end_val = start_val + duration_val
 
     devices_kwargs = [
@@ -306,7 +333,7 @@ def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
 
         # Explicitly corrupt the metadata file for the invalid device
         meta_file = experiment_path / "invalid_device" / "meta.yml"
-        with open(meta_file, "r") as f:
+        with open(meta_file) as f:
             meta = yaml.safe_load(f)
         meta.update(override_meta)
         with open(meta_file, "w") as f:
@@ -319,8 +346,20 @@ def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
                 root_folder=str(experiment_path), modality_config=config
             )
 
-    assert "valid_device" in experiment.devices
-    assert "invalid_device" not in experiment.devices
+    assert "valid_device" in experiment.devices, (
+        "Expected 'valid_device' to be initialized"
+    )
+    assert "invalid_device" not in experiment.devices, (
+        "Expected 'invalid_device' to be skipped"
+    )
+
     # Removed pytest.approx here
-    assert experiment.start_time == start_val
-    assert experiment.end_time == end_val
+    assert experiment.start_time == (start_val), (
+        f"Expected start_time={start_val}, got {experiment.start_time}"
+    )
+    assert experiment.end_time == (end_val), (
+        f"Expected end_time={end_val}, got {experiment.end_time}"
+    )
+    assert any("invalid_device" in message for message in caplog.messages), (
+        "Expected warning about invalid_device was skipped"
+    )

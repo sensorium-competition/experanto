@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import logging
-import re
 import warnings
-from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
