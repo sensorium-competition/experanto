@@ -47,5 +47,5 @@ def make_modality_config(*device_names, sampling_rates=None, offsets=None):
 
     return {
         name: {"interpolation": {"sampling_rate": sr, "offset": off}}
-        for name, sr, off in zip(device_names, sampling_rates, offsets)
+        for name, sr, off in zip(device_names, sampling_rates, offsets, strict=True)
     }
