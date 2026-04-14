@@ -50,6 +50,10 @@ def _generate_sequence_data(
         )
         data.flat[nan_indices] = np.nan
 
+    # ensure each row has at least one non-NaN
+    row_all_nan = np.isnan(data).all(axis=1)
+    data[row_all_nan, 0] = 0.0
+
     if not use_mem_mapped:
         np.save(sequence_root / "data.npy", data)
     else:
