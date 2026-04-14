@@ -76,7 +76,7 @@ class Experiment:
     def _load_devices(self) -> None:
         # Populate devices by going through subfolders
         # Assumption: blocks are sorted by start time
-        device_folders = [d for d in self.root_folder.iterdir() if (d.is_dir())]
+        device_folders = [d for d in self.root_folder.iterdir() if d.is_dir()]
 
         for d in device_folders:
             if d.name not in self.modality_config:
@@ -95,14 +95,14 @@ class Experiment:
                 dev = instantiate(
                     interp_conf, root_folder=d, cache_data=self.cache_data
                 )
+
                 # Check if instantiated object is proper Interpolator
                 if not isinstance(dev, Interpolator):
                     raise ValueError(
-                        "Please provide an Interpolator which inherits from experantos Interpolator class."
+                        "Instantiated object must inherit from Interpolator class."
                     )
 
             elif isinstance(interp_conf, Interpolator):
-                # Already instantiated Interpolator
                 dev = interp_conf
 
             else:
@@ -207,26 +207,22 @@ class Experiment:
         dict_keys(['screen', 'responses', 'eye_tracker'])
         """
         if device is None:
-            values = {}
-            valid = {}
+            values, valid = {}, {}
             for d, interp in self.devices.items():
                 res = interp.interpolate(times, return_valid=return_valid)
                 if return_valid:
                     vals, vlds = res
-                    values[d] = vals
-                    valid[d] = vlds
+                    values[d], valid[d] = vals, vlds
                 else:
                     values[d] = res
-            if return_valid:
-                return values, valid
-            else:
-                return values
+            return (values, valid) if return_valid else values
+
         elif isinstance(device, str):
-            assert device in self.devices, f"Unknown device '{device}'"
-            res = self.devices[device].interpolate(times, return_valid=return_valid)
-            return res
-        else:
-            raise ValueError(f"Unsupported device type: {type(device)}")
+            if device not in self.devices:
+                raise KeyError(f"Unknown device '{device}'")
+            return self.devices[device].interpolate(times, return_valid=return_valid)
+
+        raise ValueError(f"Unsupported device type: {type(device)}")
 
     def get_valid_range(self, device_name: str) -> tuple[float, float]:
         """Get the valid time range for a specific device.
@@ -239,7 +235,7 @@ class Experiment:
         Returns
         -------
         tuple
-            A tuple ``(start_time, end_time)`` representing the valid
+            A tuple `(start_time, end_time)` representing the valid
             time interval in seconds.
         """
         return tuple(self.devices[device_name].valid_interval)
