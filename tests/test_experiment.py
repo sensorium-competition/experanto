@@ -92,18 +92,19 @@ def test_experiment_initialization_and_device_loading(tmp_path, mock_interpolato
         "eye_tracker": {"interpolation": mock_interpolator},
     }
     exp = Experiment(root_folder=str(tmp_path), modality_config=config)
-    assert "screen" in exp.devices, (
-        f"Expected 'screen' in experiment devices but exp.devices = {exp.devices}"
-    )
-    assert "eye_tracker" in exp.devices, (
-        f"Expected 'eye_tracker' in experiment devices but exp.devices = {exp.devices}"
-    )
-    assert "ignored_device" not in exp.devices, (
-        f"Expected 'ignored_device' to be excluded from experiment devices but exp.devices = {exp.devices}"
-    )
-    assert set(exp.device_names) == {"screen", "eye_tracker"}, (
-        f"Expected {{'screen', 'eye_tracker'}}, got {set(exp.device_names)}"
-    )
+    assert (
+        "screen" in exp.devices
+    ), f"Expected 'screen' in experiment devices but exp.devices = {exp.devices}"
+    assert (
+        "eye_tracker" in exp.devices
+    ), f"Expected 'eye_tracker' in experiment devices but exp.devices = {exp.devices}"
+    assert (
+        "ignored_device" not in exp.devices
+    ), f"Expected 'ignored_device' to be excluded from experiment devices but exp.devices = {exp.devices}"
+    assert set(exp.device_names) == {
+        "screen",
+        "eye_tracker",
+    }, f"Expected {{'screen', 'eye_tracker'}}, got {set(exp.device_names)}"
 
 
 def test_experiment_interpolate_routing(tmp_path, mock_interpolator):
@@ -122,9 +123,9 @@ def test_experiment_interpolate_routing(tmp_path, mock_interpolator):
         err_msg=f"Interpolated result does not match mock output. Got {res}",
     )
     res_dict = exp.interpolate(test_times, device=None)
-    assert isinstance(res_dict, dict), (
-        f"Expected dict return for device=None, got {type(res_dict)}"
-    )
+    assert isinstance(
+        res_dict, dict
+    ), f"Expected dict return for device=None, got {type(res_dict)}"
     np.testing.assert_array_equal(
         res_dict["screen"],
         np.array([1, 2, 3]),
@@ -157,9 +158,10 @@ def test_get_valid_range_all_devices(tmp_path, device_name, start_t, end_t):
             root_folder=str(experiment_path), modality_config=config
         )
         valid_range = experiment.get_valid_range(device_name)
-        assert valid_range == (start_t, end_t), (
-            f"Expected valid range {(start_t, end_t)} for {device_name}, got {valid_range}"
-        )
+        assert valid_range == (
+            start_t,
+            end_t,
+        ), f"Expected valid range {(start_t, end_t)} for {device_name}, got {valid_range}"
 
 
 def test_get_valid_range_raises_for_invalid_device(tmp_path):
@@ -217,13 +219,13 @@ def test_experiment_numeric_precision_offset(
         )
         valid_range = experiment.get_valid_range("device_0")
 
-        assert valid_range[0] == pytest.approx(start_offset), (
-            f"Expected valid_range[0] to be approx {start_offset}, got {valid_range[0]}"
-        )
+        assert valid_range[0] == pytest.approx(
+            start_offset
+        ), f"Expected valid_range[0] to be approx {start_offset}, got {valid_range[0]}"
 
-        assert valid_range[1] == pytest.approx(start_offset + duration), (
-            f"Expected valid_range[1] to be approx {start_offset + duration}, got {valid_range[1]}"
-        )
+        assert valid_range[1] == pytest.approx(
+            start_offset + duration
+        ), f"Expected valid_range[1] to be approx {start_offset + duration}, got {valid_range[1]}"
 
         res = experiment.interpolate(np.array([start_offset]), device="device_0")
         assert res is not None
@@ -287,12 +289,12 @@ def test_experiment_start_end_time_reflects_union(
             root_folder=str(experiment_path), modality_config=config
         )
 
-    assert experiment.start_time == (expected_start), (
-        f"Expected start_time={expected_start}, got {experiment.start_time}"
-    )
-    assert experiment.end_time == (expected_end), (
-        f"Expected end_time={expected_end}, got {experiment.end_time}"
-    )
+    assert experiment.start_time == (
+        expected_start
+    ), f"Expected start_time={expected_start}, got {experiment.start_time}"
+    assert experiment.end_time == (
+        expected_end
+    ), f"Expected end_time={expected_end}, got {experiment.end_time}"
 
 
 @pytest.mark.parametrize("override_meta", INVALID_META_CASES, ids=INVALID_META_IDS)
@@ -359,21 +361,21 @@ def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
                 root_folder=str(experiment_path), modality_config=config
             )
 
-    assert "valid_device" in experiment.devices, (
-        f"Expected 'valid_device' to be in experiment.devices but experiment.devices = {experiment.devices}"
-    )
+    assert (
+        "valid_device" in experiment.devices
+    ), f"Expected 'valid_device' to be in experiment.devices but experiment.devices = {experiment.devices}"
 
-    assert "invalid_device" not in experiment.devices, (
-        f"Expected 'invalid_device' to be skipped in experiment.devices, instead experiment.devices = {experiment.devices}"
-    )
+    assert (
+        "invalid_device" not in experiment.devices
+    ), f"Expected 'invalid_device' to be skipped in experiment.devices, instead experiment.devices = {experiment.devices}"
 
-    assert experiment.start_time == (start_val), (
-        f"Expected start_time={start_val}, got {experiment.start_time}"
-    )
-    assert experiment.end_time == (end_val), (
-        f"Expected end_time={end_val}, got {experiment.end_time}"
-    )
+    assert experiment.start_time == (
+        start_val
+    ), f"Expected start_time={start_val}, got {experiment.start_time}"
+    assert experiment.end_time == (
+        end_val
+    ), f"Expected end_time={end_val}, got {experiment.end_time}"
 
-    assert any("invalid_device" in message for message in caplog.messages), (
-        f"Expected warning about invalid_device was skipped. caplog.messages = {caplog.messages}"
-    )
+    assert any(
+        "invalid_device" in message for message in caplog.messages
+    ), f"Expected warning about invalid_device was skipped. caplog.messages = {caplog.messages}"
