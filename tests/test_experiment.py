@@ -337,12 +337,13 @@ def test_experiment_skips_invalid_devices(tmp_path, override_meta, caplog):
     end_val = start_val + duration_val
 
     # Generate random values for the invalid device as well
-    inv_start = np.random.lognormal(mean=0.0, sigma=1.0)
-    inv_end = inv_start + 10.0
+    start_nonval = np.random.lognormal(mean=0.0, sigma=1.0)
+    duration_nonval = np.random.lognormal(mean=0.0, sigma=1.0)
+    end_nonval = start_nonval + duration_nonval
 
     devices_kwargs = [
         {"start_time": start_val, "t_end": end_val},  # valid device
-        {"start_time": inv_start, "t_end": inv_end},  # invalid device
+        {"start_time": start_nonval, "t_end": end_nonval},  # invalid device
     ]
 
     with setup_test_experiment(

@@ -72,6 +72,8 @@ def _generate_sequence_data(
     with open(sequence_root / "meta.yml", "w") as f:
         yaml.safe_dump(meta, f)
 
+    return timestamps, data, shifts
+
 
 @contextmanager
 def create_sequence_data(
