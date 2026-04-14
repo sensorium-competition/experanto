@@ -18,11 +18,17 @@ from .create_experiment import (
 # --- Test Data and Mocks ---
 
 DEVICE_TIME_RANGE_CASES = [
+    # Single device: start and end should match that device's range
     ([(2.0, 9.0)], 2.0, 9.0),
+    # Two devices with different ranges: start should be min, end should be max
     ([(1.0, 8.0), (0.0, 10.0)], 0.0, 10.0),
+    # Three devices with different ranges: start should be min, end should be max
     ([(0.0, 10.0), (1.0, 8.0), (2.0, 9.0)], 0.0, 10.0),
+    # Devices with non-overlapping ranges: start should be min, end should be max
     ([(0.0, 3.0), (7.0, 8.0)], 0.0, 8.0),
+    # Devices with identical ranges: start and end should match that range
     ([(1.0, 5.0), (1.0, 5.0)], 1.0, 5.0),
+    # Large time stamps: start should be min, end should be max
     ([(1e9, 1e9 + 100), (1e9 - 50, 1e9 + 50)], 1e9 - 50, 1e9 + 100),
 ]
 
