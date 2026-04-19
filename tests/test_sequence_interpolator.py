@@ -130,6 +130,7 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(
             "shifts_per_signal": True,
         }
     ) as (timestamps, data, shift, seq_interp):
+        assert shift is not None, f"Expected shift to be not None, received {shift}"
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"
@@ -282,6 +283,7 @@ def test_linear_interpolation_with_phase_shifts(
         },
         interp_kwargs={"keep_nans": keep_nans},
     ) as (timestamps, data, shift, seq_interp):
+        assert shift is not None, f"Expected shift to be not None, received {shift}"
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Not a PhaseShiftedSequenceInterpolator"
@@ -389,6 +391,9 @@ def test_interpolation_with_phase_shifts_for_invalid_times(
         },
         interp_kwargs={"keep_nans": keep_nans},
     ) as (_, _, phase_shifts, seq_interp):
+        assert (
+            phase_shifts is not None
+        ), f"Expected phase_shifts to be not None, received {phase_shifts}"
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"
@@ -545,6 +550,67 @@ def test_interpolation_mode_not_implemented():
         seq_interp.interpolation_mode = "unsupported_mode"
         with pytest.raises(NotImplementedError):
             seq_interp.interpolate(np.array([0.0, 1.0, 2.0]), return_valid=True)
+
+
+def test_sequence_interpolator_indexes_selection():
+    with sequence_data_and_interpolator(
+        data_kwargs={"n_signals": 10, "use_mem_mapped": False}
+    ) as (_, data, _, seq_interp):
+
+        seq_interp = SequenceInterpolator(
+            seq_interp.root_folder, neuron_indices=[1, 3, 5]
+        )
+
+        assert seq_interp.n_signals == 3
+        assert seq_interp._data.shape[1] == 10
+
+
+def test_sequence_interpolator_neuron_ids_selection(tmp_path):
+    with sequence_data_and_interpolator(data_kwargs={"n_signals": 4}) as (
+        _,
+        _,
+        _,
+        seq_interp,
+    ):
+
+        meta_folder = seq_interp.root_folder / "meta"
+        meta_folder.mkdir(exist_ok=True)
+
+        unit_ids = np.array([10, 20, 30, 40])
+        np.save(meta_folder / "unit_ids.npy", unit_ids)
+
+        interp = SequenceInterpolator(seq_interp.root_folder, neuron_ids=[20, 40])
+
+        assert interp.n_signals == 2
+
+
+def test_sequence_interpolator_neuron_ids_indexes_mismatch():
+    with sequence_data_and_interpolator(data_kwargs={"n_signals": 5}) as (
+        _,
+        _,
+        _,
+        seq_interp,
+    ):
+        meta_folder = seq_interp.root_folder / "meta"
+        meta_folder.mkdir(exist_ok=True)
+        np.save(meta_folder / "unit_ids.npy", np.arange(5))
+
+        with pytest.raises(ValueError):
+            SequenceInterpolator(
+                seq_interp.root_folder, neuron_ids=[1], neuron_indices=[2]
+            )
+
+
+def test_phase_shift_interpolator_indexes_filtering():
+    with sequence_data_and_interpolator(
+        data_kwargs={"n_signals": 6, "shifts_per_signal": True}
+    ) as (_, _, phase_shifts, seq_interp):
+
+        interp = PhaseShiftedSequenceInterpolator(
+            seq_interp.root_folder, neuron_indices=[0, 2, 4]
+        )
+
+        assert len(interp._phase_shifts) == 3
 
 
 if __name__ == "__main__":

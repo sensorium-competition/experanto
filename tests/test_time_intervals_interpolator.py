@@ -79,7 +79,8 @@ def run_interval_interpolation_test(timestamps, intervals_dict, time_interp):
     assert isinstance(time_interp, TimeIntervalInterpolator)
 
     signal = time_interp.interpolate(timestamps)
-
+    if isinstance(signal, tuple):
+        signal = signal[0]
     assert signal.shape == (
         len(timestamps),
         3,
@@ -260,7 +261,8 @@ def test_time_interval_interpolation_nans():
 
         # Interpolate with NaN-containing timestamps
         signal = time_interp.interpolate(timestamps)
-
+        if isinstance(signal, tuple):
+            signal = signal[0]
         # Should return fewer rows than input (NaNs filtered out)
         expected_valid_count = n_samples - (nan_end_idx - nan_start_idx)
         assert signal.shape == (
@@ -307,7 +309,8 @@ def test_time_interval_interpolation_zero_length():
         assert isinstance(time_interp, TimeIntervalInterpolator)
 
         signal = time_interp.interpolate(timestamps)
-
+        if isinstance(signal, tuple):
+            signal = signal[0]
         assert signal.shape == (
             len(timestamps),
             3,
@@ -347,7 +350,8 @@ def test_time_interval_interpolation_multi_zero_length():
         assert isinstance(time_interp, TimeIntervalInterpolator)
 
         signal = time_interp.interpolate(timestamps)
-
+        if isinstance(signal, tuple):
+            signal = signal[0]
         assert signal.shape == (
             len(timestamps),
             3,
@@ -415,7 +419,8 @@ def test_time_interval_interpolation_inverted_interval():
         assert isinstance(time_interp, TimeIntervalInterpolator)
 
         signal = time_interp.interpolate(timestamps)
-
+        if isinstance(signal, tuple):
+            signal = signal[0]
         assert signal.shape == (
             len(timestamps),
             3,
@@ -458,7 +463,8 @@ def test_time_interval_interpolation_multi_inverted():
         assert isinstance(time_interp, TimeIntervalInterpolator)
 
         signal = time_interp.interpolate(timestamps)
-
+        if isinstance(signal, tuple):
+            signal = signal[0]
         assert signal.shape == (
             len(timestamps),
             3,

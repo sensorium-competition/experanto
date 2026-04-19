@@ -20,6 +20,52 @@ from .intervals import TimeInterval
 logger = logging.getLogger(__name__)
 
 
+def resolve_neuron_indices(neuron_ids, neuron_indices, unit_ids, n_signals):
+    if neuron_ids is None and neuron_indices is None:
+        return None
+
+    if neuron_ids is not None:
+        ids_to_indexes = []
+
+        for nid in neuron_ids:
+            match = np.where(unit_ids == nid)[0]
+            if len(match) == 0:
+                raise ValueError(f"Neuron id {nid} not found")
+            ids_to_indexes.append(int(match[0]))
+
+        if neuron_indices is None:
+            return ids_to_indexes
+
+        if set(ids_to_indexes) != set(neuron_indices):
+            raise ValueError("neuron_ids and neuron_indices refer to different neurons")
+
+        warnings.warn(
+            "Both neuron_ids and neuron_indices provided; using neuron_indices",
+            stacklevel=2,
+        )
+
+    return validate_neuron_indices(neuron_indices, n_signals)
+
+
+def validate_neuron_indices(neuron_indices, n_signals):
+    try:
+        indexes_seq = list(neuron_indices)
+    except TypeError as exc:
+        raise TypeError("neuron_indices must be iterable") from exc
+
+    if not all(isinstance(i, (int, np.integer)) for i in indexes_seq):
+        raise TypeError("neuron_indices must contain integers")
+
+    if indexes_seq:
+        if min(indexes_seq) < 0 or max(indexes_seq) >= n_signals:
+            raise ValueError("neuron_indices out of bounds")
+
+        if len(set(indexes_seq)) != len(indexes_seq):
+            raise ValueError("neuron_indices contain duplicates")
+
+    return indexes_seq
+
+
 class Interpolator:
     """Abstract base class for time series interpolation.
 
@@ -55,8 +101,10 @@ class Interpolator:
     Experiment : High-level interface that manages multiple interpolators.
     """
 
-    def __init__(self, root_folder: str) -> None:
+    def __init__(self, root_folder: str | Path) -> None:
         self.root_folder = Path(root_folder)
+        self.n_signals: int = 0
+        self.interpolation_mode: str | None = None
         self.start_time = None
         self.end_time = None
         # Valid interval can be different to start time and end time.
@@ -177,6 +225,14 @@ class SequenceInterpolator(Interpolator):
         If True, subtracts mean during normalization.
     normalize_std_threshold : float, optional
         Minimum std threshold to prevent division by near-zero values.
+    neuron_ids : list, optional
+        Biological neuron IDs to include. Converted to indexes using meta/unit_ids.npy.
+    neuron_indices : list, optional
+        Column indexes of neurons to include.
+    neuron_ids : list, optional
+        Biological neuron IDs to include. Converted to indexes using meta/unit_ids.npy.
+    neuron_indices : list, optional
+        Column indexes of neurons to include.
     **kwargs
         Additional keyword arguments (ignored).
 
@@ -202,10 +258,12 @@ class SequenceInterpolator(Interpolator):
 
     def __init__(
         self,
-        root_folder: str,
+        root_folder: str | Path,
         cache_data: bool = False,  # already cached, put it here for consistency
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
+        neuron_ids: list[int] | None = None,
+        neuron_indices: list[int] | None = None,
         normalize: bool = False,
         normalize_subtract_mean: bool = False,
         normalize_std_threshold: float | None = None,  # or 0.01
@@ -215,6 +273,7 @@ class SequenceInterpolator(Interpolator):
         meta = self.load_meta()
         self.keep_nans = keep_nans
         self.interpolation_mode = interpolation_mode
+        self.neuron_ids = neuron_ids
         self.normalize = normalize
         self.normalize_subtract_mean = normalize_subtract_mean
         self.normalize_std_threshold = normalize_std_threshold
@@ -222,11 +281,22 @@ class SequenceInterpolator(Interpolator):
         self.time_delta = 1.0 / self.sampling_rate
         self.start_time = meta["start_time"]
         self.end_time = meta["end_time"]
-        self.is_mem_mapped = meta["is_mem_mapped"] if "is_mem_mapped" in meta else False
+        self.is_mem_mapped = meta.get("is_mem_mapped", False)
         # Valid interval can be different to start time and end time.
         self.valid_interval = TimeInterval(self.start_time, self.end_time)
 
         self.n_signals = meta["n_signals"]
+        unit_ids = None
+        if neuron_ids is not None:
+            unit_ids = np.load(self.root_folder / "meta/unit_ids.npy")
+
+        self.neuron_indices = resolve_neuron_indices(
+            neuron_ids,
+            neuron_indices,
+            unit_ids,
+            self.n_signals,
+        )
+
         # read .mem (memmap) or .npy file
         if self.is_mem_mapped:
             self._data = np.memmap(
@@ -235,28 +305,47 @@ class SequenceInterpolator(Interpolator):
                 mode="r",
                 shape=(meta["n_timestamps"], meta["n_signals"]),
             )
-
-            if cache_data:
-                self._data = np.array(self._data).astype(
-                    np.float32
-                )  # Convert memmap to ndarray
         else:
             self._data = np.load(self.root_folder / "data.npy")
+
+        if self.neuron_indices is not None:
+            self.n_signals = len(self.neuron_indices)
+
+        # Cache only selected data
+        if self.is_mem_mapped and cache_data:
+            if self.neuron_indices is None:
+                self._data = np.array(self._data, dtype=np.float32)
+            else:
+                self._data = np.stack(
+                    [self._data[:, i] for i in self.neuron_indices],
+                    axis=1,
+                ).astype(np.float32)
+
+            self.is_mem_mapped = False
 
         if self.normalize:
             self.normalize_init()
 
     def normalize_init(self):
-        self.mean = np.load(self.root_folder / "meta/means.npy")
-        self.std = np.load(self.root_folder / "meta/stds.npy")
+        mean = np.load(self.root_folder / "meta/means.npy")  # shape: (n_total_signals,)
+        std = np.load(self.root_folder / "meta/stds.npy")
+
+        # Filter to selected neurons, before assertion
+        if self.neuron_indices is not None:
+            mean = mean[self.neuron_indices]
+            std = std[self.neuron_indices]
+
+        self.mean = mean.T
+        self.std = std.T
+
+        # Now n_signals and shape are guaranteed to match
         assert (
             self.mean.shape[0] == self.n_signals
-        ), f"mean shape does not match: {self.mean.shape} vs {self._data.shape}"
+        ), f"mean shape does not match: {self.mean.shape[0]} vs {self.n_signals}"
         assert (
             self.std.shape[0] == self.n_signals
-        ), f"std shape does not match: {self.std.shape} vs {self._data.shape}"
-        self.mean = self.mean.T
-        self.std = self.std.T
+        ), f"std shape does not match: {self.std.shape[0]} vs {self.n_signals}"
+
         if self.normalize_std_threshold:
             threshold = self.normalize_std_threshold * np.nanmean(self.std)
             idx = self.std > threshold
@@ -294,7 +383,16 @@ class SequenceInterpolator(Interpolator):
         )
 
         if self.interpolation_mode == "nearest_neighbor":
-            data = self._data[idx_lower]
+            if self.neuron_indices is None:
+                data = self._data[idx_lower]
+            else:
+                if self.is_mem_mapped:
+                    data = np.stack(
+                        [self._data[idx_lower, i] for i in self.neuron_indices],
+                        axis=1,
+                    )
+                else:
+                    data = self._data[idx_lower]
 
             return (data, valid) if return_valid else data
 
@@ -324,8 +422,22 @@ class SequenceInterpolator(Interpolator):
             lower_signal_ratio = ((times_upper - times_valid) / denom)[:, None]
             upper_signal_ratio = ((times_valid - times_lower) / denom)[:, None]
 
-            data_lower = self._data[idx_lower]
-            data_upper = self._data[idx_upper]
+            if self.neuron_indices is None:
+                data_lower = self._data[idx_lower]
+                data_upper = self._data[idx_upper]
+            else:
+                if self.is_mem_mapped:
+                    data_lower = np.stack(
+                        [self._data[idx_lower, i] for i in self.neuron_indices],
+                        axis=1,
+                    )
+                    data_upper = np.stack(
+                        [self._data[idx_upper, i] for i in self.neuron_indices],
+                        axis=1,
+                    )
+                else:
+                    data_lower = self._data[idx_lower]
+                    data_upper = self._data[idx_upper]
 
             interpolated = (
                 lower_signal_ratio * data_lower + upper_signal_ratio * data_upper
@@ -376,7 +488,7 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
 
     def __init__(
         self,
-        root_folder: str,
+        root_folder: str | Path,
         cache_data: bool = False,  # already cached, put it here for consistency
         keep_nans: bool = False,
         interpolation_mode: str = "nearest_neighbor",
@@ -397,6 +509,10 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
         )
 
         self._phase_shifts = np.load(self.root_folder / "meta/phase_shifts.npy")
+        # Forward the required indexes
+        if self.neuron_indices is not None:
+            self._phase_shifts = self._phase_shifts[self.neuron_indices]
+
         self.valid_interval = TimeInterval(
             self.start_time
             + (np.max(self._phase_shifts) if len(self._phase_shifts) > 0 else 0),
@@ -523,8 +639,8 @@ class ScreenInterpolator(Interpolator):
 
     def __init__(
         self,
-        root_folder: str,
-        cache_data: bool = False,
+        root_folder: str | Path,
+        cache_data: bool = False,  # New parameter
         rescale: bool = False,
         rescale_size: tuple[int, int] | None = None,
         normalize: bool = False,
@@ -752,7 +868,7 @@ class TimeIntervalInterpolator(Interpolator):
       *i*-th valid time falls within any interval for the *j*-th label.
     """
 
-    def __init__(self, root_folder: str, cache_data: bool = False, **kwargs):
+    def __init__(self, root_folder: str | Path, cache_data: bool = False, **kwargs):
         super().__init__(root_folder)
         self.cache_data = cache_data
 
@@ -1046,11 +1162,13 @@ class SpikeInterpolator(Interpolator):
 
     def __init__(
         self,
-        root_folder: str,
+        root_folder: str | Path,
         cache_data: bool = False,
         interpolation_window: float = 0.3,
         interpolation_align: str = "center",
         smoothing_sigma: float = 0.0,
+        neuron_ids: list[int] | None = None,
+        neuron_indices: list[int] | None = None,
     ):
         super().__init__(root_folder)
 
@@ -1099,6 +1217,42 @@ class SpikeInterpolator(Interpolator):
                 self.spikes = np.array(self.spikes)
         else:
             self.spikes = np.load(self.dat_path)
+
+        unit_ids = None
+        if neuron_ids is not None:
+            unit_ids = np.load(self.root_folder / "meta/unit_ids.npy")
+
+        neuron_indices = resolve_neuron_indices(
+            neuron_ids,
+            neuron_indices,
+            unit_ids,
+            self.n_signals,
+        )
+
+        # If specific neuron indexes are requested, rebuild the spike array so that it
+        # only contains spikes from the selected neurons. We also rebuild the indices
+        # array so that it matches the new compacted spike array.
+        if neuron_indices is not None:
+            if len(neuron_indices) == 0:
+                # No neurons selected: represent this as an empty spike train
+                self.spikes = np.empty((0,), dtype=self.spikes.dtype)
+                self.indices = np.array([0], dtype=np.int64)
+                self.n_signals = 0
+            else:
+                new_indices = [0]
+                new_spikes = []
+
+                for i in neuron_indices:
+                    start = self.indices[i]
+                    end = self.indices[i + 1]
+                    neuron_spikes = self.spikes[start:end]
+
+                    new_spikes.append(neuron_spikes)
+                    new_indices.append(new_indices[-1] + len(neuron_spikes))
+
+                self.spikes = np.concatenate(new_spikes)
+                self.indices = np.array(new_indices, dtype=np.int64)
+                self.n_signals = len(neuron_indices)
 
     def interpolate(
         self, times: np.ndarray, return_valid: bool = False
