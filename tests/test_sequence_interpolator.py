@@ -391,7 +391,9 @@ def test_interpolation_with_phase_shifts_for_invalid_times(
         },
         interp_kwargs={"keep_nans": keep_nans},
     ) as (_, _, phase_shifts, seq_interp):
-        assert phase_shifts is not None, f"Expected phase_shifts to be not None, received {phase_shifts}"
+        assert (
+            phase_shifts is not None
+        ), f"Expected phase_shifts to be not None, received {phase_shifts}"
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"
