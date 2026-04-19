@@ -134,7 +134,7 @@ def test_spikes_cache_data():
         ), f"Expected spikes to be np.ndarray, got {type(interp.spikes).__name__}"
         assert not isinstance(
             interp.spikes, np.memmap
-        ), f"Expected spikes not to be np.memmap"
+        ), "Expected spikes not to be np.memmap"
 
         times = np.array([2.5])
         counts, valid = interp.interpolate(times, return_valid=True)
