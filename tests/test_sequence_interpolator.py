@@ -130,7 +130,7 @@ def test_nearest_neighbor_interpolation_with_phase_shifts(
             "shifts_per_signal": True,
         }
     ) as (timestamps, data, shift, seq_interp):
-        assert shift is not None
+        assert shift is not None, f"Expected shift to be not None, received {shift}"
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"
@@ -283,7 +283,7 @@ def test_linear_interpolation_with_phase_shifts(
         },
         interp_kwargs={"keep_nans": keep_nans},
     ) as (timestamps, data, shift, seq_interp):
-        assert shift is not None
+        assert shift is not None, f"Expected shift to be not None, received {shift}"
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Not a PhaseShiftedSequenceInterpolator"
@@ -391,7 +391,7 @@ def test_interpolation_with_phase_shifts_for_invalid_times(
         },
         interp_kwargs={"keep_nans": keep_nans},
     ) as (_, _, phase_shifts, seq_interp):
-        assert phase_shifts is not None
+        assert phase_shifts is not None, f"Expected phase_shifts to be not None, received {phase_shifts}"
         assert isinstance(
             seq_interp, PhaseShiftedSequenceInterpolator
         ), "Interpolation object is not a PhaseShiftedSequenceInterpolator"

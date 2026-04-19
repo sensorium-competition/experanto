@@ -22,7 +22,7 @@ def test_spikes_interpolation_accuracy(align):
         interp_kwargs={"interpolation_window": window, "interpolation_align": align},
     ) as (gt_spikes, interp):
 
-        assert isinstance(interp, SpikeInterpolator)
+        assert isinstance(interp, SpikeInterpolator), f"Expected interp to be of type SpikeInterpolator, got {type(interp).__name__}"
 
         # Query random times within the duration (avoiding edges for simplicity)
         rng = np.random.default_rng(12345)
@@ -124,9 +124,9 @@ def test_spikes_cache_data():
         data_kwargs={"duration": 5.0, "n_neurons": 2},
         interp_kwargs={"cache_data": True},
     ) as (gt_spikes, interp):
-        assert isinstance(interp, SpikeInterpolator)
-        assert isinstance(interp.spikes, np.ndarray)
-        assert not isinstance(interp.spikes, np.memmap)
+        assert isinstance(interp, SpikeInterpolator), f"Expected interp to be of type SpikeInterpolator, but got {type(interp).__name__}"
+        assert isinstance(interp.spikes, np.ndarray), f"Expected spikes to be np.ndarray, got {type(interp.spikes).__name__}"
+        assert not isinstance(interp.spikes, np.memmap), f"Expected spikes not to be np.memmap"
 
         times = np.array([2.5])
         counts, valid = interp.interpolate(times, return_valid=True)
@@ -169,7 +169,7 @@ def test_memmap_loading():
         },
         interp_kwargs={"cache_data": False},
     ) as (gt_spikes, interp):
-        assert isinstance(interp, SpikeInterpolator)
+        assert isinstance(interp, SpikeInterpolator), f"Expected SpikeInterpolator, got {type(interp).__name__}"
         assert isinstance(interp.spikes, np.memmap), "Expected a memmap object"
 
         # Verify content matches ground truth
@@ -187,7 +187,7 @@ def test_memmap_loading():
         },
         interp_kwargs={"cache_data": True},
     ) as (gt_spikes, interp):
-        assert isinstance(interp, SpikeInterpolator)
+        assert isinstance(interp, SpikeInterpolator), f"Expected SpikeInterpolator, got {type(interp).__name__}"
         assert isinstance(
             interp.spikes, np.ndarray
         ), "Expected a numpy array (loaded into RAM)"
