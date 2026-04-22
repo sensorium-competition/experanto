@@ -456,17 +456,17 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
             times_lower = (
                 self.start_time
                 + (idx_lower * self.time_delta)
-                + self._phase_shifts[np.newaxis, :]
             )
             times_upper = (
                 self.start_time
                 + (idx_upper * self.time_delta)
-                + self._phase_shifts[np.newaxis, :]
             )
             denom = times_upper - times_lower
 
-            lower_numerator = times_upper - valid_times[:, np.newaxis]
-            upper_numerator = valid_times[:, np.newaxis] - times_lower
+            time_dim = valid_times[:, np.newaxis] - self._phase_shifts[np.newaxis, :]
+
+            lower_numerator = times_upper - time_dim
+            upper_numerator = time_dim - times_lower
 
             lower_signal_ratio = lower_numerator / denom
             upper_signal_ratio = upper_numerator / denom
