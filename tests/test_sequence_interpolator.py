@@ -216,14 +216,16 @@ def test_nearest_neighbor_interpolation_with_phase_shifts_handles_nans(
 @pytest.mark.parametrize("use_mem_mapped", [False, True])
 @pytest.mark.parametrize("contain_nans", [False, True])
 @pytest.mark.parametrize("keep_nans", [False, True])
+@pytest.mark.parametrize("start_time", [0.0, 15.0])
 def test_linear_interpolation(
-    n_signals, sampling_rate, use_mem_mapped, contain_nans, keep_nans
+    n_signals, sampling_rate, use_mem_mapped, contain_nans, keep_nans, start_time
 ):
     with sequence_data_and_interpolator(
         data_kwargs={
             "n_signals": n_signals,
             "use_mem_mapped": use_mem_mapped,
-            "t_end": 5.0,
+            "start_time": start_time,
+            "t_end": start_time + 5.0,
             "sampling_rate": sampling_rate,
             "contain_nans": contain_nans,
         },
@@ -269,14 +271,16 @@ def test_linear_interpolation(
 @pytest.mark.parametrize("sampling_rate", [3.0, 10.0, 100.0])
 @pytest.mark.parametrize("use_mem_mapped", [False, True])
 @pytest.mark.parametrize("keep_nans", [False, True])
+@pytest.mark.parametrize("start_time", [0.0, 15.0])
 def test_linear_interpolation_with_phase_shifts(
-    n_signals, sampling_rate, use_mem_mapped, keep_nans
+    n_signals, sampling_rate, use_mem_mapped, keep_nans, start_time
 ):
     with sequence_data_and_interpolator(
         data_kwargs={
             "n_signals": n_signals,
             "use_mem_mapped": use_mem_mapped,
-            "t_end": 5.0,
+            "start_time": start_time,
+            "t_end": start_time + 5.0,
             "sampling_rate": sampling_rate,
             "shifts_per_signal": True,
         },

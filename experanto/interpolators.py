@@ -315,8 +315,8 @@ class SequenceInterpolator(Interpolator):
             idx_upper = idx_upper[~overflow_mask]
             idx_lower = idx_lower[~overflow_mask]
 
-            times_lower = idx_lower * self.time_delta
-            times_upper = idx_upper * self.time_delta
+            times_lower = self.start_time + (idx_lower * self.time_delta)
+            times_upper = self.start_time + (idx_upper * self.time_delta)
             denom = times_upper - times_lower
 
             times_valid = valid_times[~overflow_mask]
@@ -447,10 +447,14 @@ class PhaseShiftedSequenceInterpolator(SequenceInterpolator):
                 )
                 overflow_mask = overflow_mask | idx_lower < 0
 
-            valid = valid[~overflow_mask.any(axis=1)]
+            mask = ~overflow_mask.any(axis=1)
+            valid = valid[mask]
+            idx_upper = idx_upper[mask]
+            idx_lower = idx_lower[mask]
+            valid_times = valid_times[mask]
 
-            times_lower = idx_lower * self.time_delta
-            times_upper = idx_upper * self.time_delta
+            times_lower = self.start_time + (idx_lower * self.time_delta)
+            times_upper = self.start_time + (idx_upper * self.time_delta)
             denom = times_upper - times_lower
 
             time_dim = valid_times[:, np.newaxis] - self._phase_shifts[np.newaxis, :]
