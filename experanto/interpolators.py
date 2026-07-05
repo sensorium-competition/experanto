@@ -294,8 +294,15 @@ class SequenceInterpolator(Interpolator):
         )
 
         if self.interpolation_mode == "nearest_neighbor":
-            data = self._data[idx_lower]
+            # --- PR ÇÖZÜMÜ: Alt komşuyu (floor) değil, EN YAKIN komşuyu (round) buluyoruz ---
+            idx_nearest = np.round(
+                (valid_times - self.start_time) / self.time_delta
+            ).astype(int)
 
+            # DİKKAT (Senior Touch): Yuvarlama işlemi dizinin son elemanını aşmasın diye sınırlandırıyoruz!
+            idx_nearest = np.clip(idx_nearest, 0, self._data.shape[0] - 1)
+
+            data = self._data[idx_nearest]
             return (data, valid) if return_valid else data
 
         elif self.interpolation_mode == "linear":
